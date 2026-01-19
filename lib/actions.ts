@@ -66,3 +66,58 @@ export async function deleteUser(userId: number) {
         return { error: 'Error al eliminar usuario' };
     }
 }
+
+import { auth } from '@/auth';
+
+export async function changePassword(prevState: string | undefined, formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.email) {
+        return 'No estás autenticado.';
+    }
+
+    const currentPassword = formData.get('currentPassword') as string;
+    const newPassword = formData.get('newPassword') as string;
+    const confirmPassword = formData.get('confirmPassword') as string;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        return 'Todos los campos son obligatorios.';
+    }
+
+    if (newPassword !== confirmPassword) {
+        return 'Las nuevas contraseñas no coinciden.';
+    }
+
+    if (newPassword.length < 6) {
+        return 'La contraseña debe tener al menos 6 caracteres.';
+    }
+
+    const sql = neon(process.env.DATABASE_URL!);
+
+    try {
+        // Fetch user to get current password hash
+        const users = await sql`SELECT password FROM users WHERE email = ${session.user.email}`;
+        if (users.length === 0) {
+            return 'Usuario no encontrado.';
+        }
+
+        const user = users[0];
+        const passwordsMatch = await bcrypt.compare(currentPassword, user.password);
+
+        if (!passwordsMatch) {
+            return 'La contraseña actual es incorrecta.';
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        await sql`
+            UPDATE users 
+            SET password = ${hashedPassword} 
+            WHERE email = ${session.user.email}
+        `;
+
+        return 'Contraseña actualizada correctamente.';
+    } catch (error) {
+        console.error('Error changing password:', error);
+        return 'Error al cambiar la contraseña.';
+    }
+}
