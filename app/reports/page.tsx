@@ -29,14 +29,14 @@ export default async function ReportsPage() {
           <ReportsSummary />
         </Suspense>
 
-        {/* Gráficos y visualizaciones */}
-        <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-lg" />}>
-          <InventoryCharts />
-        </Suspense>
-
         {/* Historial de movimientos */}
         <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-lg" />}>
           <MovementHistory />
+        </Suspense>
+
+        {/* Gráficos y visualizaciones */}
+        <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-lg" />}>
+          <InventoryCharts />
         </Suspense>
       </main>
     </div>

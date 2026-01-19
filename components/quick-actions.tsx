@@ -33,7 +33,7 @@ export function QuickActions({ materials, userRole }: QuickActionsProps) {
       onClick: () => {
         router.push("/scan")
       },
-      show: true,
+      show: false,
     },
     {
       title: "Entrada Stock",
@@ -56,6 +56,16 @@ export function QuickActions({ materials, userRole }: QuickActionsProps) {
       show: true,
     },
     {
+      title: "Ver Inventario",
+      description: "Lista completa",
+      icon: FileText,
+      variant: "outline" as const,
+      onClick: () => {
+        router.push("/inventory")
+      },
+      show: true,
+    },
+    {
       title: "Reportes",
       description: "Ver estadísticas",
       icon: BarChart3,
@@ -74,16 +84,6 @@ export function QuickActions({ materials, userRole }: QuickActionsProps) {
         router.push("/materials/nuevo")
       },
       show: userRole === 'admin',
-    },
-    {
-      title: "Ver Inventario",
-      description: "Lista completa",
-      icon: FileText,
-      variant: "outline" as const,
-      onClick: () => {
-        router.push("/inventory")
-      },
-      show: true,
     },
   ]
 

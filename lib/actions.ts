@@ -121,3 +121,63 @@ export async function changePassword(prevState: string | undefined, formData: Fo
         return 'Error al cambiar la contraseña.';
     }
 }
+
+export async function createCategory(formData: FormData) {
+    const sql = neon(process.env.DATABASE_URL!);
+    const name = formData.get('name') as string;
+    const description = formData.get('description') as string;
+
+    if (!name) return { error: 'El nombre es requerido' };
+
+    try {
+        await sql`INSERT INTO categories (name, description) VALUES (${name}, ${description})`;
+        revalidatePath('/settings/categories');
+        revalidatePath('/materials/nuevo');
+        return { success: true };
+    } catch (error) {
+        console.error('Error creating category:', error);
+        return { error: 'Error al crear la categoría' };
+    }
+}
+
+export async function deleteCategory(id: number) {
+    const sql = neon(process.env.DATABASE_URL!);
+    try {
+        await sql`DELETE FROM categories WHERE id = ${id}`;
+        revalidatePath('/settings/categories');
+        return { success: true };
+    } catch (error) {
+        console.error('Error deleting category:', error);
+        return { error: 'No se puede eliminar la categoría porque tiene materiales asociados' };
+    }
+}
+
+export async function createSupplier(formData: FormData) {
+    const sql = neon(process.env.DATABASE_URL!);
+    const name = formData.get('name') as string;
+    const contact_info = formData.get('contact_info') as string;
+
+    if (!name) return { error: 'El nombre es requerido' };
+
+    try {
+        await sql`INSERT INTO suppliers (name, contact_info) VALUES (${name}, ${contact_info})`;
+        revalidatePath('/settings/suppliers');
+        revalidatePath('/materials/nuevo');
+        return { success: true };
+    } catch (error) {
+        console.error('Error creating supplier:', error);
+        return { error: 'Error al crear el proveedor' };
+    }
+}
+
+export async function deleteSupplier(id: number) {
+    const sql = neon(process.env.DATABASE_URL!);
+    try {
+        await sql`DELETE FROM suppliers WHERE id = ${id}`;
+        revalidatePath('/settings/suppliers');
+        return { success: true };
+    } catch (error) {
+        console.error('Error deleting supplier:', error);
+        return { error: 'No se puede eliminar el proveedor porque tiene materiales asociados' };
+    }
+}
