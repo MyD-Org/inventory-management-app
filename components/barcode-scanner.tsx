@@ -172,7 +172,8 @@ export function BarcodeScanner({ isOpen, onClose, onScan, title = "Escanear Cód
                 stopCamera()
               }}
             >
-              USB
+              <Scan className="w-4 h-4 mr-1" />
+              Lector USB
             </Button>
           </div>
 
@@ -253,7 +254,7 @@ export function BarcodeScanner({ isOpen, onClose, onScan, title = "Escanear Cód
                   <div className="w-full h-32 bg-muted rounded-lg flex items-center justify-center">
                     <div className="text-center">
                       <Scan className="w-8 h-8 text-primary mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">Lector USB conectado</p>
+                      <p className="text-sm text-muted-foreground">Lector conectado</p>
                     </div>
                   </div>
                   <Badge variant="outline" className="animate-pulse">

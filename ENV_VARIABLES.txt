@@ -1,0 +1,40 @@
+# ============================================
+# VARIABLES DE ENTORNO PARA TU PROYECTO
+# ============================================
+# Copia estas variables a tu archivo .env
+# Reemplaza los valores con los que tienes en tus imágenes
+# ============================================
+
+# Database Configuration - Neon
+DATABASE_URL=
+DATABASE_URL_UNPOOLED=
+NEON_PROJECT_ID=
+
+# PostgreSQL Configuration
+PGDATABASE=
+PGHOST=
+PGHOST_UNPOOLED=
+PGPASSWORD=
+PGUSER=
+
+# Postgres Vercel Configuration
+POSTGRES_DATABASE=
+POSTGRES_HOST=
+POSTGRES_PASSWORD=
+POSTGRES_PRISMA_URL=
+POSTGRES_URL=
+POSTGRES_URL_NO_SSL=
+POSTGRES_URL_NON_POOLING=
+POSTGRES_USER=
+
+# Stack Secret
+STACK_SECRET_SERVER_KEY=
+
+# ============================================
+# INSTRUCCIONES:
+# ============================================
+# 1. Abre tu archivo .env en el editor
+# 2. Copia estas variables
+# 3. Pega los valores reales de tus imágenes
+# 4. Guarda el archivo
+# ============================================

@@ -4,10 +4,19 @@ import { ReportsSummary } from "@/components/reports-summary"
 import { InventoryCharts } from "@/components/inventory-charts"
 import { MovementHistory } from "@/components/movement-history"
 
-export default function ReportsPage() {
+import { auth } from "@/auth"
+import { redirect } from "next/navigation"
+
+export default async function ReportsPage() {
+  const session = await auth()
+
+  if (session?.user?.role !== 'admin') {
+    redirect('/')
+  }
+
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader />
+      <DashboardHeader user={session?.user} />
 
       <main className="container mx-auto px-4 py-6 space-y-6">
         <div className="mb-6">

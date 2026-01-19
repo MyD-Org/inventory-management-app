@@ -102,13 +102,13 @@ export async function ReportsSummary() {
   }
 
   const entradaTrend = getMovementTrend(
-    data.monthlyMovements.entrada?.count || 0,
-    data.previousMonthMovements.entrada || 0,
+    data.monthlyMovements?.entrada?.count || 0,
+    data.previousMonthMovements?.entrada || 0,
   )
 
   const salidaTrend = getMovementTrend(
-    data.monthlyMovements.salida?.count || 0,
-    data.previousMonthMovements.salida || 0,
+    data.monthlyMovements?.salida?.count || 0,
+    data.previousMonthMovements?.salida || 0,
   )
 
   return (
@@ -178,7 +178,7 @@ export async function ReportsSummary() {
           <CardContent>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold">{data.monthlyMovements.entrada?.count || 0}</span>
+                <span className="text-2xl font-bold">{data.monthlyMovements?.entrada?.count || 0}</span>
                 <Badge
                   variant={
                     entradaTrend.trend === "up"
@@ -193,7 +193,7 @@ export async function ReportsSummary() {
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground">
-                {(data.monthlyMovements.entrada?.quantity || 0).toLocaleString()} unidades ingresadas
+                {(data.monthlyMovements?.entrada?.quantity || 0).toLocaleString()} unidades ingresadas
               </p>
             </div>
           </CardContent>
@@ -209,7 +209,7 @@ export async function ReportsSummary() {
           <CardContent>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold">{data.monthlyMovements.salida?.count || 0}</span>
+                <span className="text-2xl font-bold">{data.monthlyMovements?.salida?.count || 0}</span>
                 <Badge
                   variant={
                     salidaTrend.trend === "up" ? "destructive" : salidaTrend.trend === "down" ? "default" : "secondary"
@@ -220,7 +220,7 @@ export async function ReportsSummary() {
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground">
-                {(data.monthlyMovements.salida?.quantity || 0).toLocaleString()} unidades retiradas
+                {(data.monthlyMovements?.salida?.quantity || 0).toLocaleString()} unidades retiradas
               </p>
             </div>
           </CardContent>
