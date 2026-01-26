@@ -114,6 +114,18 @@ export function InventoryImporter() {
                         <CardTitle>Cargar Archivo de Inventario</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg flex items-start gap-3">
+                            <AlertTriangle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                            <div className="text-sm text-blue-800 dark:text-blue-200">
+                                <p className="font-bold mb-1">Instrucciones Importantes:</p>
+                                <ul className="list-disc list-inside space-y-1">
+                                    <li>Solo debes modificar las columnas <strong>"Stock Actual"</strong> y <strong>"Costo Unitario"</strong>.</li>
+                                    <li><strong>NO modifiques</strong> la columna "Código" ni el "Nombre", ya que se usan para identificar el producto.</li>
+                                    <li>Si cambias el código, el sistema no encontrará el producto o dará error.</li>
+                                </ul>
+                            </div>
+                        </div>
+
                         <div className="border-2 border-dashed rounded-lg p-8 text-center space-y-4">
                             <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
                             <div>
@@ -170,10 +182,10 @@ export function InventoryImporter() {
                                             <TableCell className="text-right">{item.currentStock}</TableCell>
                                             <TableCell className="text-center">
                                                 <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${item.difference > 0
-                                                        ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                                                        : item.difference < 0
-                                                            ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                                                            : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400"
+                                                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                                    : item.difference < 0
+                                                        ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                                                        : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400"
                                                     }`}>
                                                     {item.difference > 0 ? "+" : ""}{item.difference}
                                                 </span>
