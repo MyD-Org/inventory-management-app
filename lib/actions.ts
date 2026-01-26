@@ -27,6 +27,11 @@ import bcrypt from 'bcryptjs';
 import { revalidatePath } from 'next/cache';
 
 export async function createUser(formData: FormData) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
+
     const sql = neon(process.env.DATABASE_URL!);
 
     const name = formData.get('name') as string;
@@ -55,6 +60,11 @@ export async function createUser(formData: FormData) {
 }
 
 export async function deleteUser(userId: number) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
+
     const sql = neon(process.env.DATABASE_URL!);
 
     try {
@@ -123,6 +133,11 @@ export async function changePassword(prevState: string | undefined, formData: Fo
 }
 
 export async function createCategory(formData: FormData) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
+
     const sql = neon(process.env.DATABASE_URL!);
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
@@ -141,6 +156,11 @@ export async function createCategory(formData: FormData) {
 }
 
 export async function deleteCategory(id: number) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
+
     const sql = neon(process.env.DATABASE_URL!);
     try {
         await sql`DELETE FROM categories WHERE id = ${id}`;
@@ -153,6 +173,11 @@ export async function deleteCategory(id: number) {
 }
 
 export async function createSupplier(formData: FormData) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
+
     const sql = neon(process.env.DATABASE_URL!);
     const name = formData.get('name') as string;
     const contact_info = formData.get('contact_info') as string;
@@ -171,6 +196,11 @@ export async function createSupplier(formData: FormData) {
 }
 
 export async function deleteSupplier(id: number) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
+
     const sql = neon(process.env.DATABASE_URL!);
     try {
         await sql`DELETE FROM suppliers WHERE id = ${id}`;
