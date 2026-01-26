@@ -237,3 +237,107 @@ export async function downloadInventoryReport() {
         return [];
     }
 }
+
+export async function previewInventoryUpdates(items: { barcode: string; newStock: number; newCost?: number }[]) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
+
+    const sql = neon(process.env.DATABASE_URL!);
+    const updates = [];
+
+    try {
+        for (const item of items) {
+            // Find material and current stock
+            const result = await sql`
+                SELECT m.id, m.name, m.barcode, m.unit_cost, i.current_stock 
+                FROM materials m
+                JOIN inventory i ON m.id = i.material_id
+                WHERE m.barcode = ${item.barcode}
+            `;
+
+            if (result.length > 0) {
+                const currentStock = result[0].current_stock;
+                const currentCost = parseFloat(result[0].unit_cost);
+                const newStock = item.newStock;
+                const newCost = item.newCost !== undefined ? item.newCost : currentCost;
+
+                if (currentStock !== newStock || Math.abs(currentCost - newCost) > 0.01) {
+                    updates.push({
+                        id: result[0].id,
+                        name: result[0].name,
+                        barcode: result[0].barcode,
+                        currentStock,
+                        newStock,
+                        currentCost,
+                        newCost,
+                        difference: newStock - currentStock
+                    });
+                }
+            }
+        }
+        return { updates };
+    } catch (error) {
+        console.error('Error previewing updates:', error);
+        return { error: 'Error al analizar el archivo' };
+    }
+}
+
+export async function executeInventoryUpdates(updates: { id: number; newStock: number; newCost: number; difference: number }[]) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
+
+    const sql = neon(process.env.DATABASE_URL!);
+
+    try {
+        for (const update of updates) {
+            // Update inventory
+            await sql`
+                UPDATE inventory 
+                SET current_stock = ${update.newStock}
+                WHERE material_id = ${update.id}
+            `;
+
+            // Update cost if changed
+            await sql`
+                UPDATE materials
+                SET unit_cost = ${update.newCost}
+                WHERE id = ${update.id}
+            `;
+
+            // Record movement only if stock changed
+            if (update.difference !== 0) {
+                const type = update.difference > 0 ? 'entrada' : 'salida';
+
+                await sql`
+                    INSERT INTO stock_movements (
+                        material_id, 
+                        movement_type, 
+                        quantity, 
+                        previous_stock, 
+                        new_stock, 
+                        notes, 
+                        user_name
+                    ) VALUES (
+                        ${update.id}, 
+                        ${type}, 
+                        ${Math.abs(update.difference)}, 
+                        ${update.newStock - update.difference}, 
+                        ${update.newStock}, 
+                        'Actualización masiva por archivo', 
+                        ${session.user.name || 'Admin'}
+                    )
+                `;
+            }
+        }
+
+        revalidatePath('/inventory');
+        return { success: true, count: updates.length };
+    } catch (error) {
+        console.error('Error executing updates:', error);
+        return { error: 'Error al aplicar los cambios' };
+    }
+}
