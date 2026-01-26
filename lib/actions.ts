@@ -181,3 +181,29 @@ export async function deleteSupplier(id: number) {
         return { error: 'No se puede eliminar el proveedor porque tiene materiales asociados' };
     }
 }
+
+export async function downloadInventoryReport() {
+    const sql = neon(process.env.DATABASE_URL!);
+    try {
+        const data = await sql`
+            SELECT 
+                m.barcode,
+                m.name,
+                c.name as category,
+                s.name as supplier,
+                i.current_stock,
+                m.unit_of_measure,
+                m.unit_cost,
+                (i.current_stock * m.unit_cost) as total_value
+            FROM materials m
+            JOIN inventory i ON m.id = i.material_id
+            LEFT JOIN categories c ON m.category_id = c.id
+            LEFT JOIN suppliers s ON m.supplier_id = s.id
+            ORDER BY m.name ASC
+        `;
+        return data;
+    } catch (error) {
+        console.error('Error fetching inventory report:', error);
+        return [];
+    }
+}

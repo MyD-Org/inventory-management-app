@@ -6,6 +6,7 @@ import { MovementHistory } from "@/components/movement-history"
 
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
+import { DownloadReportButton } from "@/components/download-report-button"
 
 export default async function ReportsPage() {
   const session = await auth()
@@ -19,9 +20,12 @@ export default async function ReportsPage() {
       <DashboardHeader user={session?.user} />
 
       <main className="container mx-auto px-4 py-6 space-y-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground mb-2">Reportes y Análisis</h1>
-          <p className="text-muted-foreground">Visualice estadísticas y tendencias del inventario</p>
+        <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground mb-2">Reportes y Análisis</h1>
+            <p className="text-muted-foreground">Visualice estadísticas y tendencias del inventario</p>
+          </div>
+          <DownloadReportButton />
         </div>
 
         {/* Resumen ejecutivo */}
