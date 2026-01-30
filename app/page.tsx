@@ -3,6 +3,8 @@ import { sql } from "@/lib/database"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { StatsCards } from "@/components/stats-cards"
 
+export const dynamic = "force-dynamic"
+
 import { LowStockAlerts } from "@/components/low-stock-alerts"
 import { RecentMovements } from "@/components/recent-movements"
 import { QuickActions } from "@/components/quick-actions"

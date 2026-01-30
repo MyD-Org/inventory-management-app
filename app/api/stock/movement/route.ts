@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
+import { revalidatePath } from "next/cache"
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,9 +50,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "El stock no puede ser negativo" }, { status: 400 })
     }
 
-    // Iniciar transacción
-    await sql`BEGIN`
-
     try {
       // Registrar el movimiento
       const movementResult = await sql`
@@ -87,8 +85,10 @@ export async function POST(request: NextRequest) {
         WHERE material_id = ${material_id}
       `
 
-      // Confirmar transacción
-      await sql`COMMIT`
+      // Revalidar las rutas que muestran el inventario
+      revalidatePath("/inventory")
+      revalidatePath("/materials")
+      revalidatePath("/")
 
       return NextResponse.json({
         success: true,
@@ -98,8 +98,6 @@ export async function POST(request: NextRequest) {
         created_at: movementResult[0].created_at,
       })
     } catch (error) {
-      // Revertir transacción en caso de error
-      await sql`ROLLBACK`
       throw error
     }
   } catch (error) {

@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,6 +38,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const { toast } = useToast()
+  const router = useRouter()
 
   const movementConfig = {
     entrada: {
@@ -163,6 +165,9 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
         title: "Éxito",
         description: `Movimiento registrado correctamente. Nuevo stock: ${result.new_stock}`,
       })
+
+      // Refrescar los datos en el cliente para que se vean reflejados en todas las tablas
+      router.refresh()
 
       // Limpiar formulario
       setTimeout(() => {

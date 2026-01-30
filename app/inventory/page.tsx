@@ -2,6 +2,8 @@ import { Suspense } from "react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { InventoryTable } from "@/components/inventory-table"
 
+export const dynamic = "force-dynamic"
+
 export default function InventoryPage({
     searchParams,
 }: {
