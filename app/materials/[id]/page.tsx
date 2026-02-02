@@ -11,7 +11,6 @@ import {
     Scale, 
     DollarSign, 
     History, 
-    ArrowLeft,
     TrendingUp,
     TrendingDown,
     RotateCcw
@@ -80,16 +79,9 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
             <DashboardHeader user={session?.user} />
             
             <main className="container mx-auto px-4 py-6 space-y-6">
-                <div className="flex items-center gap-4">
-                    <Link href="/inventory">
-                        <Button variant="outline" size="icon">
-                            <ArrowLeft className="w-4 h-4" />
-                        </Button>
-                    </Link>
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">{material.name}</h1>
-                        <p className="text-muted-foreground font-mono text-sm">{material.barcode}</p>
-                    </div>
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight">{material.name}</h1>
+                    <p className="text-muted-foreground font-mono text-sm">{material.barcode}</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
