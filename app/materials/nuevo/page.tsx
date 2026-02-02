@@ -77,10 +77,8 @@ export default function NuevoMaterialPage() {
     e.preventDefault()
     
     if (!formData.name || !formData.category_id || !formData.supplier_id) {
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: "Por favor complete los campos obligatorios",
-        variant: "destructive",
       })
       return
     }
@@ -110,17 +108,18 @@ export default function NuevoMaterialPage() {
         throw new Error(error.error || "Error al crear material")
       }
 
-      toast({
-        title: "Material creado",
+      toast.success("Material creado", {
         description: `${formData.name} se agregó correctamente al inventario`,
       })
       
-      router.push("/")
+      // Retrasamos un poco la navegación para evitar que la página se rompa al redirigir
+      setTimeout(() => {
+        router.push("/")
+        router.refresh()
+      }, 500)
     } catch (error) {
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: error instanceof Error ? error.message : "No se pudo crear el material",
-        variant: "destructive",
       })
     } finally {
       setLoading(false)

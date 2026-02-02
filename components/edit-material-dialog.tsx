@@ -107,18 +107,15 @@ export function EditMaterialDialog({ material, categories, suppliers, open: cont
                 throw new Error(error.error || "Error al actualizar material")
             }
 
-            toast({
-                title: "Material actualizado",
+            toast.success("Material actualizado", {
                 description: "Los cambios se han guardado correctamente",
             })
 
             setOpen(false)
             router.refresh()
         } catch (error) {
-            toast({
-                title: "Error",
+            toast.error("Error", {
                 description: error instanceof Error ? error.message : "No se pudo actualizar el material",
-                variant: "destructive",
             })
         } finally {
             setLoading(false)

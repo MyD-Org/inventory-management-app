@@ -77,10 +77,8 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
       const foundMaterial = await response.json()
       setMaterial(foundMaterial)
     } catch (error) {
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: "Material no encontrado en el sistema",
-        variant: "destructive",
       })
     }
   }
@@ -92,38 +90,30 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
 
   const validateMovement = () => {
     if (!material) {
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: "Debe seleccionar un material",
-        variant: "destructive",
       })
       return false
     }
 
     const qty = Number.parseInt(quantity)
     if (!qty || qty <= 0) {
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: "La cantidad debe ser mayor a 0",
-        variant: "destructive",
       })
       return false
     }
 
     if (movementType === "salida" && qty > material.available_stock) {
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: `Stock insuficiente. Disponible: ${material.available_stock}`,
-        variant: "destructive",
       })
       return false
     }
 
     if (!userName.trim()) {
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: "Debe ingresar el nombre del usuario",
-        variant: "destructive",
       })
       return false
     }
@@ -161,8 +151,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
       const result = await response.json()
 
       setSuccess(true)
-      toast({
-        title: "Éxito",
+      toast.success("Éxito", {
         description: `Movimiento registrado correctamente. Nuevo stock: ${result.new_stock}`,
       })
 
@@ -178,10 +167,8 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
         setSuccess(false)
       }, 2000)
     } catch (error) {
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: "No se pudo registrar el movimiento",
-        variant: "destructive",
       })
     } finally {
       setLoading(false)
