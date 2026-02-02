@@ -8,7 +8,7 @@ import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { DownloadReportButton } from "@/components/download-report-button"
 
-export default async function ReportsPage() {
+export default async function ReportsPage({ searchParams }: { searchParams?: { q?: string, type?: string } }) {
   const session = await auth()
 
   if (session?.user?.role !== 'admin') {
@@ -35,7 +35,7 @@ export default async function ReportsPage() {
 
         {/* Historial de movimientos */}
         <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-lg" />}>
-          <MovementHistory />
+          <MovementHistory searchParams={searchParams} />
         </Suspense>
 
         {/* Gráficos y visualizaciones */}

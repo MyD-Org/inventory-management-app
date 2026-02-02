@@ -1,12 +1,14 @@
 import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { TrendingUp, TrendingDown, RotateCcw, Search, Calendar } from "lucide-react"
+import { Calendar } from "lucide-react"
+import { MovementFilters } from "./movement-filters"
 
-async function getMovementHistory(limit = 50) {
+async function getMovementHistory(search?: string, type?: string, limit = 100) {
   try {
+    const searchPattern = search ? `%${search}%` : null
+    const typeFilter = type && type !== 'all' ? type : null
+
     const movements = await sql`
       SELECT 
         sm.id,
@@ -24,6 +26,9 @@ async function getMovementHistory(limit = 50) {
       FROM stock_movements sm
       JOIN materials m ON sm.material_id = m.id
       LEFT JOIN categories c ON m.category_id = c.id
+      WHERE 
+        (${searchPattern}::text IS NULL OR m.name ILIKE ${searchPattern} OR m.barcode ILIKE ${searchPattern})
+        AND (${typeFilter}::text IS NULL OR sm.movement_type = ${typeFilter})
       ORDER BY sm.created_at DESC
       LIMIT ${limit}
     `
@@ -48,8 +53,8 @@ async function getMovementHistory(limit = 50) {
   }
 }
 
-export async function MovementHistory() {
-  const movements = await getMovementHistory()
+export async function MovementHistory({ searchParams }: { searchParams?: { q?: string, type?: string } }) {
+  const movements = await getMovementHistory(searchParams?.q, searchParams?.type)
 
   const getMovementIcon = (type: string) => {
     switch (type) {
@@ -98,24 +103,7 @@ export async function MovementHistory() {
           Historial de Movimientos
         </CardTitle>
 
-        {/* Filtros */}
-        <div className="flex gap-4 mt-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Buscar por material o código..." className="pl-10" />
-          </div>
-          <Select defaultValue="all">
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Tipo de movimiento" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="entrada">Entradas</SelectItem>
-              <SelectItem value="salida">Salidas</SelectItem>
-              <SelectItem value="ajuste">Ajustes</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <MovementFilters />
       </CardHeader>
       <CardContent>
         <div className="space-y-3 max-h-96 overflow-y-auto">
