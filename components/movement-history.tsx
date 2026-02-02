@@ -1,7 +1,7 @@
 import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar } from "lucide-react"
+import { Calendar, TrendingUp, TrendingDown, RotateCcw } from "lucide-react"
 import { MovementFilters } from "./movement-filters"
 
 async function getMovementHistory(search?: string, type?: string, limit = 100) {
@@ -53,8 +53,11 @@ async function getMovementHistory(search?: string, type?: string, limit = 100) {
   }
 }
 
-export async function MovementHistory({ searchParams }: { searchParams?: { q?: string, type?: string } }) {
-  const movements = await getMovementHistory(searchParams?.q, searchParams?.type)
+export async function MovementHistory({ searchParams }: { searchParams?: any }) {
+  const movements = await getMovementHistory(
+    typeof searchParams?.q === 'string' ? searchParams.q : undefined,
+    typeof searchParams?.type === 'string' ? searchParams.type : undefined
+  )
 
   const getMovementIcon = (type: string) => {
     switch (type) {
