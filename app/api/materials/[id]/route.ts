@@ -3,10 +3,17 @@ import { NextRequest, NextResponse } from "next/server"
 
 const sql = neon(process.env.DATABASE_URL!)
 
+import { auth } from "@/auth"
+
 export async function PUT(
     request: NextRequest,
     { params }: { params: { id: string } }
 ) {
+    const session = await auth()
+    if (session?.user?.role !== 'admin') {
+        return NextResponse.json({ error: "No tienes permisos para esta acción" }, { status: 403 })
+    }
+    
     try {
         const id = params.id
         const body = await request.json()
@@ -77,6 +84,11 @@ export async function DELETE(
     request: NextRequest,
     { params }: { params: { id: string } }
 ) {
+    const session = await auth()
+    if (session?.user?.role !== 'admin') {
+        return NextResponse.json({ error: "No tienes permisos para esta acción" }, { status: 403 })
+    }
+
     try {
         const id = params.id
 

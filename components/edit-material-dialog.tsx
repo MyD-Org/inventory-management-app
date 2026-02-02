@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Edit, Loader2, Save } from "lucide-react"
+import { Edit, Loader2, Save, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 interface Category {
     id: number
@@ -52,6 +53,7 @@ export function EditMaterialDialog({ material, categories, suppliers, open: cont
     const setOpen = isControlled ? (controlledOnOpenChange || (() => { })) : setInternalOpen
 
     const [loading, setLoading] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false)
 
     const [formData, setFormData] = useState({
         name: "",
@@ -119,6 +121,33 @@ export function EditMaterialDialog({ material, categories, suppliers, open: cont
             })
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleDelete = async () => {
+        setIsDeleting(true)
+        try {
+            const response = await fetch(`/api/materials/${material.id}`, {
+                method: "DELETE",
+            })
+
+            if (!response.ok) {
+                const error = await response.json()
+                throw new Error(error.error || "Error al eliminar material")
+            }
+
+            toast.success("Material eliminado", {
+                description: "El producto ha sido eliminado del sistema",
+            })
+
+            setOpen(false)
+            router.refresh()
+        } catch (error) {
+            toast.error("Error", {
+                description: error instanceof Error ? error.message : "No se pudo eliminar el material",
+            })
+        } finally {
+            setIsDeleting(false)
         }
     }
 
@@ -264,23 +293,53 @@ export function EditMaterialDialog({ material, categories, suppliers, open: cont
                         </div>
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                            Cancelar
-                        </Button>
-                        <Button type="submit" disabled={loading}>
-                            {loading ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Guardando...
-                                </>
-                            ) : (
-                                <>
-                                    <Save className="w-4 h-4 mr-2" />
-                                    Guardar Cambios
-                                </>
-                            )}
-                        </Button>
+                    <div className="flex justify-between items-center pt-4">
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button type="button" variant="destructive">
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Eliminar
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Estás completamente seguro?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Esta acción no se puede deshacer. Esto eliminará permanentemente el
+                                        material <strong>{material.name}</strong> y todos sus registros asociados.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                        onClick={handleDelete}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                        disabled={isDeleting}
+                                    >
+                                        {isDeleting ? "Eliminando..." : "Sí, eliminar"}
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+
+                        <div className="flex gap-3">
+                            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                                Cancelar
+                            </Button>
+                            <Button type="submit" disabled={loading}>
+                                {loading ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Guardando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="w-4 h-4 mr-2" />
+                                        Guardar Cambios
+                                    </>
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 </form>
             </DialogContent>
