@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { EditMaterialDialog } from "./edit-material-dialog"
 import { Button } from "@/components/ui/button"
 import { History } from "lucide-react"
-import { MaterialMovementSummary } from "./material-movement-summary"
+import { useRouter } from "next/navigation"
 
 interface InventoryTableClientProps {
     items: any[]
@@ -16,7 +16,7 @@ interface InventoryTableClientProps {
 
 export function InventoryTableClient({ items, categories, suppliers, userRole }: InventoryTableClientProps) {
     const [editingMaterial, setEditingMaterial] = useState<any>(null)
-    const [viewingHistory, setViewingHistory] = useState<any>(null)
+    const router = useRouter()
 
     return (
         <>
@@ -99,9 +99,9 @@ export function InventoryTableClient({ items, categories, suppliers, userRole }:
                                             className="h-8 w-8 text-muted-foreground hover:text-primary"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                setViewingHistory(item);
+                                                router.push(`/materials/${item.id}`);
                                             }}
-                                            title="Ver historial de movimientos"
+                                            title="Ver detalle y movimientos"
                                         >
                                             <History className="h-4 w-4" />
                                         </Button>
@@ -120,16 +120,6 @@ export function InventoryTableClient({ items, categories, suppliers, userRole }:
                     suppliers={suppliers}
                     open={!!editingMaterial}
                     onOpenChange={(open) => !open && setEditingMaterial(null)}
-                />
-            )}
-
-            {viewingHistory && (
-                <MaterialMovementSummary
-                    materialId={viewingHistory.id}
-                    materialName={viewingHistory.name}
-                    barcode={viewingHistory.barcode}
-                    open={!!viewingHistory}
-                    onOpenChange={(open) => !open && setViewingHistory(null)}
                 />
             )}
         </>
