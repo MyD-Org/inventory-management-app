@@ -27,7 +27,14 @@ async function getMovementHistory(search?: string, type?: string, limit = 100) {
       JOIN materials m ON sm.material_id = m.id
       LEFT JOIN categories c ON m.category_id = c.id
       WHERE 
-        (${searchPattern}::text IS NULL OR m.name ILIKE ${searchPattern} OR m.barcode ILIKE ${searchPattern})
+        (
+          ${searchPattern}::text IS NULL 
+          OR m.name ILIKE ${searchPattern} 
+          OR m.barcode ILIKE ${searchPattern}
+          OR sm.reference_number ILIKE ${searchPattern}
+          OR sm.user_name ILIKE ${searchPattern}
+          OR m.barcode = ${search || ''}
+        )
         AND (${typeFilter}::text IS NULL OR sm.movement_type = ${typeFilter})
       ORDER BY sm.created_at DESC
       LIMIT ${limit}
