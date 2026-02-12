@@ -2,22 +2,21 @@ import { sql } from "@/lib/database"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { 
-    Package, 
-    Barcode, 
-    Tag, 
-    Truck, 
-    Scale, 
-    DollarSign, 
-    History, 
+import {
+    Package,
+    Barcode,
+    Tag,
+    Truck,
+    Scale,
+    DollarSign,
+    History,
     TrendingUp,
     TrendingDown,
-    RotateCcw
+    RotateCcw,
 } from "lucide-react"
-import Link from "next/link"
 import { notFound } from "next/navigation"
 import { auth } from "@/auth"
+import { formatCurrencyUSD } from "@/lib/formatters"
 
 async function getMaterialDetail(id: string) {
     try {
@@ -49,6 +48,7 @@ async function getMaterialMovements(id: string) {
             SELECT * FROM stock_movements 
             WHERE material_id = ${id} 
             ORDER BY created_at DESC
+            LIMIT 50
         `
         return movements
     } catch (error) {
@@ -60,7 +60,7 @@ async function getMaterialMovements(id: string) {
 export default async function MaterialDetailPage({ params }: { params: { id: string } }) {
     const session = await auth()
     const material = await getMaterialDetail(params.id)
-    
+
     if (!material) {
         notFound()
     }
@@ -77,7 +77,7 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
     return (
         <div className="min-h-screen bg-background">
             <DashboardHeader user={session?.user} />
-            
+
             <main className="container mx-auto px-4 py-6 space-y-6">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">{material.name}</h1>
@@ -85,7 +85,6 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Información Principal */}
                     <Card className="md:col-span-2">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
@@ -122,8 +121,8 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
                                 <div className="flex items-start gap-3">
                                     <DollarSign className="w-4 h-4 mt-1 text-muted-foreground" />
                                     <div>
-                                        <p className="text-xs font-medium text-muted-foreground uppercase">Costo Unitario</p>
-                                        <p className="text-sm font-semibold">${Number(material.unit_cost).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</p>
+                                        <p className="text-xs font-medium text-muted-foreground uppercase">Costo Unitario (USD)</p>
+                                        <p className="text-sm font-semibold">{formatCurrencyUSD(Number(material.unit_cost))}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-start gap-3">
@@ -144,7 +143,6 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
                         </CardContent>
                     </Card>
 
-                    {/* Estado del Stock */}
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
@@ -156,7 +154,7 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
                             <div className="text-center p-4 bg-muted rounded-xl">
                                 <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Stock Actual</p>
                                 <p className="text-4xl font-bold">{material.current_stock}</p>
-                                <Badge 
+                                <Badge
                                     className="mt-2"
                                     variant={stockLevel === "low" ? "destructive" : stockLevel === "high" ? "secondary" : "default"}
                                 >
@@ -176,14 +174,15 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
                                 <div className="pt-3 border-t">
                                     <div className="flex justify-between text-xs text-muted-foreground">
                                         <span>Rango Ideal:</span>
-                                        <span>{material.min_stock} - {material.max_stock}</span>
+                                        <span>
+                                            {material.min_stock} - {material.max_stock}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
 
-                    {/* Historial de Movimientos */}
                     <Card className="md:col-span-3">
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div>
@@ -223,7 +222,7 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
                                                             month: "2-digit",
                                                             year: "2-digit",
                                                             hour: "2-digit",
-                                                            minute: "2-digit"
+                                                            minute: "2-digit",
                                                         })}
                                                     </td>
                                                     <td className="py-3">
@@ -239,8 +238,20 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
                                                         </div>
                                                     </td>
                                                     <td className="py-3 text-center">
-                                                        <Badge variant={m.movement_type === "entrada" ? "default" : m.movement_type === "salida" ? "destructive" : "secondary"}>
-                                                            {m.movement_type === "entrada" ? "+" : m.movement_type === "salida" ? "-" : "±"}
+                                                        <Badge
+                                                            variant={
+                                                                m.movement_type === "entrada"
+                                                                    ? "default"
+                                                                    : m.movement_type === "salida"
+                                                                        ? "destructive"
+                                                                        : "secondary"
+                                                            }
+                                                        >
+                                                            {m.movement_type === "entrada"
+                                                                ? "+"
+                                                                : m.movement_type === "salida"
+                                                                    ? "-"
+                                                                    : "±"}
                                                             {Math.abs(m.quantity)}
                                                         </Badge>
                                                     </td>
