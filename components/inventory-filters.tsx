@@ -27,6 +27,7 @@ export function InventoryFilters({ categories }: InventoryFiltersProps) {
         } else {
             params.delete("search")
         }
+        params.set("page", "1")
         router.replace(`?${params.toString()}`)
     }, 300)
 
@@ -37,6 +38,7 @@ export function InventoryFilters({ categories }: InventoryFiltersProps) {
         } else {
             params.delete("category")
         }
+        params.set("page", "1")
         router.replace(`?${params.toString()}`)
     }
 
@@ -47,6 +49,7 @@ export function InventoryFilters({ categories }: InventoryFiltersProps) {
         } else {
             params.delete("status")
         }
+        params.set("page", "1")
         router.replace(`?${params.toString()}`)
     }
 

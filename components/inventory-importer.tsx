@@ -9,6 +9,7 @@ import { Upload, AlertTriangle, CheckCircle, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import { previewInventoryUpdates, executeInventoryUpdates } from "@/lib/actions"
 import { useRouter } from "next/navigation"
+import { formatCurrencyUSD } from "@/lib/formatters"
 
 export function InventoryImporter() {
     const [file, setFile] = useState<File | null>(null)
@@ -119,7 +120,7 @@ export function InventoryImporter() {
                             <div className="text-sm text-blue-800 dark:text-blue-200">
                                 <p className="font-bold mb-1">Instrucciones Importantes:</p>
                                 <ul className="list-disc list-inside space-y-1">
-                                    <li>Solo debes modificar las columnas <strong>"Stock Actual"</strong> y <strong>"Costo Unitario"</strong>.</li>
+                                    <li>Solo debes modificar las columnas <strong>"Stock Actual"</strong> y <strong>"Costo Unitario (USD)"</strong>.</li>
                                     <li><strong>NO modifiques</strong> la columna "Código" ni el "Nombre", ya que se usan para identificar el producto.</li>
                                     <li>Si cambias el código, el sistema no encontrará el producto o dará error.</li>
                                 </ul>
@@ -130,7 +131,7 @@ export function InventoryImporter() {
                             <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
                             <div>
                                 <p className="text-sm font-medium">Arrastra tu archivo CSV aquí o haz clic para seleccionar</p>
-                                <p className="text-xs text-muted-foreground mt-1">Columnas requeridas: "Código", "Stock Actual". Opcional: "Costo Unitario"</p>
+                                <p className="text-xs text-muted-foreground mt-1">Columnas requeridas: "Código", "Stock Actual". Opcional: "Costo Unitario (USD)"</p>
                             </div>
                             <Input
                                 type="file"
@@ -171,7 +172,7 @@ export function InventoryImporter() {
                                         <TableHead className="text-right">Stock Actual</TableHead>
                                         <TableHead className="text-center">Cambio</TableHead>
                                         <TableHead className="text-right">Nuevo Stock</TableHead>
-                                        <TableHead className="text-right">Nuevo Costo</TableHead>
+                                        <TableHead className="text-right">Nuevo Costo (USD)</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -194,11 +195,11 @@ export function InventoryImporter() {
                                             <TableCell className="text-right">
                                                 {item.newCost !== undefined && item.newCost !== item.currentCost ? (
                                                     <span className="text-blue-600 font-bold">
-                                                        ${item.newCost}
+                                                        {formatCurrencyUSD(Number(item.newCost))}
                                                     </span>
                                                 ) : (
                                                     <span className="text-muted-foreground">
-                                                        ${item.currentCost}
+                                                        {formatCurrencyUSD(Number(item.currentCost))}
                                                     </span>
                                                 )}
                                             </TableCell>

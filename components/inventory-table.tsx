@@ -1,17 +1,19 @@
 import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { InventoryFilters } from "./inventory-filters"
-import { EditMaterialDialog } from "./edit-material-dialog"
 import { InventoryTableClient } from "./inventory-table-client"
+import { Pagination } from "./pagination"
 
 interface InventoryTableProps {
   searchParams?: {
     search?: string
     category?: string
     status?: string
+    page?: string
   }
 }
+
+const ITEMS_PER_PAGE = 25
 
 async function getCategories() {
   try {
@@ -33,11 +35,48 @@ async function getSuppliers() {
   }
 }
 
-async function getInventoryItems(search?: string, categoryId?: string, status?: string) {
+async function getInventoryCount(search?: string, categoryId?: string, status?: string) {
   try {
     const searchPattern = search ? `%${search}%` : null
     const categoryFilter = categoryId && categoryId !== 'all' ? categoryId : null
     const statusFilter = status && status !== 'all' ? status : null
+
+    const result = await sql`
+      SELECT 
+        COUNT(DISTINCT m.id) as total
+      FROM materials m
+      JOIN inventory i ON m.id = i.material_id
+      LEFT JOIN categories c ON m.category_id = c.id
+      LEFT JOIN suppliers s ON m.supplier_id = s.id
+      WHERE 
+        (${searchPattern}::text IS NULL OR m.name ILIKE ${searchPattern} OR m.barcode ILIKE ${searchPattern})
+        AND (${categoryFilter}::int IS NULL OR m.category_id = ${categoryFilter})
+        AND (
+          ${statusFilter}::text IS NULL OR
+          (${statusFilter} = 'low' AND i.current_stock <= m.min_stock) OR
+          (${statusFilter} = 'high' AND i.current_stock >= m.max_stock) OR
+          (${statusFilter} = 'normal' AND i.current_stock > m.min_stock AND i.current_stock < m.max_stock)
+        )
+    `
+
+    return Number(result[0]?.total || 0)
+  } catch (error) {
+    console.error("Error fetching inventory count:", error)
+    return 0
+  }
+}
+
+async function getInventoryItemsPaged(
+  search: string | undefined,
+  categoryId: string | undefined,
+  status: string | undefined,
+  page: number
+) {
+  try {
+    const searchPattern = search ? `%${search}%` : null
+    const categoryFilter = categoryId && categoryId !== 'all' ? categoryId : null
+    const statusFilter = status && status !== 'all' ? status : null
+    const offset = (page - 1) * ITEMS_PER_PAGE
 
     const items = await sql`
       SELECT 
@@ -70,7 +109,8 @@ async function getInventoryItems(search?: string, categoryId?: string, status?: 
           (${statusFilter} = 'normal' AND i.current_stock > m.min_stock AND i.current_stock < m.max_stock)
         )
       ORDER BY m.name
-      LIMIT 100
+      LIMIT ${ITEMS_PER_PAGE}
+      OFFSET ${offset}
     `
 
     return items
@@ -84,15 +124,35 @@ import { auth } from "@/auth"
 
 export async function InventoryTable({ searchParams }: InventoryTableProps) {
   const session = await auth()
-  const [categories, suppliers, items] = await Promise.all([
+  const pageParam = searchParams?.page ? Number.parseInt(searchParams.page, 10) : 1
+
+  const [categories, suppliers, totalCount] = await Promise.all([
     getCategories(),
     getSuppliers(),
-    getInventoryItems(
+    getInventoryCount(
       searchParams?.search,
       searchParams?.category,
       searchParams?.status
-    )
+    ),
   ])
+  const totalPages = totalCount > 0 ? Math.ceil(totalCount / ITEMS_PER_PAGE) : 0
+  const currentPage = totalPages > 0 ? Math.min(Math.max(pageParam, 1), totalPages) : 1
+  const items = await getInventoryItemsPaged(
+    searchParams?.search,
+    searchParams?.category,
+    searchParams?.status,
+    currentPage
+  )
+
+  const buildPageHref = (page: number) => {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(searchParams || {})) {
+      if (key === "page") continue
+      if (typeof value === "string") params.set(key, value)
+    }
+    params.set("page", String(page))
+    return `/inventory?${params.toString()}`
+  }
 
   return (
     <Card>
@@ -107,6 +167,11 @@ export async function InventoryTable({ searchParams }: InventoryTableProps) {
           suppliers={suppliers}
           userRole={session?.user?.role}
         />
+        {totalPages > 1 && (
+          <div className="mt-4 flex justify-end">
+            <Pagination currentPage={currentPage} totalPages={totalPages} buildHref={buildPageHref} />
+          </div>
+        )}
       </CardContent>
     </Card>
   )

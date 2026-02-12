@@ -238,6 +238,48 @@ export async function downloadInventoryReport() {
     }
 }
 
+export async function downloadMovementsReport(params?: { search?: string; type?: string; from?: string; to?: string }) {
+    const sql = neon(process.env.DATABASE_URL!);
+    const { search, type, from, to } = params || {};
+
+    try {
+        const searchVal = search ? `%${search}%` : null;
+        const typeVal = type || 'all';
+        const fromVal = from ? new Date(from).toISOString() : null;
+        const toVal = to ? new Date(new Date(to).setHours(23, 59, 59, 999)).toISOString() : null;
+
+        const data = await sql`
+            SELECT 
+                sm.id,
+                sm.movement_type,
+                sm.quantity,
+                sm.previous_stock,
+                sm.new_stock,
+                sm.reference_number,
+                sm.notes,
+                sm.user_name,
+                sm.created_at,
+                m.name as material_name,
+                m.barcode,
+                c.name as category_name
+            FROM stock_movements sm
+            JOIN materials m ON sm.material_id = m.id
+            LEFT JOIN categories c ON m.category_id = c.id
+            WHERE 
+                (${searchVal}::text IS NULL OR (m.name ILIKE ${searchVal}::text OR m.barcode ILIKE ${searchVal}::text OR sm.reference_number ILIKE ${searchVal}::text))
+                AND (${typeVal}::text = 'all' OR sm.movement_type = ${typeVal}::text)
+                AND (${fromVal}::text IS NULL OR sm.created_at >= ${fromVal}::timestamp)
+                AND (${toVal}::text IS NULL OR sm.created_at <= ${toVal}::timestamp)
+            ORDER BY sm.created_at DESC
+        `;
+
+        return data;
+    } catch (error) {
+        console.error('Error fetching movements report:', error);
+        return [];
+    }
+}
+
 export async function previewInventoryUpdates(items: { barcode: string; newStock: number; newCost?: number }[]) {
     const session = await auth();
     if (session?.user?.role !== 'admin') {

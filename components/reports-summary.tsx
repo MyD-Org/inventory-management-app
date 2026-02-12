@@ -2,6 +2,7 @@ import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { TrendingUp, TrendingDown, Package, AlertTriangle, DollarSign } from "lucide-react"
+import { formatCurrencyUSD } from "@/lib/formatters"
 
 async function getReportsSummary() {
   try {
@@ -139,12 +140,12 @@ export async function ReportsSummary() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
+            <CardTitle className="text-sm font-medium">Valor Total (USD)</CardTitle>
             <DollarSign className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              ${Number(data.summary.total_value).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+            <div className="text-xl font-bold leading-tight break-all sm:text-2xl">
+              {formatCurrencyUSD(Number(data.summary.total_value))}
             </div>
             <p className="text-xs text-muted-foreground">Valor del inventario</p>
           </CardContent>

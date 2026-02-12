@@ -19,7 +19,7 @@ export function DownloadReportButton() {
             }
 
             // Convert to CSV
-            const headers = ["Código", "Nombre", "Categoría", "Proveedor", "Stock Actual", "Unidad", "Costo Unitario", "Valor Total"]
+            const headers = ["Código", "Nombre", "Categoría", "Proveedor", "Stock Actual", "Unidad", "Costo Unitario (USD)", "Valor Total (USD)"]
             const csvContent = [
                 headers.join(","),
                 ...data.map((row: any) => [

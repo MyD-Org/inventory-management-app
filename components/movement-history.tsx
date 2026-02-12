@@ -1,13 +1,52 @@
 import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, TrendingUp, TrendingDown, RotateCcw } from "lucide-react"
+import { TrendingUp, TrendingDown, RotateCcw, Calendar } from "lucide-react"
 import { MovementFilters } from "./movement-filters"
+import { DownloadMovementsButton } from "./download-movements-button"
+import { MovementHistoryLoadingOverlay, MovementHistoryProvider } from "./movement-history-context"
+import { Pagination } from "./pagination"
 
-async function getMovementHistory(search?: string, type?: string, limit = 100) {
+const MOVEMENTS_PER_PAGE = 25
+
+async function getMovementHistoryCount(params: { search?: string; type?: string; from?: string; to?: string }) {
+  const { search, type, from, to } = params
+
   try {
-    const searchPattern = search ? `%${search}%` : null
-    const typeFilter = type && type !== 'all' ? type : null
+    const searchVal = search ? `%${search}%` : null
+    const typeVal = type || "all"
+    const fromVal = from ? new Date(from).toISOString() : null
+    const toVal = to ? new Date(new Date(to).setHours(23, 59, 59, 999)).toISOString() : null
+
+    const result = await sql`
+      SELECT 
+        COUNT(*) as total
+      FROM stock_movements sm
+      JOIN materials m ON sm.material_id = m.id
+      LEFT JOIN categories c ON m.category_id = c.id
+      WHERE 
+        (${searchVal}::text IS NULL OR (m.name ILIKE ${searchVal}::text OR m.barcode ILIKE ${searchVal}::text OR sm.reference_number ILIKE ${searchVal}::text))
+        AND (${typeVal}::text = 'all' OR sm.movement_type = ${typeVal}::text)
+        AND (${fromVal}::text IS NULL OR sm.created_at >= ${fromVal}::timestamp)
+        AND (${toVal}::text IS NULL OR sm.created_at <= ${toVal}::timestamp)
+    `
+
+    return Number(result[0]?.total || 0)
+  } catch (error) {
+    console.error("Error fetching movement history count:", error)
+    return 0
+  }
+}
+
+async function getMovementHistory(params: { search?: string; type?: string; from?: string; to?: string; page?: number }) {
+  const { search, type, from, to, page = 1 } = params
+  const offset = (page - 1) * MOVEMENTS_PER_PAGE
+
+  try {
+    const searchVal = search ? `%${search}%` : null
+    const typeVal = type || "all"
+    const fromVal = from ? new Date(from).toISOString() : null
+    const toVal = to ? new Date(new Date(to).setHours(23, 59, 59, 999)).toISOString() : null
 
     const movements = await sql`
       SELECT 
@@ -27,20 +66,16 @@ async function getMovementHistory(search?: string, type?: string, limit = 100) {
       JOIN materials m ON sm.material_id = m.id
       LEFT JOIN categories c ON m.category_id = c.id
       WHERE 
-        (
-          ${searchPattern}::text IS NULL 
-          OR m.name ILIKE ${searchPattern} 
-          OR m.barcode ILIKE ${searchPattern}
-          OR sm.reference_number ILIKE ${searchPattern}
-          OR sm.user_name ILIKE ${searchPattern}
-          OR m.barcode = ${search || ''}
-        )
-        AND (${typeFilter}::text IS NULL OR sm.movement_type = ${typeFilter})
+        (${searchVal}::text IS NULL OR (m.name ILIKE ${searchVal}::text OR m.barcode ILIKE ${searchVal}::text OR sm.reference_number ILIKE ${searchVal}::text))
+        AND (${typeVal}::text = 'all' OR sm.movement_type = ${typeVal}::text)
+        AND (${fromVal}::text IS NULL OR sm.created_at >= ${fromVal}::timestamp)
+        AND (${toVal}::text IS NULL OR sm.created_at <= ${toVal}::timestamp)
       ORDER BY sm.created_at DESC
-      LIMIT ${limit}
+      LIMIT ${MOVEMENTS_PER_PAGE}
+      OFFSET ${offset}
     `
 
-    return movements.map((movement) => ({
+    return movements.map((movement: any) => ({
       id: movement.id,
       movement_type: movement.movement_type,
       quantity: Number(movement.quantity),
@@ -60,11 +95,22 @@ async function getMovementHistory(search?: string, type?: string, limit = 100) {
   }
 }
 
-export async function MovementHistory({ searchParams }: { searchParams?: any }) {
-  const movements = await getMovementHistory(
-    typeof searchParams?.q === 'string' ? searchParams.q : undefined,
-    typeof searchParams?.type === 'string' ? searchParams.type : undefined
-  )
+export async function MovementHistory({
+  searchParams,
+}: {
+  searchParams?: { [key: string]: string | string[] | undefined }
+}) {
+  const search = typeof searchParams?.search === "string" ? searchParams.search : undefined
+  const type = typeof searchParams?.type === "string" ? searchParams.type : undefined
+  const from = typeof searchParams?.from === "string" ? searchParams.from : undefined
+  const to = typeof searchParams?.to === "string" ? searchParams.to : undefined
+  const pageParam = typeof searchParams?.page === "string" ? Number.parseInt(searchParams.page, 10) : 1
+
+  const totalCount = await getMovementHistoryCount({ search, type, from, to })
+  const totalPages = totalCount > 0 ? Math.ceil(totalCount / MOVEMENTS_PER_PAGE) : 0
+  const currentPage = totalPages > 0 ? Math.min(Math.max(pageParam, 1), totalPages) : 1
+
+  const movements = await getMovementHistory({ search, type, from, to, page: currentPage })
 
   const getMovementIcon = (type: string) => {
     switch (type) {
@@ -105,79 +151,109 @@ export async function MovementHistory({ searchParams }: { searchParams?: any }) 
     }
   }
 
+  const buildPageHref = (page: number) => {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(searchParams || {})) {
+      if (key === "page") continue
+      if (typeof value === "string") params.set(key, value)
+    }
+    params.set("page", String(page))
+    return `/reports?${params.toString()}`
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Calendar className="w-5 h-5" />
-          Historial de Movimientos
-        </CardTitle>
+    <MovementHistoryProvider>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              Historial de Movimientos
+            </CardTitle>
+            <DownloadMovementsButton />
+          </div>
 
-        <MovementFilters />
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3 max-h-96 overflow-y-auto">
-          {movements.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">No hay movimientos registrados</p>
-          ) : (
-            movements.map((movement) => {
-              const Icon = getMovementIcon(movement.movement_type)
-              const colorClass = getMovementColor(movement.movement_type)
-              const badgeVariant = getMovementBadge(movement.movement_type)
+          <MovementFilters />
+        </CardHeader>
+        <CardContent>
+          <MovementHistoryLoadingOverlay>
+            <div>
+              <div className="space-y-3">
+                {movements.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    No hay movimientos que coincidan con los filtros
+                  </p>
+                ) : (
+                  movements.map((movement) => {
+                    const Icon = getMovementIcon(movement.movement_type)
+                    const colorClass = getMovementColor(movement.movement_type)
+                    const badgeVariant = getMovementBadge(movement.movement_type)
 
-              return (
-                <div key={movement.id} className="flex items-start gap-3 p-4 border rounded-lg hover:bg-muted/50">
-                  <Icon className={`w-5 h-5 mt-1 ${colorClass}`} />
+                    return (
+                      <div
+                        key={movement.id}
+                        className="flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 md:flex-row md:items-center md:gap-4"
+                      >
+                        <div className="flex items-center gap-2 md:w-[36%] md:min-w-0">
+                          <Icon className={`h-4 w-4 ${colorClass}`} />
+                          <div className="min-w-0">
+                            <h4 className="truncate font-medium text-foreground">{movement.material_name}</h4>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {movement.barcode} • {movement.category_name}
+                            </p>
+                          </div>
+                        </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1">
-                        <h4 className="font-medium text-foreground truncate">{movement.material_name}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {movement.barcode} • {movement.category_name}
-                        </p>
-                      </div>
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground md:w-[28%] md:justify-start">
+                          <span className="font-medium text-foreground/80">{movement.user_name}</span>
+                          <span className="hidden md:inline">•</span>
+                          <span>
+                            {new Date(movement.created_at).toLocaleDateString("es-AR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          {movement.reference_number && (
+                            <>
+                              <span className="hidden md:inline">•</span>
+                              <span>Ref: {movement.reference_number}</span>
+                            </>
+                          )}
+                        </div>
 
-                      <div className="text-right flex-shrink-0">
-                        <Badge variant={badgeVariant as any}>
-                          {movement.movement_type === "entrada" ? "+" : movement.movement_type === "salida" ? "-" : "±"}
-                          {Math.abs(movement.quantity)}
-                        </Badge>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {movement.previous_stock} → {movement.new_stock}
+                        <div className="flex items-center justify-between md:ml-auto md:w-[28%] md:justify-end md:gap-3">
+                          {movement.notes && (
+                            <span className="mr-2 hidden max-w-[220px] truncate text-xs italic text-muted-foreground md:inline">
+                              {movement.notes}
+                            </span>
+                          )}
+                          <div className="text-right">
+                            <Badge variant={badgeVariant as any}>
+                              {movement.movement_type === "entrada" ? "+" : movement.movement_type === "salida" ? "-" : "±"}
+                              {Math.abs(movement.quantity)}
+                            </Badge>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {movement.previous_stock} → {movement.new_stock}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="mt-2 text-sm text-muted-foreground">
-                      <div className="flex items-center justify-between">
-                        <span>{movement.user_name}</span>
-                        <span>
-                          {new Date(movement.created_at).toLocaleDateString("es-AR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-
-                      {movement.reference_number && (
-                        <div className="mt-1">
-                          <span className="font-medium">Ref:</span> {movement.reference_number}
-                        </div>
-                      )}
-
-                      {movement.notes && <div className="mt-1 text-xs">{movement.notes}</div>}
-                    </div>
-                  </div>
+                    )
+                  })
+                )}
+              </div>
+              {totalPages > 1 && (
+                <div className="mt-4 flex justify-end">
+                  <Pagination currentPage={currentPage} totalPages={totalPages} buildHref={buildPageHref} />
                 </div>
-              )
-            })
-          )}
-        </div>
-      </CardContent>
-    </Card>
+              )}
+            </div>
+          </MovementHistoryLoadingOverlay>
+        </CardContent>
+      </Card>
+    </MovementHistoryProvider>
   )
 }

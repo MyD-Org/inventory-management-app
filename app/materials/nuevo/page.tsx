@@ -232,7 +232,7 @@ export default function NuevoMaterialPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="unit_cost">Costo Unitario ($)</Label>
+                  <Label htmlFor="unit_cost">Costo Unitario (USD)</Label>
                   <Input
                     id="unit_cost"
                     type="number"
