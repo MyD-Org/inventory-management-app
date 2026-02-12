@@ -24,7 +24,7 @@ export default async function SuppliersPage() {
                     <SuppliersTable suppliers={suppliers.map(s => ({
                         id: s.id,
                         name: s.name,
-                        contact_info: s.contact_info
+                        contact_info: s.address || s.contact_info || s.email || s.phone
                     }))} />
                 </div>
             </main>
