@@ -14,9 +14,10 @@ interface DashboardHeaderProps {
     image?: string | null
     role?: string
   }
+  hideBackButton?: boolean
 }
 
-export function DashboardHeader({ user }: DashboardHeaderProps) {
+export function DashboardHeader({ user, hideBackButton = false }: DashboardHeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
   const isHomePage = pathname === "/"
@@ -26,7 +27,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {!isHomePage && (
+            {!isHomePage && !hideBackButton && (
               <div className="flex items-center gap-1 mr-2">
                 <Button
                   variant="outline"

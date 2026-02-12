@@ -189,55 +189,54 @@ export async function MovementHistory({
                     const colorClass = getMovementColor(movement.movement_type)
                     const badgeVariant = getMovementBadge(movement.movement_type)
 
-                    return (
-                      <div
-                        key={movement.id}
-                        className="flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 md:flex-row md:items-center md:gap-4"
-                      >
-                        <div className="flex items-center gap-2 md:w-[36%] md:min-w-0">
-                          <Icon className={`h-4 w-4 ${colorClass}`} />
-                          <div className="min-w-0">
-                            <h4 className="truncate font-medium text-foreground">{movement.material_name}</h4>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {movement.barcode} • {movement.category_name}
-                            </p>
-                          </div>
+                  return (
+                    <div
+                      key={movement.id}
+                      className="flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 md:flex-row md:items-center md:gap-4"
+                    >
+                      <div className="flex items-center gap-2 md:w-[36%] md:min-w-0">
+                        <Icon className={`h-4 w-4 ${colorClass}`} />
+                        <div className="min-w-0">
+                          <h4 className="truncate font-medium text-foreground">{movement.material_name}</h4>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {movement.barcode} • {movement.category_name}
+                          </p>
                         </div>
+                      </div>
 
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground md:w-[28%] md:justify-start">
-                          <span className="font-medium text-foreground/80">{movement.user_name}</span>
-                          <span className="hidden md:inline">•</span>
-                          <span>
-                            {new Date(movement.created_at).toLocaleDateString("es-AR", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground md:w-[28%] md:justify-start">
+                        <span className="font-medium text-foreground/80">{movement.user_name}</span>
+                        <span className="hidden md:inline">•</span>
+                        <span>
+                          {new Date(movement.created_at).toLocaleDateString("es-AR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        {movement.reference_number && (
+                          <>
+                            <span className="hidden md:inline">•</span>
+                            <span>Ref: {movement.reference_number}</span>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between md:ml-auto md:w-[28%] md:justify-end md:gap-3">
+                        {movement.notes && (
+                          <span className="mr-2 hidden max-w-[220px] truncate text-xs italic text-muted-foreground md:inline">
+                            {movement.notes}
                           </span>
-                          {movement.reference_number && (
-                            <>
-                              <span className="hidden md:inline">•</span>
-                              <span>Ref: {movement.reference_number}</span>
-                            </>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-between md:ml-auto md:w-[28%] md:justify-end md:gap-3">
-                          {movement.notes && (
-                            <span className="mr-2 hidden max-w-[220px] truncate text-xs italic text-muted-foreground md:inline">
-                              {movement.notes}
-                            </span>
-                          )}
-                          <div className="text-right">
-                            <Badge variant={badgeVariant as any}>
-                              {movement.movement_type === "entrada" ? "+" : movement.movement_type === "salida" ? "-" : "±"}
-                              {Math.abs(movement.quantity)}
-                            </Badge>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {movement.previous_stock} → {movement.new_stock}
-                            </div>
+                        )}
+                        <div className="text-right">
+                          <Badge variant={badgeVariant as any}>
+                            {movement.movement_type === "entrada" ? "+" : movement.movement_type === "salida" ? "-" : "±"}
+                            {Math.abs(movement.quantity)}
+                          </Badge>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {movement.previous_stock} → {movement.new_stock}
                           </div>
                         </div>
                       </div>
