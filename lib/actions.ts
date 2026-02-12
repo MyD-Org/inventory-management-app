@@ -185,7 +185,20 @@ export async function createSupplier(formData: FormData) {
     if (!name) return { error: 'El nombre es requerido' };
 
     try {
-        await sql`INSERT INTO suppliers (name, contact_info) VALUES (${name}, ${contact_info})`;
+        const columns = await sql`
+            SELECT column_name 
+            FROM information_schema.columns
+            WHERE table_name = 'suppliers'
+        `;
+        const columnNames = new Set(columns.map((row: any) => row.column_name));
+
+        if (columnNames.has("address")) {
+            await sql`INSERT INTO suppliers (name, address) VALUES (${name}, ${contact_info || null})`;
+        } else if (columnNames.has("contact_info")) {
+            await sql`INSERT INTO suppliers (name, contact_info) VALUES (${name}, ${contact_info || null})`;
+        } else {
+            await sql`INSERT INTO suppliers (name) VALUES (${name})`;
+        }
         revalidatePath('/settings/suppliers');
         revalidatePath('/materials/nuevo');
         return { success: true };
