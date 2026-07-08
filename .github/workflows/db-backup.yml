@@ -1,0 +1,90 @@
+name: Backup DB a Google Drive
+
+# Backup semanal de la base Neon (Postgres) a Google Drive vía rclone.
+# - Corre todos los domingos a las 03:00 UTC (00:00 hora Argentina).
+# - Se puede disparar a mano desde la pestaña "Actions" (workflow_dispatch).
+#
+# Requiere estos secrets del repo (Settings -> Secrets and variables -> Actions):
+#   DATABASE_URL_UNPOOLED  -> URL de conexión DIRECTA de Neon (la "unpooled", con ?sslmode=require)
+#   RCLONE_CONF            -> contenido completo del archivo rclone.conf (remote de Drive con token OAuth)
+# Y esta variable (Settings -> Secrets and variables -> Actions -> Variables):
+#   RCLONE_DRIVE_DEST      -> destino en Drive, ej: "gdrive:Backups/avantec-db"
+#
+# Ver docs/BACKUP.md para el paso a paso de cómo generar cada uno.
+
+on:
+  schedule:
+    - cron: "0 3 * * 0" # domingos 03:00 UTC = domingos 00:00 ART
+  workflow_dispatch: {} # permite correrlo a mano
+
+# Evita que dos backups corran a la vez.
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Instalar cliente de PostgreSQL 17
+        run: |
+          set -euo pipefail
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          pg_dump --version
+
+      - name: Instalar rclone
+        run: |
+          set -euo pipefail
+          sudo -v
+          curl -fsSL https://rclone.org/install.sh | sudo bash
+          rclone version
+
+      - name: Configurar rclone
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/rclone"
+          printf '%s' "${RCLONE_CONF}" > "$HOME/.config/rclone/rclone.conf"
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
+
+      - name: Generar dump comprimido
+        id: dump
+        run: |
+          set -euo pipefail
+          STAMP="$(date -u +%Y-%m-%d_%H%M%S)"
+          FILE="avantec-db_${STAMP}.sql.gz"
+          echo "Generando ${FILE}..."
+          # --no-owner / --no-privileges: el dump restaura limpio en cualquier Postgres nuevo.
+          pg_dump "${DATABASE_URL}" --no-owner --no-privileges --format=plain \
+            | gzip -9 > "${FILE}"
+          ls -lh "${FILE}"
+          # Falla el job si el dump quedó vacío o sospechosamente chico (<1KB).
+          if [ "$(stat -c%s "${FILE}")" -lt 1024 ]; then
+            echo "ERROR: el dump es demasiado chico, algo falló." >&2
+            exit 1
+          fi
+          echo "file=${FILE}" >> "$GITHUB_OUTPUT"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+
+      - name: Subir a Google Drive
+        run: |
+          set -euo pipefail
+          rclone copy "${FILE}" "${DEST}" --progress
+          echo "Backup subido a ${DEST}/${FILE}"
+        env:
+          FILE: ${{ steps.dump.outputs.file }}
+          DEST: ${{ vars.RCLONE_DRIVE_DEST }}
+
+      - name: Borrar backups viejos (retención 8 semanas)
+        run: |
+          set -euo pipefail
+          # Elimina de Drive los dumps con más de 56 días de antigüedad.
+          rclone delete "${DEST}" --min-age 56d --include "avantec-db_*.sql.gz"
+          echo "Retención aplicada: se conservan ~8 semanas."
+        env:
+          DEST: ${{ vars.RCLONE_DRIVE_DEST }}
