@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Trash2, Loader2 } from "lucide-react"
 import { createUser, deleteUser } from "@/lib/actions"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { toast } from "sonner"
 
 interface User {
@@ -27,6 +28,8 @@ interface UsersTableProps {
 export function UsersTable({ initialUsers }: UsersTableProps) {
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [pendingId, setPendingId] = useState<number | null>(null)
+    const [deleting, setDeleting] = useState(false)
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
@@ -44,13 +47,15 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
         setLoading(false)
     }
 
-    const handleDelete = async (userId: number) => {
-        if (!confirm("¿Estás seguro de eliminar este usuario?")) return
-
-        const result = await deleteUser(userId)
+    const doDelete = async () => {
+        if (pendingId == null) return
+        setDeleting(true)
+        const result = await deleteUser(pendingId)
+        setDeleting(false)
         if (result.error) {
             toast.error(result.error)
         } else {
+            setPendingId(null)
             toast.success("Usuario eliminado")
         }
     }
@@ -131,7 +136,7 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        onClick={() => handleDelete(user.id)}
+                                        onClick={() => setPendingId(user.id)}
                                         className="text-red-500 hover:text-red-700 hover:bg-red-50"
                                     >
                                         <Trash2 className="w-4 h-4" />
@@ -142,6 +147,17 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
                     </TableBody>
                 </Table>
             </CardContent>
+
+            <ConfirmDialog
+                open={pendingId != null}
+                onOpenChange={(o) => !o && setPendingId(null)}
+                title="Eliminar usuario"
+                description="Esta acción no se puede deshacer. ¿Querés eliminar este usuario?"
+                confirmLabel="Eliminar"
+                destructive
+                loading={deleting}
+                onConfirm={doDelete}
+            />
         </Card>
     )
 }

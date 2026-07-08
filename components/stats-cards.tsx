@@ -1,6 +1,8 @@
 import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Package, TrendingDown, TrendingUp, AlertTriangle } from "lucide-react"
+import { Package, TrendingDown, TrendingUp, AlertTriangle, DollarSign } from "lucide-react"
+import { auth } from "@/auth"
+import { formatCurrencyUSD } from "@/lib/formatters"
 
 async function getInventoryStats() {
   try {
@@ -22,11 +24,19 @@ async function getInventoryStats() {
       WHERE i.current_stock <= m.min_stock
     `
 
-    // Movimientos del día
+    // Movimientos del día (según la zona horaria de Argentina, no UTC)
     const todayMovements = await sql`
-      SELECT COUNT(*) as count 
-      FROM stock_movements 
-      WHERE DATE(created_at) = CURRENT_DATE
+      SELECT COUNT(*) as count
+      FROM stock_movements
+      WHERE (created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
+          = (now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
+    `
+
+    // Valor total del inventario (stock * costo unitario)
+    const totalValue = await sql`
+      SELECT SUM(i.current_stock * m.unit_cost) as total
+      FROM inventory i
+      JOIN materials m ON i.material_id = m.id
     `
 
     return {
@@ -34,6 +44,7 @@ async function getInventoryStats() {
       totalStock: Number(totalStock[0]?.total || 0),
       lowStock: Number(lowStock[0]?.count || 0),
       todayMovements: Number(todayMovements[0]?.count || 0),
+      totalValue: Number(totalValue[0]?.total || 0),
     }
   } catch (error) {
     console.error("Error fetching inventory stats:", error)
@@ -42,12 +53,14 @@ async function getInventoryStats() {
       totalStock: 0,
       lowStock: 0,
       todayMovements: 0,
+      totalValue: 0,
     }
   }
 }
 
 export async function StatsCards() {
-  const stats = await getInventoryStats()
+  const [stats, session] = await Promise.all([getInventoryStats(), auth()])
+  const isAdmin = session?.user?.role === "admin"
 
   const cards = [
     {
@@ -62,6 +75,17 @@ export async function StatsCards() {
       icon: TrendingUp,
       description: "Unidades en inventario",
     },
+    // Valor de inventario: información sensible, solo visible para admins
+    ...(isAdmin
+      ? [
+          {
+            title: "Valor de Inventario",
+            value: formatCurrencyUSD(stats.totalValue),
+            icon: DollarSign,
+            description: "Costo total en stock",
+          },
+        ]
+      : []),
     {
       title: "Stock Bajo",
       value: stats.lowStock.toLocaleString(),
@@ -78,7 +102,11 @@ export async function StatsCards() {
   ]
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div
+      className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${
+        isAdmin ? "lg:grid-cols-5" : "lg:grid-cols-4"
+      }`}
+    >
       {cards.map((card, index) => (
         <Card key={index} className={card.alert ? "border-destructive" : ""}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

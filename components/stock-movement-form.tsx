@@ -34,7 +34,6 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
   const [quantity, setQuantity] = useState("")
   const [referenceNumber, setReferenceNumber] = useState("")
   const [notes, setNotes] = useState("")
-  const [userName, setUserName] = useState("")
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const { toast } = useToast()
@@ -90,16 +89,16 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
 
   const validateMovement = () => {
     if (!material) {
-      toast.error("Error", {
-        description: "Debe seleccionar un material",
+      toast.error("Falta el material", {
+        description: "Seleccioná un material antes de confirmar.",
       })
       return false
     }
 
     const qty = Number.parseInt(quantity)
     if (!qty || qty <= 0) {
-      toast.error("Error", {
-        description: "La cantidad debe ser mayor a 0",
+      toast.error("Falta la cantidad", {
+        description: "La cantidad debe ser mayor a 0.",
       })
       return false
     }
@@ -107,13 +106,6 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
     if (movementType === "salida" && qty > material.available_stock) {
       toast.error("Error", {
         description: `Stock insuficiente. Disponible: ${material.available_stock}`,
-      })
-      return false
-    }
-
-    if (!userName.trim()) {
-      toast.error("Error", {
-        description: "Debe ingresar el nombre del usuario",
       })
       return false
     }
@@ -140,7 +132,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
           quantity: movementType === "salida" ? -Number.parseInt(quantity) : Number.parseInt(quantity),
           reference_number: referenceNumber || null,
           notes: notes || null,
-          user_name: userName,
+          // El usuario se toma de la sesión en el servidor (ver /api/stock/movement)
         }),
       })
 
@@ -264,33 +256,20 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="quantity">Cantidad ({material.unit_of_measure}) *</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    min="1"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    placeholder="Ingrese la cantidad"
-                    required
-                  />
-                  {movementType === "salida" && material && (
-                    <p className="text-xs text-muted-foreground mt-1">Máximo disponible: {material.available_stock}</p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="userName">Usuario *</Label>
-                  <Input
-                    id="userName"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                    placeholder="Nombre del operador"
-                    required
-                  />
-                </div>
+              <div>
+                <Label htmlFor="quantity">Cantidad ({material.unit_of_measure}) *</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  placeholder="Ingrese la cantidad"
+                  required
+                />
+                {movementType === "salida" && material && (
+                  <p className="text-xs text-muted-foreground mt-1">Máximo disponible: {material.available_stock}</p>
+                )}
               </div>
 
               <div>
@@ -328,7 +307,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
                 )}
 
               <div className="flex gap-3 pt-4">
-                <Button type="submit" disabled={loading || !material || !quantity || !userName} className="flex-1">
+                <Button type="submit" disabled={loading} className="flex-1">
                   {loading ? "Procesando..." : `Registrar ${config.title}`}
                 </Button>
                 <Button type="button" variant="outline" onClick={resetForm}>

@@ -1,10 +1,19 @@
 import { neon } from "@neondatabase/serverless"
 import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/auth"
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest) {
   try {
+    // El usuario que realiza el movimiento se obtiene de la sesión autenticada
+    // (fuente de verdad en el servidor), igual que en app/api/stock/movement/route.ts
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 })
+    }
+    const user_name = session.user.name || session.user.email || "Desconocido"
+
     const body = await request.json()
     const {
       name,
@@ -57,8 +66,8 @@ export async function POST(request: NextRequest) {
     // Si hay stock inicial, registrar el movimiento
     if (initial_stock && initial_stock > 0) {
       await sql`
-        INSERT INTO stock_movements (material_id, movement_type, quantity, notes, performed_by)
-        VALUES (${materialId}, 'entrada', ${initial_stock}, 'Stock inicial', 'Sistema')
+        INSERT INTO stock_movements (material_id, movement_type, quantity, notes, user_name)
+        VALUES (${materialId}, 'entrada', ${initial_stock}, 'Stock inicial', ${user_name})
       `
     }
 

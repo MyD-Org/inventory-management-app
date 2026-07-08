@@ -58,9 +58,9 @@ export function MaterialLookup({ onMaterialFound }: MaterialLookupProps) {
   }
 
   const getStockStatus = (current: number, min: number) => {
-    if (current <= min) return { status: "low", color: "destructive", text: "Stock Bajo" }
-    if (current <= min * 1.5) return { status: "warning", color: "secondary", text: "Stock Medio" }
-    return { status: "good", color: "default", text: "Stock Normal" }
+    if (current <= min) return { status: "low", color: "destructive", text: "Stock Bajo" } as const
+    if (current <= min * 1.5) return { status: "warning", color: "secondary", text: "Stock Medio" } as const
+    return { status: "good", color: "default", text: "Stock Normal" } as const
   }
 
   return (
