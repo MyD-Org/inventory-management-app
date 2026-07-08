@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils"
 import { useDebounce } from "use-debounce"
 import { useMovementHistoryTransition } from "./movement-history-context"
 
-export function MovementFilters() {
+export function MovementFilters({ hideTypeFilter = false }: { hideTypeFilter?: boolean }) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -173,17 +173,19 @@ export function MovementFilters() {
                     />
                 </div>
 
-                <Select value={type} onValueChange={handleTypeChange}>
-                    <SelectTrigger className="w-full sm:w-48">
-                        <SelectValue placeholder="Tipo de movimiento" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">Todos los tipos</SelectItem>
-                        <SelectItem value="entrada">Entradas</SelectItem>
-                        <SelectItem value="salida">Salidas</SelectItem>
-                        <SelectItem value="ajuste">Ajustes</SelectItem>
-                    </SelectContent>
-                </Select>
+                {!hideTypeFilter && (
+                    <Select value={type} onValueChange={handleTypeChange}>
+                        <SelectTrigger className="w-full sm:w-48">
+                            <SelectValue placeholder="Tipo de movimiento" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todos los tipos</SelectItem>
+                            <SelectItem value="entrada">Entradas</SelectItem>
+                            <SelectItem value="salida">Salidas</SelectItem>
+                            <SelectItem value="ajuste">Ajustes</SelectItem>
+                        </SelectContent>
+                    </Select>
+                )}
 
                 <Popover>
                     <PopoverTrigger asChild>

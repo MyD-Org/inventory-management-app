@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -6,7 +7,7 @@ import { AlertTriangle } from "lucide-react"
 async function getLowStockItems() {
   try {
     const lowStockItems = await sql`
-      SELECT 
+      SELECT
         m.id,
         m.name,
         m.barcode,
@@ -23,15 +24,22 @@ async function getLowStockItems() {
       LIMIT 10
     `
 
-    return lowStockItems
+    const totalResult = await sql`
+      SELECT COUNT(*) as count
+      FROM inventory i
+      JOIN materials m ON i.material_id = m.id
+      WHERE i.current_stock <= m.min_stock
+    `
+
+    return { items: lowStockItems, total: Number(totalResult[0]?.count || 0) }
   } catch (error) {
     console.error("Error fetching low stock items:", error)
-    return []
+    return { items: [], total: 0 }
   }
 }
 
 export async function LowStockAlerts() {
-  const lowStockItems = await getLowStockItems()
+  const { items: lowStockItems, total } = await getLowStockItems()
 
   if (lowStockItems.length === 0) {
     return (
@@ -51,16 +59,26 @@ export async function LowStockAlerts() {
 
   return (
     <Card className="border-destructive">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle className="text-lg flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-destructive" />
-          Alertas de Stock Bajo ({lowStockItems.length})
+          Alertas de Stock Bajo ({total})
         </CardTitle>
+        <Link
+          href="/inventory?status=low"
+          className="shrink-0 text-sm font-medium text-primary hover:underline"
+        >
+          Ver todos →
+        </Link>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
           {lowStockItems.map((item) => (
-            <div key={item.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+            <Link
+              key={item.id}
+              href={`/materials/${item.id}`}
+              className="flex items-center justify-between p-3 bg-muted rounded-lg transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               <div className="flex-1">
                 <div className="font-medium text-foreground">{item.name}</div>
                 <div className="text-sm text-muted-foreground">
@@ -73,9 +91,17 @@ export async function LowStockAlerts() {
                 </Badge>
                 <div className="text-xs text-muted-foreground">Mín: {item.min_stock}</div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
+        {total > lowStockItems.length && (
+          <Link
+            href="/inventory?status=low"
+            className="mt-3 flex items-center justify-center rounded-lg border border-dashed p-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            Ver los {total - lowStockItems.length} restantes en Inventario →
+          </Link>
+        )}
       </CardContent>
     </Card>
   )

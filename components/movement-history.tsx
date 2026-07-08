@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -59,6 +60,7 @@ async function getMovementHistory(params: { search?: string; type?: string; from
         sm.notes,
         sm.user_name,
         sm.created_at,
+        m.id as material_id,
         m.name as material_name,
         m.barcode,
         c.name as category_name
@@ -77,6 +79,7 @@ async function getMovementHistory(params: { search?: string; type?: string; from
 
     return movements.map((movement: any) => ({
       id: movement.id,
+      material_id: movement.material_id,
       movement_type: movement.movement_type,
       quantity: Number(movement.quantity),
       previous_stock: Number(movement.previous_stock),
@@ -97,11 +100,19 @@ async function getMovementHistory(params: { search?: string; type?: string; from
 
 export async function MovementHistory({
   searchParams,
+  basePath = "/movimientos",
+  forcedType,
+  title = "Historial de Movimientos",
+  headerAction,
 }: {
   searchParams?: { [key: string]: string | string[] | undefined }
+  basePath?: string
+  forcedType?: string
+  title?: string
+  headerAction?: React.ReactNode
 }) {
   const search = typeof searchParams?.search === "string" ? searchParams.search : undefined
-  const type = typeof searchParams?.type === "string" ? searchParams.type : undefined
+  const type = forcedType ?? (typeof searchParams?.type === "string" ? searchParams.type : undefined)
   const from = typeof searchParams?.from === "string" ? searchParams.from : undefined
   const to = typeof searchParams?.to === "string" ? searchParams.to : undefined
   const pageParam = typeof searchParams?.page === "string" ? Number.parseInt(searchParams.page, 10) : 1
@@ -158,7 +169,7 @@ export async function MovementHistory({
       if (typeof value === "string") params.set(key, value)
     }
     params.set("page", String(page))
-    return `/reports?${params.toString()}`
+    return `${basePath}?${params.toString()}`
   }
 
   return (
@@ -168,12 +179,15 @@ export async function MovementHistory({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <Calendar className="w-5 h-5" />
-              Historial de Movimientos
+              {title}
             </CardTitle>
-            <DownloadMovementsButton />
+            <div className="flex items-center gap-2">
+              {headerAction}
+              <DownloadMovementsButton />
+            </div>
           </div>
 
-          <MovementFilters />
+          <MovementFilters hideTypeFilter={!!forcedType} />
         </CardHeader>
         <CardContent>
           <MovementHistoryLoadingOverlay>
@@ -190,9 +204,10 @@ export async function MovementHistory({
                     const badgeVariant = getMovementBadge(movement.movement_type)
 
                     return (
-                      <div
+                      <Link
                         key={movement.id}
-                        className="flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 md:flex-row md:items-center md:gap-4"
+                        href={`/materials/${movement.material_id}`}
+                        className="flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:flex-row md:items-center md:gap-4"
                       >
                         <div className="flex items-center gap-2 md:w-[36%] md:min-w-0">
                           <Icon className={`h-4 w-4 ${colorClass}`} />
@@ -240,7 +255,7 @@ export async function MovementHistory({
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </Link>
                     )
                   })
                 )}

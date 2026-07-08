@@ -14,12 +14,19 @@ export const metadata: Metadata = {
 }
 
 import { Toaster } from "@/components/ui/sonner"
+import { AiAssistant } from "@/components/ai-assistant"
+import { auth } from "@/auth"
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // El asistente de IA solo se monta para ADMINISTRADORES logueados
+  // (no aparece en /login ni para usuarios sin rol admin).
+  const session = await auth()
+  const isAdmin = session?.user?.role === "admin"
+
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
@@ -27,6 +34,7 @@ export default function RootLayout({
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             {children}
             <Toaster />
+            {isAdmin && <AiAssistant />}
           </ThemeProvider>
         </Suspense>
         <Analytics />

@@ -1,14 +1,24 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
 import { revalidatePath } from "next/cache"
+import { auth } from "@/auth"
 
 export async function POST(request: NextRequest) {
   try {
+    // El usuario que realiza el movimiento se obtiene de la sesión autenticada
+    // (fuente de verdad en el servidor). No se confía en un user_name enviado
+    // por el cliente, que podría ser falso o quedar hardcodeado.
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 })
+    }
+    const user_name = session.user.name || session.user.email || "Desconocido"
+
     const body = await request.json()
-    const { material_id, movement_type, quantity, reference_number, notes, user_name } = body
+    const { material_id, movement_type, quantity, reference_number, notes } = body
 
     // Validaciones
-    if (!material_id || !movement_type || !quantity || !user_name) {
+    if (!material_id || !movement_type || !quantity) {
       return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 })
     }
 

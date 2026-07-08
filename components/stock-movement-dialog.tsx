@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Save, Plus, Minus, Scan, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useDebouncedCallback } from "use-debounce"
 
 interface Material {
     id: number
@@ -45,14 +46,55 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
         reference_number: "",
     })
 
+    const [materialError, setMaterialError] = useState(false)
+    const [quantityError, setQuantityError] = useState(false)
+    const [notFoundCode, setNotFoundCode] = useState<string | null>(null)
+    const [submitError, setSubmitError] = useState<string | null>(null)
+    const [suggestOpen, setSuggestOpen] = useState(false)
+    const scanBoxRef = useRef<HTMLDivElement>(null)
+
     const quantityInputRef = useRef<HTMLInputElement>(null)
     const barcodeInputRef = useRef<HTMLInputElement>(null)
 
     const selectedMaterial = materials.find(m => m.id.toString() === formData.material_id)
 
-    // Auto-focus barcode input when dialog opens
+    // Sugerencias por nombre o código (mientras no haya un material ya identificado).
+    const query = barcode.trim().toLowerCase()
+    const suggestions = query
+        ? materials
+            .filter(m => m.name.toLowerCase().includes(query) || (m.barcode || "").toLowerCase().includes(query))
+            .slice(0, 8)
+        : []
+
+    // Selecciona un material (desde escaneo, sugerencia o búsqueda exacta) y va a cantidad.
+    const selectMaterial = (m: Material) => {
+        setFormData(prev => ({ ...prev, material_id: m.id.toString() }))
+        setMaterialError(false)
+        setNotFoundCode(null)
+        setSuggestOpen(false)
+        setBarcode(m.barcode || m.name)
+        setTimeout(() => quantityInputRef.current?.focus(), 100)
+    }
+
+    // Cerrar el dropdown de sugerencias al hacer click afuera.
+    useEffect(() => {
+        const onDoc = (e: MouseEvent) => {
+            if (scanBoxRef.current && !scanBoxRef.current.contains(e.target as Node)) setSuggestOpen(false)
+        }
+        document.addEventListener("mousedown", onDoc)
+        return () => document.removeEventListener("mousedown", onDoc)
+    }, [])
+
+    // Al abrir: resetear a estado limpio (no reabrir con lo de la vez anterior) y enfocar.
     useEffect(() => {
         if (open) {
+            setFormData({ material_id: "", quantity: "", notes: "", reference_number: "" })
+            setBarcode("")
+            setMaterialError(false)
+            setQuantityError(false)
+            setNotFoundCode(null)
+            setSubmitError(null)
+            setSuggestOpen(false)
             setTimeout(() => {
                 barcodeInputRef.current?.focus()
             }, 100)
@@ -67,36 +109,57 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
     }
 
     const findMaterialByBarcode = (code: string) => {
-        const foundMaterial = materials.find(m => m.barcode === code)
+        const trimmed = code.trim()
+        if (!trimmed) {
+            toast.error("Falta el código", {
+                description: "Escaneá o escribí un código para buscar el material.",
+            })
+            return
+        }
+        const foundMaterial = materials.find(m => m.barcode === trimmed)
 
         if (foundMaterial) {
-            setFormData(prev => ({ ...prev, material_id: foundMaterial.id.toString() }))
-            toast.success("Material encontrado", {
-                description: `${foundMaterial.name}`,
-            })
-            // Move focus to quantity
-            setTimeout(() => {
-                quantityInputRef.current?.focus()
-            }, 100)
+            selectMaterial(foundMaterial)
         } else {
-            toast.error("No encontrado", {
-                description: "No se encontró ningún material con ese código",
-            })
+            // Se muestra en la caja del modal (no en toast).
+            setNotFoundCode(trimmed)
             setFormData(prev => ({ ...prev, material_id: "" }))
         }
     }
 
+    // Búsqueda automática ~350ms después de dejar de escribir (así el escáner o el tipeo
+    // manual identifican el material sin apretar Enter). Silenciosa si no encuentra: no
+    // molesta con "no encontrado" mientras seguís tipeando un código más largo.
+    const autoSearch = useDebouncedCallback((code: string) => {
+        const trimmed = code.trim()
+        if (!trimmed) return
+        const found = materials.find(m => m.barcode === trimmed)
+        if (found) selectMaterial(found)
+    }, 350)
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
-        if (!formData.material_id || !formData.quantity) {
-            toast.error("Error", {
-                description: "Por favor complete los campos obligatorios",
+        if (!formData.material_id) {
+            setMaterialError(true)
+            toast.error("Falta el material", {
+                description: "Escaneá o escribí un código para identificar el material.",
             })
+            barcodeInputRef.current?.focus()
+            return
+        }
+        const qty = Number.parseInt(formData.quantity)
+        if (!formData.quantity || Number.isNaN(qty) || qty <= 0) {
+            setQuantityError(true)
+            toast.error("Falta la cantidad", {
+                description: `Ingresá cuántas unidades vas a ${type === "entrada" ? "ingresar" : "retirar"} (mayor a 0).`,
+            })
+            quantityInputRef.current?.focus()
             return
         }
 
         setLoading(true)
+        setSubmitError(null)
 
         try {
             const response = await fetch("/api/stock/movement", {
@@ -108,7 +171,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                     quantity: parseInt(formData.quantity), // Changed to parseInt
                     reference_number: formData.reference_number || null,
                     notes: formData.notes || null,
-                    user_name: "Usuario Actual", // TODO: Replace with actual user
+                    // El usuario se toma de la sesión en el servidor (ver /api/stock/movement)
                 }),
             })
 
@@ -131,9 +194,8 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
             setBarcode("")
             router.refresh()
         } catch (error) {
-            toast.error("Error", {
-                description: error instanceof Error ? error.message : "No se pudo registrar el movimiento",
-            })
+            // Se muestra dentro del modal (banner) para que no se pierda como el toast.
+            setSubmitError(error instanceof Error ? error.message : "No se pudo registrar el movimiento")
         } finally {
             setLoading(false)
         }
@@ -164,28 +226,57 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                             <Scan className="w-4 h-4 inline mr-2" />
                             Escanear Código
                         </Label>
-                        <div className="flex gap-2">
-                            <Input
-                                id="barcode-input"
-                                ref={barcodeInputRef}
-                                placeholder="Haga clic aquí y escanee..."
-                                value={barcode}
-                                onChange={(e) => setBarcode(e.target.value)}
-                                onKeyDown={handleBarcodeSubmit}
-                                className="font-mono text-lg"
-                                autoComplete="off"
-                            />
-                            <Button
-                                type="button"
-                                size="icon"
-                                onClick={() => findMaterialByBarcode(barcode)}
-                            >
-                                <Search className="w-4 h-4" />
-                            </Button>
+                        <div className="relative" ref={scanBoxRef}>
+                            <div className="flex gap-2">
+                                <Input
+                                    id="barcode-input"
+                                    ref={barcodeInputRef}
+                                    placeholder="Escaneá el código o buscá por nombre…"
+                                    value={barcode}
+                                    onChange={(e) => {
+                                        const v = e.target.value
+                                        setBarcode(v)
+                                        // Si estabas editando el campo, deseleccioná el material anterior
+                                        // para volver a buscar y mostrar sugerencias.
+                                        if (formData.material_id) setFormData(prev => ({ ...prev, material_id: "" }))
+                                        if (notFoundCode) setNotFoundCode(null)
+                                        setSuggestOpen(true)
+                                        autoSearch(v)
+                                    }}
+                                    onFocus={() => setSuggestOpen(true)}
+                                    onKeyDown={handleBarcodeSubmit}
+                                    className="text-lg"
+                                    autoComplete="off"
+                                />
+                                <Button
+                                    type="button"
+                                    size="icon"
+                                    onClick={() => findMaterialByBarcode(barcode)}
+                                >
+                                    <Search className="w-4 h-4" />
+                                </Button>
+                            </div>
+                            {suggestOpen && !selectedMaterial && suggestions.length > 0 && (
+                                <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-md max-h-60 overflow-auto">
+                                    {suggestions.map(m => (
+                                        <button
+                                            key={m.id}
+                                            type="button"
+                                            onClick={() => selectMaterial(m)}
+                                            className="flex w-full items-center justify-between gap-3 p-2.5 text-left text-sm hover:bg-muted"
+                                        >
+                                            <span className="min-w-0">
+                                                <span className="font-medium">{m.name}</span>
+                                                <span className="ml-2 font-mono text-xs text-muted-foreground">{m.barcode}</span>
+                                            </span>
+                                            <span className="shrink-0 text-xs text-muted-foreground">
+                                                stock {m.current_stock ?? 0}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-2">
-                            Presione Enter después de escanear o escribir el código.
-                        </p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -204,8 +295,13 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                                         </span>
                                     </div>
                                 </div>
+                            ) : notFoundCode ? (
+                                <div className="rounded-lg border border-destructive bg-destructive/5 p-3 text-center text-sm py-6 text-destructive">
+                                    No se encontró ningún material con el código{" "}
+                                    <span className="font-mono font-semibold">{notFoundCode}</span>
+                                </div>
                             ) : (
-                                <div className="bg-muted/30 p-3 rounded-lg border border-dashed text-center text-muted-foreground text-sm py-6">
+                                <div className={`bg-muted/30 p-3 rounded-lg border border-dashed text-center text-sm py-6 ${materialError ? "border-destructive text-destructive" : "text-muted-foreground"}`}>
                                     Escanee un código para identificar el material
                                 </div>
                             )}
@@ -221,8 +317,9 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                                 step="1"
                                 placeholder="0"
                                 value={formData.quantity}
-                                onChange={(e) => setFormData(prev => ({ ...prev, quantity: e.target.value }))}
-                                className="text-lg font-semibold"
+                                onChange={(e) => { setFormData(prev => ({ ...prev, quantity: e.target.value })); if (quantityError) setQuantityError(false) }}
+                                aria-invalid={quantityError}
+                                className={`text-lg font-semibold ${quantityError ? "border-destructive focus-visible:ring-destructive" : ""}`}
                                 required
                                 disabled={!selectedMaterial}
                             />
@@ -237,13 +334,19 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                             />
                         </div>
 
+                        {submitError && (
+                            <div className="rounded-lg border border-destructive bg-destructive/5 p-3 text-sm text-destructive">
+                                {submitError}
+                            </div>
+                        )}
+
                         <div className="flex justify-end gap-3 pt-2">
                             <Button type="button" variant="outline" onClick={() => setOpen?.(false)}>
                                 Cancelar
                             </Button>
                             <Button
                                 type="submit"
-                                disabled={loading || !formData.material_id || !formData.quantity}
+                                disabled={loading}
                                 className={type === "entrada" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}
                             >
                                 {loading ? (

@@ -4,12 +4,9 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Edit, Loader2, Save, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { MaterialFormFields } from "@/components/material-form-fields"
 
 interface Category {
     id: number
@@ -197,130 +194,12 @@ export function EditMaterialDialog({ material, categories, suppliers, open: cont
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-4 py-4">
-                        <div className="grid gap-4 md:grid-cols-2">
-                            {/* ... existing form fields ... */}
-                            <div className="space-y-2 md:col-span-2">
-                                <Label htmlFor="name">Nombre del Material *</Label>
-                                <Input
-                                    id="name"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                                    required
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="barcode">Código de Barras</Label>
-                                <Input
-                                    id="barcode"
-                                    value={formData.barcode}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, barcode: e.target.value }))}
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="unit_of_measure">Unidad de Medida</Label>
-                                <Select
-                                    value={formData.unit_of_measure}
-                                    onValueChange={(value) => setFormData(prev => ({ ...prev, unit_of_measure: value }))}
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Unidad">Unidad</SelectItem>
-                                        <SelectItem value="Pieza">Pieza</SelectItem>
-                                        <SelectItem value="Metro">Metro</SelectItem>
-                                        <SelectItem value="Kg">Kilogramo</SelectItem>
-                                        <SelectItem value="Litro">Litro</SelectItem>
-                                        <SelectItem value="Rollo">Rollo</SelectItem>
-                                        <SelectItem value="Caja">Caja</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="category_id">Categoría *</Label>
-                                <Select
-                                    value={formData.category_id}
-                                    onValueChange={(value) => setFormData(prev => ({ ...prev, category_id: value }))}
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Seleccionar categoría" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {categories.map((cat) => (
-                                            <SelectItem key={cat.id} value={cat.id.toString()}>
-                                                {cat.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="supplier_id">Proveedor *</Label>
-                                <Select
-                                    value={formData.supplier_id}
-                                    onValueChange={(value) => setFormData(prev => ({ ...prev, supplier_id: value }))}
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Seleccionar proveedor" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {suppliers.map((sup) => (
-                                            <SelectItem key={sup.id} value={sup.id.toString()}>
-                                                {sup.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="unit_cost">Costo Unitario (USD)</Label>
-                                <Input
-                                    id="unit_cost"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={formData.unit_cost}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, unit_cost: e.target.value }))}
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="min_stock">Stock Mínimo</Label>
-                                <Input
-                                    id="min_stock"
-                                    type="number"
-                                    min="0"
-                                    value={formData.min_stock}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, min_stock: e.target.value }))}
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="max_stock">Stock Máximo</Label>
-                                <Input
-                                    id="max_stock"
-                                    type="number"
-                                    min="0"
-                                    value={formData.max_stock}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, max_stock: e.target.value }))}
-                                />
-                            </div>
-
-                            <div className="space-y-2 md:col-span-2">
-                                <Label htmlFor="description">Descripción</Label>
-                                <Textarea
-                                    id="description"
-                                    rows={3}
-                                    value={formData.description}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                                />
-                            </div>
-                        </div>
+                        <MaterialFormFields
+                            data={formData}
+                            onChange={(patch) => setFormData(prev => ({ ...prev, ...patch }))}
+                            categories={categories}
+                            suppliers={suppliers}
+                        />
 
                         <div className="flex justify-between items-center pt-4">
                             <Button 

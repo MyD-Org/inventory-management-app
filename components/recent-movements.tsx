@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -13,6 +14,7 @@ async function getRecentMovements() {
         sm.reference_number,
         sm.user_name,
         sm.created_at,
+        m.id as material_id,
         m.name as material_name,
         m.barcode
       FROM stock_movements sm
@@ -59,8 +61,14 @@ export async function RecentMovements() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle className="text-lg">Movimientos Recientes</CardTitle>
+        <Link
+          href="/movimientos"
+          className="shrink-0 text-sm font-medium text-primary hover:underline"
+        >
+          Ver todos →
+        </Link>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
@@ -72,7 +80,11 @@ export async function RecentMovements() {
               const colorClass = getMovementColor(movement.movement_type)
 
               return (
-                <div key={movement.id} className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                <Link
+                  key={movement.id}
+                  href={`/materials/${movement.material_id}`}
+                  className="flex items-center gap-3 p-3 bg-muted rounded-lg transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   <Icon className={`w-5 h-5 ${colorClass}`} />
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-foreground truncate">{movement.material_name}</div>
@@ -94,7 +106,7 @@ export async function RecentMovements() {
                       })}
                     </div>
                   </div>
-                </div>
+                </Link>
               )
             })
           )}

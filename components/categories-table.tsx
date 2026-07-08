@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Trash2, Plus, Loader2 } from "lucide-react"
 import { createCategory, deleteCategory } from "@/lib/actions"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 
@@ -21,6 +22,7 @@ interface Category {
 export function CategoriesTable({ categories }: { categories: Category[] }) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [pendingId, setPendingId] = useState<number | null>(null)
     const { toast } = useToast()
     const router = useRouter()
 
@@ -46,10 +48,11 @@ export function CategoriesTable({ categories }: { categories: Category[] }) {
         }
     }
 
-    async function handleDelete(id: number) {
-        if (!confirm("¿Estás seguro de eliminar esta categoría?")) return
-
-        const result = await deleteCategory(id)
+    async function doDelete() {
+        if (pendingId == null) return
+        setLoading(true)
+        const result = await deleteCategory(pendingId)
+        setLoading(false)
 
         if (result.error) {
             toast("Error", {
@@ -60,6 +63,7 @@ export function CategoriesTable({ categories }: { categories: Category[] }) {
                 },
             })
         } else {
+            setPendingId(null)
             toast("Éxito", {
                 description: "Categoría eliminada correctamente",
             })
@@ -116,7 +120,7 @@ export function CategoriesTable({ categories }: { categories: Category[] }) {
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        onClick={() => handleDelete(category.id)}
+                                        onClick={() => setPendingId(category.id)}
                                     >
                                         <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
@@ -133,6 +137,17 @@ export function CategoriesTable({ categories }: { categories: Category[] }) {
                     </TableBody>
                 </Table>
             </div>
+
+            <ConfirmDialog
+                open={pendingId != null}
+                onOpenChange={(o) => !o && setPendingId(null)}
+                title="Eliminar categoría"
+                description="Esta acción no se puede deshacer. ¿Querés eliminar esta categoría?"
+                confirmLabel="Eliminar"
+                destructive
+                loading={loading}
+                onConfirm={doDelete}
+            />
         </div>
     )
 }
