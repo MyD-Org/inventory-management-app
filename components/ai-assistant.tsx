@@ -105,6 +105,7 @@ export function AiAssistant() {
         useBudgetLabel: "Abrir en el editor",
       }}
       showActivity
+      enableNewConversation
       onUseBudget={onUseBudget}
     />
   )
