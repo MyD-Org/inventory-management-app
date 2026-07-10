@@ -215,6 +215,52 @@ async function importPayments(header: string[], data: string[][], sourceFile: st
     return { name: sourceFile, kind: "payments", created, updated, skipped }
 }
 
+// Reconstruye cuánto se pagó de cada documento asignando cada pago a sus facturas
+// asociadas en orden (greedy, como aplica Alegra). Alegra tiene PAGOS PARCIALES: una
+// factura queda "Por cobrar" hasta cubrirse entera, y un recibo puede repartirse entre
+// varias facturas ("Facturas: G-418, G-419, G-421"). El saldo real por doc es
+// total − paid_amount; la MV alegra_client_balances lo agrega por cliente.
+export async function recomputePaidAmounts(): Promise<void> {
+    const docs = await sql`
+        SELECT id, code, total::float AS total
+        FROM alegra_sales_documents
+        WHERE doc_type IN ('invoice', 'debit_note')
+          AND LOWER(COALESCE(status, '')) NOT LIKE '%anulad%'`
+    const byCode = new Map<string, { id: number; total: number; paid: number }>(
+        docs.map((d: any) => [d.code as string, { id: d.id, total: d.total, paid: 0 }]),
+    )
+    // Orden cronológico: los pagos viejos consumen primero (igual que la aplicación real).
+    const pays = await sql`
+        SELECT amount::float AS amount, associated_docs
+        FROM alegra_payments
+        WHERE LOWER(COALESCE(status, '')) NOT LIKE '%anulad%'
+        ORDER BY payment_date ASC, number ASC`
+    for (const p of pays) {
+        let rest: number = p.amount
+        // "Facturas: 05298, G-421" → ["05298", "G-421"]
+        const codes = String(p.associated_docs ?? "").replace(/^[^:]*:/, "").split(",").map((s) => s.trim()).filter(Boolean)
+        for (const code of codes) {
+            if (rest <= 0) break
+            const d = byCode.get(code)
+            if (!d) continue // factura no espejada (o anulada): esa porción queda sin asignar
+            const take = Math.min(rest, Math.max(d.total - d.paid, 0))
+            d.paid += take
+            rest -= take
+        }
+    }
+    const ids: number[] = []
+    const paids: number[] = []
+    for (const d of byCode.values()) {
+        ids.push(d.id)
+        paids.push(Math.round(d.paid * 100) / 100)
+    }
+    await sql`
+        UPDATE alegra_sales_documents d
+        SET paid_amount = v.paid, updated_at = NOW()
+        FROM (SELECT UNNEST(${ids}::int[]) AS id, UNNEST(${paids}::numeric[]) AS paid) v
+        WHERE d.id = v.id AND d.paid_amount IS DISTINCT FROM v.paid`
+}
+
 export async function importAlegraFiles(files: AlegraFile[]): Promise<ImportSummary> {
     const cache: ClientCache = new Map()
     const results: FileResult[] = []
@@ -231,12 +277,13 @@ export async function importAlegraFiles(files: AlegraFile[]): Promise<ImportSumm
     const [{ payments }] = await sql`SELECT COUNT(*)::int AS payments FROM alegra_payments`
     const [{ clients }] = await sql`SELECT COUNT(*)::int AS clients FROM alegra_clients`
 
-    // MV con saldos pre-computados: list_receivables la lee directo. Sin refresh
-    // los balances quedan viejos hasta el próximo import.
+    // Reasignar pagos → saldos por documento y refrescar la MV que los agrega por
+    // cliente. Sin esto los balances quedan viejos hasta el próximo import.
     try {
+        await recomputePaidAmounts()
         await sql`REFRESH MATERIALIZED VIEW CONCURRENTLY alegra_client_balances`
     } catch (e) {
-        console.warn("No se pudo refrescar alegra_client_balances:", e instanceof Error ? e.message : e)
+        console.warn("No se pudo recalcular/refrescar alegra_client_balances:", e instanceof Error ? e.message : e)
     }
 
     return { files: results, totals: { documents, payments, clients } }

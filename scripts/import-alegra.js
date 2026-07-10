@@ -261,14 +261,54 @@ async function run() {
     const [{ count: clients }] = await sql`SELECT COUNT(*)::int AS count FROM alegra_clients`;
     console.log(`\n📊 Totales en el espejo: ${docs} documentos, ${pays} pagos, ${clients} clientes`);
 
-    // Refrescar la MV de saldos: list_receivables la lee directo. Sin este refresh
-    // los balances quedan con la foto previa a este import.
+    // Reasignar pagos → saldos por documento y refrescar la MV de saldos. Alegra tiene
+    // pagos parciales (un recibo se reparte entre facturas y una factura queda "Por
+    // cobrar" hasta cubrirse): el saldo real es total − paid_amount, no el status binario.
     try {
+        await recomputePaidAmounts(sql);
         await sql`REFRESH MATERIALIZED VIEW CONCURRENTLY alegra_client_balances`;
-        console.log("♻️  alegra_client_balances refrescada");
+        console.log("♻️  saldos reasignados y alegra_client_balances refrescada");
     } catch (e) {
-        console.warn("⚠️  No se pudo refrescar alegra_client_balances:", e.message);
+        console.warn("⚠️  No se pudo recalcular/refrescar alegra_client_balances:", e.message);
     }
+}
+
+// Espejo de lib/alegra-import.ts#recomputePaidAmounts (mantener en sincronía):
+// asigna cada pago a sus facturas asociadas en orden (greedy, cronológico).
+async function recomputePaidAmounts(sql) {
+    const docs = await sql`
+        SELECT id, code, total::float AS total
+        FROM alegra_sales_documents
+        WHERE doc_type IN ('invoice', 'debit_note')
+          AND LOWER(COALESCE(status, '')) NOT LIKE '%anulad%'`;
+    const byCode = new Map(docs.map((d) => [d.code, { id: d.id, total: d.total, paid: 0 }]));
+    const pays = await sql`
+        SELECT amount::float AS amount, associated_docs
+        FROM alegra_payments
+        WHERE LOWER(COALESCE(status, '')) NOT LIKE '%anulad%'
+        ORDER BY payment_date ASC, number ASC`;
+    for (const p of pays) {
+        let rest = p.amount;
+        const codes = String(p.associated_docs ?? "").replace(/^[^:]*:/, "").split(",").map((s) => s.trim()).filter(Boolean);
+        for (const code of codes) {
+            if (rest <= 0) break;
+            const d = byCode.get(code);
+            if (!d) continue; // factura no espejada (o anulada): esa porción queda sin asignar
+            const take = Math.min(rest, Math.max(d.total - d.paid, 0));
+            d.paid += take;
+            rest -= take;
+        }
+    }
+    const ids = [], paids = [];
+    for (const d of byCode.values()) {
+        ids.push(d.id);
+        paids.push(Math.round(d.paid * 100) / 100);
+    }
+    await sql`
+        UPDATE alegra_sales_documents d
+        SET paid_amount = v.paid, updated_at = NOW()
+        FROM (SELECT UNNEST(${ids}::int[]) AS id, UNNEST(${paids}::numeric[]) AS paid) v
+        WHERE d.id = v.id AND d.paid_amount IS DISTINCT FROM v.paid`;
 }
 
 run().catch((e) => { console.error("❌", e.message); process.exit(1); });

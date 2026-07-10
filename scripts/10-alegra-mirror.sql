@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS alegra_sales_documents (
     notes TEXT,
     subtotal NUMERIC(14,2) DEFAULT 0,
     total NUMERIC(14,2) NOT NULL DEFAULT 0,
+    -- Pagos aplicados a este documento (reconstruido por el importador asignando cada
+    -- pago a sus facturas asociadas en orden). Saldo pendiente = total − paid_amount.
+    paid_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
     source_file VARCHAR(200),                -- de qué export vino (trazabilidad)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -92,14 +95,19 @@ CREATE INDEX IF NOT EXISTS idx_alegra_payments_date ON alegra_payments(payment_d
 -- - billed: facturado histórico neto (facturas + ND − NC, sin anuladas). Para KPIs.
 -- - paid: cobrado histórico (todos los pagos ingresados no anulados).
 -- - balance: saldo pendiente REAL, matchea el reporte "Cuentas por cobrar" de Alegra.
---   Suma solo facturas/ND con status "Por cobrar". Alegra usa lógica binaria:
---   Cobrada = 100% pagada, Por cobrar = 100% pendiente, Anulada = ignorada. No hay
---   "parcialmente cobrada" (los pagos parciales quedan reflejados via payments
---   pero Alegra marca la factura como Cobrada cuando cierra).
+--   Suma el saldo (total − paid_amount) de facturas/ND con status "Por cobrar".
+--   OJO: Alegra tiene PAGOS PARCIALES — un recibo puede repartirse entre varias
+--   facturas y una factura queda "Por cobrar" hasta cubrirse entera (verificado
+--   2026-07-10: factura 05298 $19,6M con pago parcial de $10M). Por eso el status
+--   solo no alcanza: paid_amount lo reconstruye el importador asignando cada pago
+--   a sus facturas asociadas en orden (recomputePaidAmounts).
 -- MATERIALIZED: pre-computa la agregación en disco para que list_receivables lea
 -- rápido sin recalcular joins/aggs por cada request. Se REFRESHea al final del
 -- importador (scripts/import-alegra.js). Nunca queda inconsistente porque el
 -- importador refresca al terminar. Requiere DROP + CREATE (no acepta REPLACE).
+
+-- Migración para bases ya creadas (CREATE TABLE IF NOT EXISTS no agrega columnas).
+ALTER TABLE alegra_sales_documents ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(14,2) NOT NULL DEFAULT 0;
 
 -- Migración VIEW → MV: versiones anteriores de este script creaban una VIEW común con
 -- este nombre. Comparten namespace: sin este DROP, el IF NOT EXISTS de abajo la saltea,
@@ -112,7 +120,10 @@ BEGIN
     END IF;
 END $$;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS alegra_client_balances AS
+-- La definición cambió (saldo con pagos parciales): recrear siempre para converger.
+DROP MATERIALIZED VIEW IF EXISTS alegra_client_balances;
+
+CREATE MATERIALIZED VIEW alegra_client_balances AS
 SELECT
     c.id AS client_id,
     c.name,
@@ -137,7 +148,7 @@ LEFT JOIN (
     GROUP BY client_id
 ) p ON p.client_id = c.id
 LEFT JOIN (
-    SELECT client_id, SUM(total) AS balance
+    SELECT client_id, SUM(GREATEST(total - paid_amount, 0)) AS balance
     FROM alegra_sales_documents
     WHERE doc_type IN ('invoice','debit_note')
       AND LOWER(COALESCE(status, '')) = 'por cobrar'
