@@ -100,6 +100,18 @@ CREATE INDEX IF NOT EXISTS idx_alegra_payments_date ON alegra_payments(payment_d
 -- rápido sin recalcular joins/aggs por cada request. Se REFRESHea al final del
 -- importador (scripts/import-alegra.js). Nunca queda inconsistente porque el
 -- importador refresca al terminar. Requiere DROP + CREATE (no acepta REPLACE).
+
+-- Migración VIEW → MV: versiones anteriores de este script creaban una VIEW común con
+-- este nombre. Comparten namespace: sin este DROP, el IF NOT EXISTS de abajo la saltea,
+-- el CREATE UNIQUE INDEX falla y el REFRESH del importador cae siempre en el catch
+-- (la deuda quedaría calculada con la fórmula vieja billed − paid).
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_views WHERE schemaname = 'public' AND viewname = 'alegra_client_balances') THEN
+        EXECUTE 'DROP VIEW alegra_client_balances';
+    END IF;
+END $$;
+
 CREATE MATERIALIZED VIEW IF NOT EXISTS alegra_client_balances AS
 SELECT
     c.id AS client_id,
