@@ -82,6 +82,8 @@ function stripPreamble(rows) {
 
 function detectKind(header) {
     const h = header.join("|");
+    // NC de Alegra: header con "TOTAL - NOTA CRÉDITO", columnas distintas a facturas.
+    if (h.includes("TOTAL - NOTA CRÉDITO") && h.includes("ÍTEM - NOMBRE")) return "credit_notes";
     if (h.includes("TOTAL - FACTURA") && h.includes("ÍTEM - NOMBRE")) return "invoices";
     if (h.includes("CONCILIADA?") || (h.includes("CUENTA") && h.includes("MÉTODO DE PAGO"))) return "payments";
     return null;
@@ -107,11 +109,15 @@ async function upsertClient(sql, cache, name, extra = {}) {
     return rows[0].id;
 }
 
-async function importInvoices(sql, header, data, sourceFile, clientCache) {
+async function importInvoices(sql, header, data, sourceFile, clientCache, docType = "invoice") {
     const col = (name) => header.findIndex((h) => h === name);
+    // Fallbacks para NC (Alegra usa nombres distintos: NÚMERO, TOTAL - NOTA CRÉDITO, SUBTOTAL - NOTA CRÉDITO).
+    const codeCol = col("CÓDIGO") !== -1 ? col("CÓDIGO") : col("NÚMERO");
+    const totalCol = col("TOTAL - FACTURA") !== -1 ? col("TOTAL - FACTURA") : col("TOTAL - NOTA CRÉDITO");
+    const subtotalCol = col("SUBTOTAL - ITEMS") !== -1 ? col("SUBTOTAL - ITEMS") : col("SUBTOTAL - NOTA CRÉDITO");
     const C = {
         date: col("FECHA DE EMISIÓN") !== -1 ? col("FECHA DE EMISIÓN") : col("FECHA"),
-        code: col("CÓDIGO"), status: col("ESTADO"), warehouse: col("BODEGA"),
+        code: codeCol, status: col("ESTADO"), warehouse: col("BODEGA"),
         client: col("CLIENTE - NOMBRE") !== -1 ? col("CLIENTE - NOMBRE") : col("CLIENTE"),
         clientId: col("CLIENTE - IDENTIFICACIÓN"), address: col("CLIENTE - DIRECCIÓN"),
         phone: col("CLIENTE - TELÉFONO"), city: col("CLIENTE - CIUDAD"),
@@ -120,7 +126,7 @@ async function importInvoices(sql, header, data, sourceFile, clientCache) {
         itName: col("ÍTEM - NOMBRE"), itRef: col("ÍTEM - REFERENCIA"), itDesc: col("ÍTEM - DESCRIPCIÓN"),
         itQty: col("ÍTEM - CANTIDAD"), itPrice: col("ÍTEM - PRECIO UNITARIO"), itDisc: col("ÍTEM - DESCUENTO"),
         itTaxPct: col("ÍTEM - IMPUESTO (%)"), itTaxVal: col("ÍTEM - IMPUESTO (VALOR)"), itTotal: col("ÍTEM - TOTAL"),
-        subtotal: col("SUBTOTAL - ITEMS"), total: col("TOTAL - FACTURA"),
+        subtotal: subtotalCol, total: totalCol,
     };
 
     // Agrupar filas (1 por ítem) por código de documento
@@ -143,19 +149,19 @@ async function importInvoices(sql, header, data, sourceFile, clientCache) {
             INSERT INTO alegra_sales_documents
                 (doc_type, code, issue_date, due_date, status, client_id, client_name,
                  seller, warehouse, payment_term, notes, subtotal, total, source_file)
-            VALUES ('invoice', ${code}, ${parseDate(r0[C.date])}, ${parseDate(r0[C.due])},
+            VALUES (${docType}, ${code}, ${parseDate(r0[C.date])}, ${parseDate(r0[C.due])},
                     ${r0[C.status] || null}, ${clientId}, ${clientName || null},
-                    ${r0[C.seller] || null}, ${r0[C.warehouse] || null}, ${r0[C.term] || null},
+                    ${C.seller !== -1 ? r0[C.seller] || null : null}, ${r0[C.warehouse] || null},
+                    ${C.term !== -1 ? r0[C.term] || null : null},
                     ${r0[C.notes] || null}, ${parseNum(r0[C.subtotal])}, ${parseNum(r0[C.total])}, ${sourceFile})
             ON CONFLICT (doc_type, code) DO UPDATE SET
                 issue_date = EXCLUDED.issue_date, due_date = EXCLUDED.due_date,
                 status = EXCLUDED.status, client_id = EXCLUDED.client_id,
                 client_name = EXCLUDED.client_name, subtotal = EXCLUDED.subtotal,
                 total = EXCLUDED.total, source_file = EXCLUDED.source_file, updated_at = NOW()
-            RETURNING (xmax = 0) AS inserted`;
-        res[0].inserted ? created++ : updated++;
-
-        const docId = (await sql`SELECT id FROM alegra_sales_documents WHERE doc_type = 'invoice' AND code = ${code}`)[0].id;
+            RETURNING id, (xmax = 0) AS inserted`;
+        const { id: docId, inserted } = res[0];
+        inserted ? created++ : updated++;
         await sql`DELETE FROM alegra_sales_items WHERE document_id = ${docId}`;
         for (const [idx, r] of rows.entries()) {
             if (!(r[C.itName] || "").trim()) continue;
@@ -237,13 +243,16 @@ async function run() {
         const kind = detectKind(header);
         const base = path.basename(file);
         if (kind === "invoices") {
-            const r = await importInvoices(sql, header, data, base, clientCache);
+            const r = await importInvoices(sql, header, data, base, clientCache, "invoice");
             console.log(`✅ ${base}: ${r.docs} facturas (${r.created} nuevas, ${r.updated} actualizadas), ${r.items} líneas`);
+        } else if (kind === "credit_notes") {
+            const r = await importInvoices(sql, header, data, base, clientCache, "credit_note");
+            console.log(`✅ ${base}: ${r.docs} notas de crédito (${r.created} nuevas, ${r.updated} actualizadas), ${r.items} líneas`);
         } else if (kind === "payments") {
             const r = await importPayments(sql, header, data, base, clientCache);
             console.log(`✅ ${base}: pagos ${r.created} nuevos, ${r.updated} actualizados, ${r.skipped} omitidos (egresos/incompletos)`);
         } else {
-            console.log(`⏭️  ${base}: formato no reconocido (no es export de facturas ni de transacciones), lo salteo`);
+            console.log(`⏭️  ${base}: formato no reconocido (no es export de facturas, NC ni transacciones), lo salteo`);
         }
     }
 
@@ -251,6 +260,15 @@ async function run() {
     const [{ count: pays }] = await sql`SELECT COUNT(*)::int AS count FROM alegra_payments`;
     const [{ count: clients }] = await sql`SELECT COUNT(*)::int AS count FROM alegra_clients`;
     console.log(`\n📊 Totales en el espejo: ${docs} documentos, ${pays} pagos, ${clients} clientes`);
+
+    // Refrescar la MV de saldos: list_receivables la lee directo. Sin este refresh
+    // los balances quedan con la foto previa a este import.
+    try {
+        await sql`REFRESH MATERIALIZED VIEW CONCURRENTLY alegra_client_balances`;
+        console.log("♻️  alegra_client_balances refrescada");
+    } catch (e) {
+        console.warn("⚠️  No se pudo refrescar alegra_client_balances:", e.message);
+    }
 }
 
 run().catch((e) => { console.error("❌", e.message); process.exit(1); });

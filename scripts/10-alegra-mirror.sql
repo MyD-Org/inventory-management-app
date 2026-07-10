@@ -88,15 +88,25 @@ CREATE INDEX IF NOT EXISTS idx_alegra_items_name ON alegra_sales_items(item_name
 CREATE INDEX IF NOT EXISTS idx_alegra_payments_client ON alegra_payments(client_id);
 CREATE INDEX IF NOT EXISTS idx_alegra_payments_date ON alegra_payments(payment_date);
 
--- Deuda por cliente: facturas + ND − NC (no anuladas) − pagos.
--- Calculada, nunca almacenada: no puede desincronizarse.
-CREATE OR REPLACE VIEW alegra_client_balances AS
+-- Balance del cliente. Tres columnas:
+-- - billed: facturado histórico neto (facturas + ND − NC, sin anuladas). Para KPIs.
+-- - paid: cobrado histórico (todos los pagos ingresados no anulados).
+-- - balance: saldo pendiente REAL, matchea el reporte "Cuentas por cobrar" de Alegra.
+--   Suma solo facturas/ND con status "Por cobrar". Alegra usa lógica binaria:
+--   Cobrada = 100% pagada, Por cobrar = 100% pendiente, Anulada = ignorada. No hay
+--   "parcialmente cobrada" (los pagos parciales quedan reflejados via payments
+--   pero Alegra marca la factura como Cobrada cuando cierra).
+-- MATERIALIZED: pre-computa la agregación en disco para que list_receivables lea
+-- rápido sin recalcular joins/aggs por cada request. Se REFRESHea al final del
+-- importador (scripts/import-alegra.js). Nunca queda inconsistente porque el
+-- importador refresca al terminar. Requiere DROP + CREATE (no acepta REPLACE).
+CREATE MATERIALIZED VIEW IF NOT EXISTS alegra_client_balances AS
 SELECT
     c.id AS client_id,
     c.name,
     COALESCE(d.billed, 0)::NUMERIC(14,2) AS billed,
     COALESCE(p.paid, 0)::NUMERIC(14,2) AS paid,
-    (COALESCE(d.billed, 0) - COALESCE(p.paid, 0))::NUMERIC(14,2) AS balance,
+    COALESCE(o.balance, 0)::NUMERIC(14,2) AS balance,
     d.last_invoice_date,
     p.last_payment_date
 FROM alegra_clients c
@@ -113,7 +123,19 @@ LEFT JOIN (
     FROM alegra_payments
     WHERE LOWER(COALESCE(status, '')) NOT LIKE '%anulad%'
     GROUP BY client_id
-) p ON p.client_id = c.id;
+) p ON p.client_id = c.id
+LEFT JOIN (
+    SELECT client_id, SUM(total) AS balance
+    FROM alegra_sales_documents
+    WHERE doc_type IN ('invoice','debit_note')
+      AND LOWER(COALESCE(status, '')) = 'por cobrar'
+    GROUP BY client_id
+) o ON o.client_id = c.id;
+
+-- Índices para la MV: UNIQUE necesario para REFRESH CONCURRENTLY (sin lock de lectura);
+-- el de balance acelera el ORDER BY balance DESC del list_receivables.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_alegra_client_balances_client ON alegra_client_balances(client_id);
+CREATE INDEX IF NOT EXISTS idx_alegra_client_balances_balance ON alegra_client_balances(balance DESC);
 
 -- Ventas por ítem y por mes (para "qué se vende más" y tendencias).
 CREATE OR REPLACE VIEW alegra_sales_by_item AS
