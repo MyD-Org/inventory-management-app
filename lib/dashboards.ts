@@ -1,3 +1,4 @@
+import "./neon-local"
 import { neon } from "@neondatabase/serverless"
 
 // Conexión para las queries de dashboards. En prod apuntar DASHBOARDS_DATABASE_URL a un

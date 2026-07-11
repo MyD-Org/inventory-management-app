@@ -2,6 +2,7 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { authConfig } from './auth.config';
 import { z } from 'zod';
+import './lib/neon-local';
 import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
 
