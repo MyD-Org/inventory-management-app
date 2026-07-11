@@ -19,6 +19,7 @@ import {
   Menu,
   X,
   LogOut,
+  LayoutDashboard,
   type LucideIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -87,6 +88,8 @@ const sections: NavSection[] = [
     items: [
       { label: "Movimientos", href: "/movimientos", icon: ArrowLeftRight },
       { label: "Gráficos", href: "/graficos", icon: BarChart3 },
+      // AI dashboard builder: dashboards armados por chat (solo admins, como el asistente).
+      { label: "Dashboards IA", href: "/dashboards", icon: LayoutDashboard, adminOnly: true, activePrefixes: ["/dashboards/"] },
     ],
   },
   {

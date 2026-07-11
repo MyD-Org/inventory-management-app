@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
-    "@myd-org/ai-widget": "file:vendor/myd-org-ai-widget-0.1.7.tgz",
+    "@myd-org/ai-widget": "file:vendor/myd-org-ai-widget-0.1.8.tgz",
     "@neondatabase/serverless": "1.0.1",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
@@ -66,7 +66,10 @@
     "tailwindcss-animate": "^1.0.7",
     "use-debounce": "^10.1.0",
     "vaul": "^0.9.9",
-    "zod": "3.25.67"
+    "zod": "3.25.67",
+    "@myd-org/ui": "file:vendor/myd-org-ui-0.5.1.tgz",
+    "@myd-org/sdui": "file:vendor/myd-org-sdui-0.5.1.tgz",
+    "@myd-org/sdui-dashboard": "file:vendor/myd-org-sdui-dashboard-0.1.0.tgz"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",

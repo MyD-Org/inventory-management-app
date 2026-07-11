@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+/* Design system @myd-org (dashboards IA): tokens + roles; las utilidades de sus
+   componentes se compilan desde los dist vendorizados vía @source. */
+@import '@myd-org/ui/tailwind.css';
+@source '../node_modules/@myd-org/ui/dist';
+@source '../node_modules/@myd-org/sdui-dashboard/dist';
 
 @custom-variant dark (&:is(.dark *));
 
