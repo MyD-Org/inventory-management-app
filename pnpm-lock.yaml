@@ -16,13 +16,13 @@ importers:
         version: file:vendor/myd-org-ai-widget-0.1.9.tgz(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@myd-org/sdui':
         specifier: file:vendor/myd-org-sdui-0.6.0.tgz
-        version: file:vendor/myd-org-sdui-0.6.0.tgz(@myd-org/ui@file:vendor/myd-org-ui-0.6.0.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        version: file:vendor/myd-org-sdui-0.6.0.tgz(@myd-org/ui@file:vendor/myd-org-ui-0.6.1.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@myd-org/sdui-dashboard':
         specifier: file:vendor/myd-org-sdui-dashboard-0.3.0.tgz
-        version: file:vendor/myd-org-sdui-dashboard-0.3.0.tgz(@myd-org/sdui@file:vendor/myd-org-sdui-0.6.0.tgz(@myd-org/ui@file:vendor/myd-org-ui-0.6.0.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@myd-org/ui@file:vendor/myd-org-ui-0.6.0.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        version: file:vendor/myd-org-sdui-dashboard-0.3.0.tgz(@myd-org/sdui@file:vendor/myd-org-sdui-0.6.0.tgz(@myd-org/ui@file:vendor/myd-org-ui-0.6.1.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@myd-org/ui@file:vendor/myd-org-ui-0.6.1.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@myd-org/ui':
-        specifier: file:vendor/myd-org-ui-0.6.0.tgz
-        version: file:vendor/myd-org-ui-0.6.0.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        specifier: file:vendor/myd-org-ui-0.6.1.tgz
+        version: file:vendor/myd-org-ui-0.6.1.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@neondatabase/serverless':
         specifier: 1.0.1
         version: 1.0.1
@@ -307,9 +307,9 @@ packages:
       react: '>=18'
       react-dom: '>=18'
 
-  '@myd-org/ui@file:vendor/myd-org-ui-0.6.0.tgz':
-    resolution: {integrity: sha512-yzn+tJMUjmwUieKZi3YCFqmTir81Bno9nqumgIvFE7HMX9+zKhOgsQBoGw5U28q0OBZzo969zSYf93OuBSVTgw==, tarball: file:vendor/myd-org-ui-0.6.0.tgz}
-    version: 0.6.0
+  '@myd-org/ui@file:vendor/myd-org-ui-0.6.1.tgz':
+    resolution: {integrity: sha512-gDnLfZJowN19ui/P26R/sn6a7fikb8Osr5a61RS7hlY+I7SdulkjdJqIPjbVq38eDKTxATbqgBSXVRmEFo+Z8A==, tarball: file:vendor/myd-org-ui-0.6.1.tgz}
+    version: 0.6.1
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
@@ -2231,10 +2231,10 @@ snapshots:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
 
-  '@myd-org/sdui-dashboard@file:vendor/myd-org-sdui-dashboard-0.3.0.tgz(@myd-org/sdui@file:vendor/myd-org-sdui-0.6.0.tgz(@myd-org/ui@file:vendor/myd-org-ui-0.6.0.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@myd-org/ui@file:vendor/myd-org-ui-0.6.0.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@myd-org/sdui-dashboard@file:vendor/myd-org-sdui-dashboard-0.3.0.tgz(@myd-org/sdui@file:vendor/myd-org-sdui-0.6.0.tgz(@myd-org/ui@file:vendor/myd-org-ui-0.6.1.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@myd-org/ui@file:vendor/myd-org-ui-0.6.1.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
-      '@myd-org/sdui': file:vendor/myd-org-sdui-0.6.0.tgz(@myd-org/ui@file:vendor/myd-org-ui-0.6.0.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@myd-org/ui': file:vendor/myd-org-ui-0.6.0.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@myd-org/sdui': file:vendor/myd-org-sdui-0.6.0.tgz(@myd-org/ui@file:vendor/myd-org-ui-0.6.1.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@myd-org/ui': file:vendor/myd-org-ui-0.6.1.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@radix-ui/react-popover': 1.1.19(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       ajv: 8.20.0
       react: 19.2.3
@@ -2243,14 +2243,14 @@ snapshots:
       - '@types/react'
       - '@types/react-dom'
 
-  '@myd-org/sdui@file:vendor/myd-org-sdui-0.6.0.tgz(@myd-org/ui@file:vendor/myd-org-ui-0.6.0.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@myd-org/sdui@file:vendor/myd-org-sdui-0.6.0.tgz(@myd-org/ui@file:vendor/myd-org-ui-0.6.1.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
-      '@myd-org/ui': file:vendor/myd-org-ui-0.6.0.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@myd-org/ui': file:vendor/myd-org-ui-0.6.1.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       ajv: 8.20.0
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
 
-  '@myd-org/ui@file:vendor/myd-org-ui-0.6.0.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@myd-org/ui@file:vendor/myd-org-ui-0.6.1.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       '@radix-ui/react-dialog': 1.1.19(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@radix-ui/react-dropdown-menu': 2.1.20(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)

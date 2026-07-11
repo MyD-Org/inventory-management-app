@@ -67,7 +67,7 @@
     "use-debounce": "^10.1.0",
     "vaul": "^0.9.9",
     "zod": "3.25.67",
-    "@myd-org/ui": "file:vendor/myd-org-ui-0.6.0.tgz",
+    "@myd-org/ui": "file:vendor/myd-org-ui-0.6.1.tgz",
     "@myd-org/sdui": "file:vendor/myd-org-sdui-0.6.0.tgz",
     "@myd-org/sdui-dashboard": "file:vendor/myd-org-sdui-dashboard-0.3.0.tgz"
   },
