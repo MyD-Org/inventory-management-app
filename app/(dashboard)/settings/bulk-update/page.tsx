@@ -10,7 +10,7 @@ export default async function BulkUpdatePage() {
     }
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="bg-background">
             <main className="container mx-auto px-4 py-6">
                 <h1 className="text-2xl font-bold mb-6">Actualización Masiva de Inventario</h1>
                 <InventoryImporter />

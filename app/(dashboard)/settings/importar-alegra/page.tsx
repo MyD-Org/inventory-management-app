@@ -9,7 +9,7 @@ export default async function ImportarAlegraPage() {
     if (session?.user?.role !== "admin") redirect("/settings")
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="bg-background">
             <main className="container mx-auto px-4 py-6 max-w-2xl">
                 <h1 className="text-2xl font-bold mb-1">Importar datos de Alegra</h1>
                 <p className="text-sm text-muted-foreground mb-6">

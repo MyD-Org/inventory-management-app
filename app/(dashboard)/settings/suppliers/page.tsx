@@ -15,7 +15,7 @@ export default async function SuppliersPage() {
     const suppliers = await sql`SELECT * FROM suppliers ORDER BY name ASC`
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="bg-background">
             <main className="container mx-auto px-4 py-6">
                 <div className="max-w-4xl mx-auto">
                     <h1 className="text-2xl font-bold mb-6">Gestión de Proveedores</h1>
