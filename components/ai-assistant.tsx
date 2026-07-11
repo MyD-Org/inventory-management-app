@@ -99,13 +99,13 @@ export function AiAssistant() {
       config={config}
       branding={{
         title: "Asistente New Avantec",
-        subtitle: "Inventario y costos de fabricación",
+        subtitle: "Inventario, costos y ventas",
         primaryColor: "#2563eb",
         launcherPosition: "bottom-right",
       }}
       labels={{
         headerTitle: "Asistente New Avantec",
-        emptyState: "Preguntame por stock, movimientos o pedime el costo de fabricar algo.",
+        emptyState: "Preguntame por stock, costos de fabricación, ventas o cobranzas.",
         useBudgetLabel: "Abrir en el editor",
       }}
       showActivity

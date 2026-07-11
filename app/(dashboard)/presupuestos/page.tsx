@@ -40,7 +40,7 @@ export default async function QuotesPage() {
     }))
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="bg-background">
             <main className="container mx-auto px-4 py-6">
                 <div className="flex items-center justify-between mb-6">
                     <div>

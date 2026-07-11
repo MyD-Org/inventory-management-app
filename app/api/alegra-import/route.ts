@@ -2,6 +2,12 @@ import { type NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { importAlegraFiles, type AlegraFile } from "@/lib/alegra-import"
 
+// Import de CSVs con miles de filas: puede tardar minutos. Subimos el timeout del
+// route (default 10s en Vercel/Edge; en dev el server igual banca más). Ver batching
+// en lib/alegra-import.ts para reducir round-trips a Neon.
+export const maxDuration = 300
+export const dynamic = "force-dynamic"
+
 // Importa exports CSV de Alegra (facturas / transacciones) al espejo local.
 // Solo admin. Recibe multipart/form-data con uno o más archivos "files".
 export async function POST(request: NextRequest) {

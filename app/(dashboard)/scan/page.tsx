@@ -2,7 +2,7 @@ import { MaterialLookup } from "@/components/material-lookup"
 
 export default function ScanPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <main className="container mx-auto px-4 py-6">
         <div className="max-w-2xl mx-auto">
           <div className="mb-6">

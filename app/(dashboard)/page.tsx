@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
 
 export default async function DashboardPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <main className="container mx-auto px-4 py-6 space-y-6">
         {/* Estadísticas principales */}
         <Suspense fallback={<div className="h-32 bg-muted animate-pulse rounded-lg" />}>

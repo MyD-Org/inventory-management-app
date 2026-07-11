@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
+import { getFlags } from "@/lib/feature-flags"
 import { AppShell } from "@/components/app-shell"
 
 async function getMaterials() {
@@ -20,10 +21,10 @@ async function getMaterials() {
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const session = await auth()
-  const materials = await getMaterials()
+  const [materials, flags] = await Promise.all([getMaterials(), getFlags()])
 
   return (
-    <AppShell user={session?.user} materials={materials}>
+    <AppShell user={session?.user} materials={materials} flags={flags}>
       {children}
     </AppShell>
   )

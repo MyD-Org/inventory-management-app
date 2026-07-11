@@ -137,7 +137,7 @@ export default function NuevoMaterialPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <main className="container mx-auto px-4 py-6">
         <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link href="/" className="flex items-center gap-1 hover:text-foreground transition-colors">

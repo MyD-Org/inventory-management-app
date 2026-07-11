@@ -17,7 +17,7 @@ export default async function InventoryPage({
     const isAdmin = session?.user?.role === "admin"
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="bg-background">
             <main className="container mx-auto px-4 py-6">
                 <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <h1 className="text-2xl font-bold">Inventario Completo</h1>

@@ -22,6 +22,7 @@ import {
   LayoutDashboard,
   type LucideIcon,
 } from "lucide-react"
+import type { FlagKey } from "@/lib/feature-flags"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { StockMovementDialog } from "@/components/stock-movement-dialog"
@@ -42,6 +43,7 @@ interface AppShellProps {
     role?: string
   }
   materials?: Material[]
+  flags?: Partial<Record<FlagKey, boolean>>
   children: ReactNode
 }
 
@@ -51,6 +53,8 @@ interface NavItem {
   icon: LucideIcon
   badge?: string
   adminOnly?: boolean
+  /** Si está seteado, el item solo se muestra cuando ese feature flag está habilitado. */
+  flag?: FlagKey
   activePrefixes?: string[]
   quickAction?: "entrada" | "salida"
 }
@@ -89,7 +93,7 @@ const sections: NavSection[] = [
       { label: "Movimientos", href: "/movimientos", icon: ArrowLeftRight },
       { label: "Gráficos", href: "/graficos", icon: BarChart3 },
       // AI dashboard builder: dashboards armados por chat (solo admins, como el asistente).
-      { label: "Dashboards IA", href: "/dashboards", icon: LayoutDashboard, adminOnly: true, activePrefixes: ["/dashboards/"] },
+      { label: "Dashboards IA", href: "/dashboards", icon: LayoutDashboard, adminOnly: true, flag: "ai_dashboards", activePrefixes: ["/dashboards/"] },
     ],
   },
   {
@@ -109,7 +113,7 @@ function isItemActive(item: NavItem, pathname: string): boolean {
   return item.activePrefixes?.some((prefix) => pathname.startsWith(prefix)) ?? false
 }
 
-function SidebarContent({ user, materials = [] }: { user?: AppShellProps["user"]; materials?: Material[] }) {
+function SidebarContent({ user, materials = [], flags = {} }: { user?: AppShellProps["user"]; materials?: Material[]; flags?: AppShellProps["flags"] }) {
   const pathname = usePathname()
   const isAdmin = user?.role === "admin"
   const initials = user?.name?.slice(0, 2).toUpperCase() || "US"
@@ -129,7 +133,9 @@ function SidebarContent({ user, materials = [] }: { user?: AppShellProps["user"]
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-2">
         {sections.map((section, i) => {
-          const items = section.items.filter((item) => !item.adminOnly || isAdmin)
+          const items = section.items.filter(
+            (item) => (!item.adminOnly || isAdmin) && (!item.flag || flags?.[item.flag]),
+          )
           if (items.length === 0) return null
           return (
             <div key={section.title ?? i}>
@@ -251,7 +257,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
   )
 }
 
-export function AppShell({ user, materials, children }: AppShellProps) {
+export function AppShell({ user, materials, flags, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const pathname = usePathname()
 
@@ -263,7 +269,7 @@ export function AppShell({ user, materials, children }: AppShellProps) {
     <div className="min-h-screen bg-background">
       {/* Sidebar fijo en desktop */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 lg:block">
-        <SidebarContent user={user} materials={materials} />
+        <SidebarContent user={user} materials={materials} flags={flags} />
       </aside>
 
       {/* Sidebar como drawer en mobile */}
@@ -275,7 +281,7 @@ export function AppShell({ user, materials, children }: AppShellProps) {
             aria-hidden="true"
           />
           <aside className="absolute inset-y-0 left-0 w-64">
-            <SidebarContent user={user} materials={materials} />
+            <SidebarContent user={user} materials={materials} flags={flags} />
             <Button
               variant="ghost"
               size="icon"

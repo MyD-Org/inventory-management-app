@@ -4,9 +4,11 @@ import { requireInternalSecret, parseLimit } from "@/lib/ai-tools-auth"
 
 const ORDERS = new Set(["balance", "oldest_payment", "recent_invoice"])
 
-// Tool de IA (read-only): cobranzas pendientes. Lee la vista alegra_client_balances
-// (facturas + ND − NC − pagos, sin anuladas). Filtros: q (nombre de cliente parcial),
-// min_balance (default 1: solo deudores), order y limit. Incluye totales agregados.
+// Tool de IA (read-only): cobranzas pendientes. Lee la MV alegra_client_balances:
+// balance = saldo real de facturas/ND "Por cobrar" (total − paid_amount; Alegra tiene
+// pagos parciales, ver recomputePaidAmounts en lib/alegra-import.ts); billed/paid son
+// históricos para KPIs. Filtros: q (nombre de cliente parcial), min_balance (default 1:
+// solo deudores), order y limit.
 export async function GET(request: NextRequest) {
   const denied = requireInternalSecret(request)
   if (denied) return denied

@@ -19,7 +19,7 @@ export default async function UsersPage() {
     const users = await getUsers();
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="bg-background">
             <main className="container mx-auto px-4 py-6">
                 <div className="flex justify-between items-center mb-6">
                     <div>

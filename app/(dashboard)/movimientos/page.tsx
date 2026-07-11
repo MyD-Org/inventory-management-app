@@ -9,7 +9,7 @@ export default function MovimientosPage({
   searchParams?: { [key: string]: string | string[] | undefined }
 }) {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <main className="mx-auto w-full max-w-[1600px] px-3 py-6 sm:px-6 lg:px-8 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground mb-2">Movimientos</h1>

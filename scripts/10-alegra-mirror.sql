@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS alegra_sales_documents (
     notes TEXT,
     subtotal NUMERIC(14,2) DEFAULT 0,
     total NUMERIC(14,2) NOT NULL DEFAULT 0,
+    -- Pagos aplicados a este documento (reconstruido por el importador asignando cada
+    -- pago a sus facturas asociadas en orden). Saldo pendiente = total − paid_amount.
+    paid_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
     source_file VARCHAR(200),                -- de qué export vino (trazabilidad)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -88,15 +91,45 @@ CREATE INDEX IF NOT EXISTS idx_alegra_items_name ON alegra_sales_items(item_name
 CREATE INDEX IF NOT EXISTS idx_alegra_payments_client ON alegra_payments(client_id);
 CREATE INDEX IF NOT EXISTS idx_alegra_payments_date ON alegra_payments(payment_date);
 
--- Deuda por cliente: facturas + ND − NC (no anuladas) − pagos.
--- Calculada, nunca almacenada: no puede desincronizarse.
-CREATE OR REPLACE VIEW alegra_client_balances AS
+-- Balance del cliente. Tres columnas:
+-- - billed: facturado histórico neto (facturas + ND − NC, sin anuladas). Para KPIs.
+-- - paid: cobrado histórico (todos los pagos ingresados no anulados).
+-- - balance: saldo pendiente REAL, matchea el reporte "Cuentas por cobrar" de Alegra.
+--   Suma el saldo (total − paid_amount) de facturas/ND con status "Por cobrar".
+--   OJO: Alegra tiene PAGOS PARCIALES — un recibo puede repartirse entre varias
+--   facturas y una factura queda "Por cobrar" hasta cubrirse entera (verificado
+--   2026-07-10: factura 05298 $19,6M con pago parcial de $10M). Por eso el status
+--   solo no alcanza: paid_amount lo reconstruye el importador asignando cada pago
+--   a sus facturas asociadas en orden (recomputePaidAmounts).
+-- MATERIALIZED: pre-computa la agregación en disco para que list_receivables lea
+-- rápido sin recalcular joins/aggs por cada request. Se REFRESHea al final del
+-- importador (scripts/import-alegra.js). Nunca queda inconsistente porque el
+-- importador refresca al terminar. Requiere DROP + CREATE (no acepta REPLACE).
+
+-- Migración para bases ya creadas (CREATE TABLE IF NOT EXISTS no agrega columnas).
+ALTER TABLE alegra_sales_documents ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(14,2) NOT NULL DEFAULT 0;
+
+-- Migración VIEW → MV: versiones anteriores de este script creaban una VIEW común con
+-- este nombre. Comparten namespace: sin este DROP, el IF NOT EXISTS de abajo la saltea,
+-- el CREATE UNIQUE INDEX falla y el REFRESH del importador cae siempre en el catch
+-- (la deuda quedaría calculada con la fórmula vieja billed − paid).
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_views WHERE schemaname = 'public' AND viewname = 'alegra_client_balances') THEN
+        EXECUTE 'DROP VIEW alegra_client_balances';
+    END IF;
+END $$;
+
+-- La definición cambió (saldo con pagos parciales): recrear siempre para converger.
+DROP MATERIALIZED VIEW IF EXISTS alegra_client_balances;
+
+CREATE MATERIALIZED VIEW alegra_client_balances AS
 SELECT
     c.id AS client_id,
     c.name,
     COALESCE(d.billed, 0)::NUMERIC(14,2) AS billed,
     COALESCE(p.paid, 0)::NUMERIC(14,2) AS paid,
-    (COALESCE(d.billed, 0) - COALESCE(p.paid, 0))::NUMERIC(14,2) AS balance,
+    COALESCE(o.balance, 0)::NUMERIC(14,2) AS balance,
     d.last_invoice_date,
     p.last_payment_date
 FROM alegra_clients c
@@ -113,7 +146,19 @@ LEFT JOIN (
     FROM alegra_payments
     WHERE LOWER(COALESCE(status, '')) NOT LIKE '%anulad%'
     GROUP BY client_id
-) p ON p.client_id = c.id;
+) p ON p.client_id = c.id
+LEFT JOIN (
+    SELECT client_id, SUM(GREATEST(total - paid_amount, 0)) AS balance
+    FROM alegra_sales_documents
+    WHERE doc_type IN ('invoice','debit_note')
+      AND LOWER(COALESCE(status, '')) = 'por cobrar'
+    GROUP BY client_id
+) o ON o.client_id = c.id;
+
+-- Índices para la MV: UNIQUE necesario para REFRESH CONCURRENTLY (sin lock de lectura);
+-- el de balance acelera el ORDER BY balance DESC del list_receivables.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_alegra_client_balances_client ON alegra_client_balances(client_id);
+CREATE INDEX IF NOT EXISTS idx_alegra_client_balances_balance ON alegra_client_balances(balance DESC);
 
 -- Ventas por ítem y por mes (para "qué se vende más" y tendencias).
 CREATE OR REPLACE VIEW alegra_sales_by_item AS

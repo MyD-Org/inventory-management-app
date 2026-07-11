@@ -16,6 +16,7 @@ export const metadata: Metadata = {
 import { Toaster } from "@/components/ui/sonner"
 import { AiAssistant } from "@/components/ai-assistant"
 import { auth } from "@/auth"
+import { getFlags } from "@/lib/feature-flags"
 
 export default async function RootLayout({
   children,
@@ -23,9 +24,11 @@ export default async function RootLayout({
   children: React.ReactNode
 }>) {
   // El asistente de IA solo se monta para ADMINISTRADORES logueados
-  // (no aparece en /login ni para usuarios sin rol admin).
-  const session = await auth()
+  // (no aparece en /login ni para usuarios sin rol admin) y detrás del flag "ai-widget".
+  // Uso getFlags() (no aiWidgetFlag() directo) para pasar por su try/catch de seguridad.
+  const [session, flags] = await Promise.all([auth(), getFlags()])
   const isAdmin = session?.user?.role === "admin"
+  const aiWidgetEnabled = flags.ai_widget
 
   return (
     <html lang="es" suppressHydrationWarning>
@@ -34,7 +37,7 @@ export default async function RootLayout({
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             {children}
             <Toaster />
-            {isAdmin && <AiAssistant />}
+            {isAdmin && aiWidgetEnabled && <AiAssistant />}
           </ThemeProvider>
         </Suspense>
         <Analytics />
