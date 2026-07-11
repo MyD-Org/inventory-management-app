@@ -19,6 +19,7 @@ import {
   Menu,
   X,
   LogOut,
+  LayoutDashboard,
   type LucideIcon,
 } from "lucide-react"
 import type { FlagKey } from "@/lib/feature-flags"
