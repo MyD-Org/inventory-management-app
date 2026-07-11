@@ -6,7 +6,8 @@ import { DashboardView, type DashboardDocument } from "@myd-org/sdui-dashboard"
 import { ChatPanel } from "@myd-org/ai-widget/preset"
 import "@myd-org/ai-widget/styles"
 import { Button } from "@/components/ui/button"
-import { Save, Loader2, Eye, Pencil } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Save, Loader2, Eye, Pencil, PanelRightClose, PanelRightOpen, MessageSquare } from "lucide-react"
 
 // Workspace del AI dashboard builder: dashboard a la izquierda, chat a la derecha.
 // El agente (ai-api, kind dashboard_builder) emite el documento completo por SSE
@@ -26,6 +27,10 @@ export function DashboardWorkspace({
   const [isDirty, setIsDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  // El agente está generando/editando (status 'streaming' del chat) → skeletons/overlay.
+  const [generating, setGenerating] = useState(false)
+  // Chat colapsable a un rail fino para ver mejor el dashboard.
+  const [chatCollapsed, setChatCollapsed] = useState(false)
   // getPageContext se evalúa por envío: ref para no reconfigurar el chat en cada emisión.
   const docRef = useRef<DashboardDocument | null>(initialDocument)
   docRef.current = document
@@ -59,6 +64,10 @@ export function DashboardWorkspace({
           setIsDirty(true)
         }
       },
+      // 'streaming' mientras el agente trabaja → prende los skeletons/overlay del dashboard.
+      onStatus: (status: "idle" | "streaming" | "error") => {
+        setGenerating(status === "streaming")
+      },
     }),
     [],
   )
@@ -86,12 +95,16 @@ export function DashboardWorkspace({
   }, [dashboardId, router])
 
   return (
-    <div className="flex gap-4" style={{ height: "calc(100vh - 120px)" }}>
-      <div className="min-w-0 flex-1 overflow-y-auto pr-1">
+    // Llena exacto el alto bajo el topbar (h-14 = 3.5rem, sticky en flujo): sin banda muerta.
+    // El padding va SOLO en la columna del dashboard (para que respire); el dock queda flush
+    // a top/right/bottom (patrón dock: solo borde izquierdo) y usa todo el espacio disponible.
+    <div className="flex h-[calc(100vh-3.5rem)]">
+      <div className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
         <DashboardView
           document={document}
           executeQuery={executeQuery}
           editable={!preview}
+          generating={generating}
           onDocumentChange={(doc) => {
             setDocument(doc)
             setIsDirty(true)
@@ -113,9 +126,40 @@ export function DashboardWorkspace({
           }
         />
       </div>
-      <div className="w-[380px] shrink-0">
-        <ChatPanel config={chatConfig} variant="dock" />
-      </div>
+
+      {/* Chat colapsable. El panel queda SIEMPRE montado (oculto con `hidden` al colapsar)
+          para no perder la conversación; el rail fino permite re-expandir. */}
+      <aside
+        className={cn(
+          "relative shrink-0 transition-[width] duration-200 ease-out",
+          chatCollapsed ? "w-12" : "w-[380px]",
+        )}
+      >
+        {chatCollapsed && (
+          <button
+            type="button"
+            onClick={() => setChatCollapsed(false)}
+            title="Expandir asistente"
+            aria-label="Expandir asistente"
+            className="flex h-full w-12 flex-col items-center gap-4 border-l bg-card pt-3 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <PanelRightOpen className="h-5 w-5" />
+            <MessageSquare className="h-5 w-5" />
+          </button>
+        )}
+        <div className={cn("relative h-full", chatCollapsed && "hidden")}>
+          <button
+            type="button"
+            onClick={() => setChatCollapsed(true)}
+            title="Colapsar asistente"
+            aria-label="Colapsar asistente"
+            className="absolute right-2 top-2.5 z-10 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <PanelRightClose className="h-4 w-4" />
+          </button>
+          <ChatPanel config={chatConfig} variant="dock" />
+        </div>
+      </aside>
     </div>
   )
 }
