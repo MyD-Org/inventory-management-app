@@ -6,7 +6,7 @@ import { DashboardView, type DashboardDocument } from "@myd-org/sdui-dashboard"
 import { ChatPanel } from "@myd-org/ai-widget/preset"
 import "@myd-org/ai-widget/styles"
 import { Button } from "@/components/ui/button"
-import { Save, Loader2, Pencil, Check } from "lucide-react"
+import { Save, Loader2, Eye, Pencil } from "lucide-react"
 
 // Workspace del AI dashboard builder: dashboard a la izquierda, chat a la derecha.
 // El agente (ai-api, kind dashboard_builder) emite el documento completo por SSE
@@ -21,7 +21,8 @@ export function DashboardWorkspace({
 }) {
   const router = useRouter()
   const [document, setDocument] = useState<DashboardDocument | null>(initialDocument)
-  const [editable, setEditable] = useState(false)
+  // Como en nullplatform: la edición es el estado default del builder; preview es el opt-in.
+  const [preview, setPreview] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -90,7 +91,7 @@ export function DashboardWorkspace({
         <DashboardView
           document={document}
           executeQuery={executeQuery}
-          editable={editable}
+          editable={!preview}
           onDocumentChange={(doc) => {
             setDocument(doc)
             setIsDirty(true)
@@ -99,9 +100,9 @@ export function DashboardWorkspace({
             document && (
               <div className="flex items-center gap-2">
                 {saveError && <span className="text-sm text-red-600">{saveError}</span>}
-                <Button variant={editable ? "default" : "outline"} size="sm" onClick={() => setEditable((v) => !v)}>
-                  {editable ? <Check className="mr-1 h-4 w-4" /> : <Pencil className="mr-1 h-4 w-4" />}
-                  {editable ? "Listo" : "Editar"}
+                <Button variant={preview ? "default" : "outline"} size="sm" onClick={() => setPreview((v) => !v)}>
+                  {preview ? <Pencil className="mr-1 h-4 w-4" /> : <Eye className="mr-1 h-4 w-4" />}
+                  {preview ? "Seguir editando" : "Vista previa"}
                 </Button>
                 <Button onClick={save} disabled={saving || !isDirty} size="sm">
                   {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
