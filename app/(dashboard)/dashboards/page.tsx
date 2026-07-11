@@ -20,7 +20,7 @@ export default async function DashboardsPage() {
   `) as Array<{ id: number; name: string; created_by: string | null; updated_at: string }>
 
   return (
-    <div className="space-y-6">
+    <main className="container mx-auto space-y-6 px-4 py-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Dashboards IA</h1>
         <Button asChild>
@@ -59,6 +59,6 @@ export default async function DashboardsPage() {
           ))}
         </div>
       )}
-    </div>
+    </main>
   )
 }
