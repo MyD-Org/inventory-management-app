@@ -17,6 +17,18 @@ const nextConfig = {
     if (!aiApi) return []
     return [{ source: "/ai-api/:path*", destination: `${aiApi}/:path*` }]
   },
+
+  // `@vercel/flags-core` hace un require() opcional de `@vercel/flags-definitions`
+  // (marcado con /* turbopackOptional */) que Turbopack sabe saltar pero Webpack no
+  // — y ese paquete no existe en npm, es un stub generado. Sin este fallback, el build
+  // de Next 14 en Vercel rompe con "Module not found: @vercel/flags-definitions".
+  webpack: (config) => {
+    config.resolve.fallback = {
+      ...(config.resolve.fallback ?? {}),
+      "@vercel/flags-definitions": false,
+    }
+    return config
+  },
 }
 
 export default nextConfig
