@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useCallback } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { ChatDrawer } from "@myd-org/ai-widget/preset"
 import type { BudgetCard } from "@myd-org/ai-widget"
 import "@myd-org/ai-widget/styles"
@@ -19,6 +19,7 @@ export const QUOTE_DRAFT_KEY = "avantec-quote-draft"
 // /api/ai/token (el API key del tenant nunca llega al browser).
 export function AiAssistant() {
   const router = useRouter()
+  const pathname = usePathname()
 
   const config = useMemo(
     () => ({
@@ -89,6 +90,9 @@ export function AiAssistant() {
   )
 
   if (!process.env.NEXT_PUBLIC_AI_AGENT_ID) return null
+  // En el AI dashboard builder (/dashboards) se usa el chat embebido (dock), no la
+  // burbuja flotante global → la ocultamos ahí para no duplicar asistentes.
+  if (pathname?.startsWith("/dashboards")) return null
 
   return (
     <ChatDrawer

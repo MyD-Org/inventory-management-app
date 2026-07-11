@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+/* Design system @myd-org (dashboards IA): tokens + roles; las utilidades de sus
+   componentes se compilan desde los dist vendorizados vía @source. */
+@import '@myd-org/ui/tailwind.css';
+@source '../node_modules/@myd-org/ui/dist';
+@source '../node_modules/@myd-org/sdui-dashboard/dist';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -134,6 +139,21 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+}
+
+/* ── Reconciliación con el design system @myd-org (dashboards IA) ────────────────
+   shadcn y @myd-org/ui comparten el namespace --color-* de Tailwind v4 con semántica
+   distinta: shadcn usa `muted` como color de FONDO (casi blanco), el DS lo usa como color
+   de TEXTO gris. El @theme de shadcn gana en la utilidad `.text-muted`, así que el texto
+   `text-muted` de los componentes del DS (DateRangeField, ejes de charts, descripciones de
+   Card) renderizaba casi blanco en light. El host nunca usa `text-muted` a secas (usa
+   text-muted-foreground, 188×), por lo que reasignar la utilidad al token del DS es seguro.
+   Reglas SIN @layer → ganan a la utilidad de Tailwind (que va en @layer utilities). */
+.text-muted {
+  color: var(--color-muted, #71717a);
+}
+.dark .text-muted {
+  color: var(--color-muted, #a1a1aa);
 }
 /* Impresión: solo se ve el contenido del documento (presupuesto en PDF). */
 @media print {
