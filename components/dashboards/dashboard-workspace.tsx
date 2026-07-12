@@ -2,12 +2,15 @@
 
 import { useCallback, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { DashboardView, type DashboardDocument } from "@myd-org/sdui-dashboard"
+import { toast } from "sonner"
+import { DashboardView, type DashboardDocument, type CreateAlertInfo } from "@myd-org/sdui-dashboard"
 import { ChatPanel } from "@myd-org/ai-widget/preset"
 import "@myd-org/ai-widget/styles"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Save, Loader2, Eye, Pencil, PanelRightClose, PanelRightOpen, MessageSquare } from "lucide-react"
+import { AutomationProposalCard } from "@/components/automations/automation-proposal-card"
+import { type AutomationInput, inlineParams } from "@/components/automations/automation-types"
 
 // Workspace del AI dashboard builder: dashboard a la izquierda, chat a la derecha.
 // El agente (ai-api, kind dashboard_builder) emite el documento completo por SSE
@@ -31,6 +34,8 @@ export function DashboardWorkspace({
   const [generating, setGenerating] = useState(false)
   // Chat colapsable a un rail fino para ver mejor el dashboard.
   const [chatCollapsed, setChatCollapsed] = useState(false)
+  // Propuesta de automatización emitida por el agente.
+  const [automationProposal, setAutomationProposal] = useState<AutomationInput | null>(null)
   // getPageContext se evalúa por envío: ref para no reconfigurar el chat en cada emisión.
   const docRef = useRef<DashboardDocument | null>(initialDocument)
   docRef.current = document
@@ -63,6 +68,9 @@ export function DashboardWorkspace({
           setDocument(payload as DashboardDocument)
           setIsDirty(true)
         }
+        if (name === "automation") {
+          setAutomationProposal(payload as AutomationInput)
+        }
       },
       // 'streaming' mientras el agente trabaja → prende los skeletons/overlay del dashboard.
       onStatus: (status: "idle" | "streaming" | "error") => {
@@ -70,6 +78,27 @@ export function DashboardWorkspace({
       },
     }),
     [],
+  )
+
+  // Botón campana del toolbar de un widget → precarga /automations/nuevo con la
+  // primera query del widget (params ya resueltos a los filtros actuales, v1: una sola query).
+  const handleCreateAlert = useCallback(
+    (info: CreateAlertInfo) => {
+      const q = info.queries[0]
+      if (!q) {
+        toast.info("Este widget no tiene una query asociada")
+        return
+      }
+      sessionStorage.setItem(
+        "automation-prefill",
+        JSON.stringify({
+          name: `Alerta: ${info.title ?? info.nodeType}`,
+          sql: inlineParams(q.source, q.resolvedParams),
+        }),
+      )
+      router.push("/automations/nuevo")
+    },
+    [router],
   )
 
   const save = useCallback(async () => {
@@ -99,12 +128,13 @@ export function DashboardWorkspace({
     // El padding va SOLO en la columna del dashboard (para que respire); el dock queda flush
     // a top/right/bottom (patrón dock: solo borde izquierdo) y usa todo el espacio disponible.
     <div className="flex h-[calc(100vh-3.5rem)]">
-      <div className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
+      <div className="relative min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
         <DashboardView
           document={document}
           executeQuery={executeQuery}
           editable={!preview}
           generating={generating}
+          onCreateAlert={handleCreateAlert}
           onDocumentChange={(doc) => {
             setDocument(doc)
             setIsDirty(true)
@@ -125,6 +155,18 @@ export function DashboardWorkspace({
             )
           }
         />
+
+        {/* Floating automation proposal card over the dashboard area */}
+        {automationProposal && (
+          <div className="pointer-events-none fixed bottom-6 left-6 right-6 z-50 max-w-md">
+            <div className="pointer-events-auto">
+              <AutomationProposalCard
+                proposal={automationProposal}
+                onDone={() => setAutomationProposal(null)}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Chat colapsable. El panel queda SIEMPRE montado (oculto con `hidden` al colapsar)

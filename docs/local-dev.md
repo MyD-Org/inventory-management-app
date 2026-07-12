@@ -67,3 +67,32 @@ pnpm next dev -p 3005   # :3000 lo usa ai-api
 Tip: para que los dashboards de ventas tengan data, el espejo Alegra local necesita
 filas (alegra_clients/sales_documents/sales_items/payments) — importar con
 `scripts/import-alegra.js` o insertar data de prueba.
+
+## 5. Automatizaciones (cap #3)
+
+El motor vive en ai-api (rama `feat/automatizaciones`); este repo expone el endpoint de
+query y la UI (`/automations`). Para probarlas local:
+
+```bash
+# 1. ai-api CON el motor (usa otra terminal; :3000 puede estar ocupado por otro ai-api)
+cd ../ai-api && git checkout feat/automatizaciones && npm run db:migrate && PORT=3010 npm run dev
+# re-seed para que el agente conozca emit_automation (idempotente):
+npm run seed:avantec
+
+# 2. esta app apuntando a ese ai-api (AI_API_BASE_URL=http://localhost:3010 en .env.local)
+pnpm next dev -p 3005
+
+# 3. registrar el data source del tenant (una vez; queryUrl = esta app):
+curl -X PUT localhost:3010/v1/data-source \
+  -H "Authorization: Bearer $AVANTEC_AI_API_KEY" -H 'content-type: application/json' \
+  -d '{"queryUrl":"http://localhost:3005/api/automations/query","secret":"<INTERNAL_SECRET>"}'
+
+# 4. listener efímero para probar webhooks:
+node -e 'require("http").createServer((q,s)=>{let b="";q.on("data",c=>b+=c);q.on("end",()=>{console.log(q.headers["x-automation-signature-256"],b);s.end("ok")})}).listen(9999)'
+```
+
+Flujos: crear por chat desde un dashboard ("avisame cuando…" → card → Crear alerta) o
+por form en `/automations/nuevo` (Probar query puebla los selects de columnas). El
+scheduler evalúa cada ≤60s las vencidas; historial en `/automations/actividad`.
+Sin `RESEND_API_KEY` en ai-api las acciones email quedan `skipped` (visible en el
+historial). Contrato completo: `platform/contracts/automations.md`.
