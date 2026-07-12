@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, Play, Plus, Trash2 } from "lucide-react"
@@ -56,6 +56,23 @@ export function AutomationForm({ automation }: { automation?: Automation }) {
   const [rearmPolicy, setRearmPolicy] = useState<Automation["rearmPolicy"]>(automation?.rearmPolicy ?? "on_clear")
   const [remindEveryHours, setRemindEveryHours] = useState(automation?.remindEveryHours ?? 24)
   const [actions, setActions] = useState<AutomationAction[]>(automation?.actions ?? [defaultAction("email")])
+
+  // Precarga desde "Crear alerta" en el botón campana del toolbar de un widget del dashboard
+  // (ver DashboardWorkspace.handleCreateAlert): solo en creación, una vez al montar.
+  useEffect(() => {
+    if (isEdit) return
+    const raw = sessionStorage.getItem("automation-prefill")
+    if (!raw) return
+    sessionStorage.removeItem("automation-prefill")
+    try {
+      const prefill = JSON.parse(raw) as { name?: string; sql?: string }
+      if (prefill.name) setName(prefill.name)
+      if (prefill.sql) setSql(prefill.sql)
+    } catch {
+      // prefill corrupto: ignorar silenciosamente, el usuario completa el form a mano
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // "Probar query": pega contra el mismo endpoint que usa el dashboard builder
   // (/api/dashboards/query). Las columnas devueltas alimentan los selects de abajo.

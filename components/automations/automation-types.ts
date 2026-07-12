@@ -119,6 +119,27 @@ function describeAction(action: AutomationAction): string {
   }
 }
 
+// Convierte un literal JS resuelto para un placeholder $n en el literal SQL equivalente.
+function sqlLiteral(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "NULL"
+  if (typeof value === "number") return String(value)
+  if (typeof value === "boolean") return value ? "TRUE" : "FALSE"
+  if (value instanceof Date) return `'${value.toISOString().replace(/'/g, "''")}'`
+  return `'${String(value).replace(/'/g, "''")}'`
+}
+
+// Reemplaza los placeholders posicionales $1..$n de `source` por los literales SQL de `params`
+// (mismo orden que resuelve el runtime del dashboard). Reemplazo de mayor índice a menor para
+// que $12 no sea pisado por el reemplazo de $1. Params sin índice presente en el SQL se ignoran.
+export function inlineParams(source: string, params: unknown[]): string {
+  let result = source
+  for (let i = params.length; i >= 1; i--) {
+    const literal = sqlLiteral(params[i - 1])
+    result = result.replace(new RegExp(`\\$${i}\\b`, "g"), literal)
+  }
+  return result
+}
+
 // Resumen humano de una automatización, ej:
 // "dias > 30, por cliente_id, cada 60 min → email a {{email}}"
 export function describeAutomation(a: AutomationInput): string {

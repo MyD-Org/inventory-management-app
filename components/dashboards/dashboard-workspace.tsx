@@ -2,14 +2,15 @@
 
 import { useCallback, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { DashboardView, type DashboardDocument } from "@myd-org/sdui-dashboard"
+import { toast } from "sonner"
+import { DashboardView, type DashboardDocument, type CreateAlertInfo } from "@myd-org/sdui-dashboard"
 import { ChatPanel } from "@myd-org/ai-widget/preset"
 import "@myd-org/ai-widget/styles"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Save, Loader2, Eye, Pencil, PanelRightClose, PanelRightOpen, MessageSquare } from "lucide-react"
 import { AutomationProposalCard } from "@/components/automations/automation-proposal-card"
-import { type AutomationInput } from "@/components/automations/automation-types"
+import { type AutomationInput, inlineParams } from "@/components/automations/automation-types"
 
 // Workspace del AI dashboard builder: dashboard a la izquierda, chat a la derecha.
 // El agente (ai-api, kind dashboard_builder) emite el documento completo por SSE
@@ -79,6 +80,27 @@ export function DashboardWorkspace({
     [],
   )
 
+  // Botón campana del toolbar de un widget → precarga /automations/nuevo con la
+  // primera query del widget (params ya resueltos a los filtros actuales, v1: una sola query).
+  const handleCreateAlert = useCallback(
+    (info: CreateAlertInfo) => {
+      const q = info.queries[0]
+      if (!q) {
+        toast.info("Este widget no tiene una query asociada")
+        return
+      }
+      sessionStorage.setItem(
+        "automation-prefill",
+        JSON.stringify({
+          name: `Alerta: ${info.title ?? info.nodeType}`,
+          sql: inlineParams(q.source, q.resolvedParams),
+        }),
+      )
+      router.push("/automations/nuevo")
+    },
+    [router],
+  )
+
   const save = useCallback(async () => {
     const doc = docRef.current
     if (!doc) return
@@ -112,6 +134,7 @@ export function DashboardWorkspace({
           executeQuery={executeQuery}
           editable={!preview}
           generating={generating}
+          onCreateAlert={handleCreateAlert}
           onDocumentChange={(doc) => {
             setDocument(doc)
             setIsDirty(true)

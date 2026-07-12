@@ -71,7 +71,7 @@
     "zod": "3.25.67",
     "@myd-org/ui": "file:vendor/myd-org-ui-0.6.4.tgz",
     "@myd-org/sdui": "file:vendor/myd-org-sdui-0.6.0.tgz",
-    "@myd-org/sdui-dashboard": "file:vendor/myd-org-sdui-dashboard-0.3.4.tgz"
+    "@myd-org/sdui-dashboard": "file:vendor/myd-org-sdui-dashboard-0.4.0.tgz"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",
