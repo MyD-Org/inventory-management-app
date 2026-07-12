@@ -36,6 +36,12 @@ export type FlagKey = "ai_dashboards" | "ai_widget"
  * que romper el layout.
  */
 export async function getFlags(): Promise<Record<FlagKey, boolean>> {
+  // Override local: en dev no hay VERCEL_OIDC_TOKEN y todos los flags caen a false,
+  // escondiendo los ítems de nav gateados. Con AI_FLAGS_LOCAL=true en .env.local se
+  // fuerzan todos a true SOLO en esa máquina (no afecta Preview/Production).
+  if (process.env.AI_FLAGS_LOCAL === "true") {
+    return { ai_dashboards: true, ai_widget: true }
+  }
   try {
     const [ai_dashboards, ai_widget] = await Promise.all([aiDashboardsFlag(), aiWidgetFlag()])
     return { ai_dashboards, ai_widget }
