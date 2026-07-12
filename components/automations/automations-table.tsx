@@ -118,11 +118,11 @@ export function AutomationsTable({ automations }: { automations: Automation[] })
               <TableCell>
                 <StatusBadge automation={automation} />
               </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
+              <TableCell className="text-sm text-muted-foreground" suppressHydrationWarning>
                 {formatDateTime(automation.lastRunAt)}
                 {automation.lastRunStatus ? ` · ${automation.lastRunStatus === "ok" ? "ok" : "error"}` : ""}
               </TableCell>
-              <TableCell className="text-sm text-muted-foreground">{formatDateTime(automation.nextRunAt)}</TableCell>
+              <TableCell className="text-sm text-muted-foreground" suppressHydrationWarning>{formatDateTime(automation.nextRunAt)}</TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
                   <Button

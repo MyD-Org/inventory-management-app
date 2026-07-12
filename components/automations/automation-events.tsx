@@ -75,7 +75,7 @@ export function AutomationEvents({
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   )}
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">{formatDateTime(event.firedAt)}</TableCell>
+                <TableCell className="text-sm text-muted-foreground" suppressHydrationWarning>{formatDateTime(event.firedAt)}</TableCell>
                 {automationNames && (
                   <TableCell className="text-sm">{automationNames[event.automationId] ?? event.automationId}</TableCell>
                 )}
