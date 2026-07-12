@@ -20,6 +20,7 @@ import {
   X,
   LogOut,
   LayoutDashboard,
+  BellRing,
   type LucideIcon,
 } from "lucide-react"
 import type { FlagKey } from "@/lib/feature-flags"
@@ -94,6 +95,9 @@ const sections: NavSection[] = [
       { label: "Gráficos", href: "/graficos", icon: BarChart3 },
       // AI dashboard builder: dashboards armados por chat (solo admins, como el asistente).
       { label: "Dashboards IA", href: "/dashboards", icon: LayoutDashboard, adminOnly: true, flag: "ai_dashboards", activePrefixes: ["/dashboards/"] },
+      // Automatizaciones: reutiliza la misma capability family que Dashboards IA
+      // (flag 'ai_dashboards') — no hace falta un flag nuevo en Vercel.
+      { label: "Automatizaciones", href: "/automations", icon: BellRing, adminOnly: true, flag: "ai_dashboards", activePrefixes: ["/automations/"] },
     ],
   },
   {
