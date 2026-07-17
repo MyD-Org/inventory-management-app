@@ -77,7 +77,7 @@ function buildDailySeries(rows: any[]) {
 }
 
 export function InventoryChartsClient({ data }: { data: ChartData }) {
-    const dailySeries = buildDailySeries(data.movementsByDay)
+    // const dailySeries = buildDailySeries(data.movementsByDay) // gráfico últimos 7 días oculto
     const totalStockItems = data.stockStatus.reduce((sum, s) => sum + Number(s.count || 0), 0)
 
     return (
@@ -172,8 +172,8 @@ export function InventoryChartsClient({ data }: { data: ChartData }) {
                 </CardContent>
             </Card>
 
-            {/* Movimientos últimos 7 días */}
-            <Card className="lg:col-span-2">
+            {/* Movimientos últimos 7 días — oculto a pedido */}
+            {/* <Card className="lg:col-span-2">
                 <CardHeader>
                     <CardTitle>Movimientos (Últimos 7 días)</CardTitle>
                 </CardHeader>
@@ -208,7 +208,7 @@ export function InventoryChartsClient({ data }: { data: ChartData }) {
                         )}
                     </div>
                 </CardContent>
-            </Card>
+            </Card> */}
 
             {/* Top Materiales con Más Movimientos */}
             <Card className="lg:col-span-2">
