@@ -7,12 +7,13 @@ import { Upload, FileText, CheckCircle2, AlertCircle, Loader2 } from "lucide-rea
 
 interface FileResult {
     name: string
-    kind: "invoices" | "payments" | "skipped"
+    kind: "invoices" | "credit_notes" | "payments" | "receivables" | "skipped"
     docs?: number
     created?: number
     updated?: number
     items?: number
     skipped?: number
+    outstanding?: number
 }
 interface ImportSummary {
     files: FileResult[]
@@ -51,21 +52,22 @@ export function AlegraImportClient() {
                 <CardContent className="text-sm text-muted-foreground space-y-1">
                     <p>En Alegra web: <strong>Reportes → Para trabajar → Exportar facturas</strong> (y también <strong>Informe contador</strong> para traer los pagos).</p>
                     <p>Se baja un <strong>.zip</strong>: descomprimilo (doble clic) y subí los archivos <strong>.csv</strong> que quedan adentro.</p>
+                    <p>Para que el <strong>saldo por cobrar</strong> coincida exacto con Alegra, subí además el reporte <strong>Cuentas por cobrar</strong> (se baja en <strong>.xlsx</strong>). Sin él, el saldo se estima a partir de los pagos.</p>
                 </CardContent>
             </Card>
 
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-base">2. Subí los archivos CSV</CardTitle>
+                    <CardTitle className="text-base">2. Subí los archivos (CSV y XLSX)</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg p-8 cursor-pointer hover:bg-muted/50 transition-colors">
                         <Upload className="h-8 w-8 text-muted-foreground" />
                         <span className="text-sm text-muted-foreground">
-                            {files.length > 0 ? `${files.length} archivo(s) seleccionado(s)` : "Clic para elegir archivos .csv"}
+                            {files.length > 0 ? `${files.length} archivo(s) seleccionado(s)` : "Clic para elegir archivos .csv y .xlsx"}
                         </span>
                         <input
-                            type="file" accept=".csv" multiple className="hidden"
+                            type="file" accept=".csv,.xlsx" multiple className="hidden"
                             onChange={(e) => { setFiles(Array.from(e.target.files ?? [])); setResult(null); setError(null) }}
                         />
                     </label>
@@ -111,7 +113,9 @@ export function AlegraImportClient() {
                             {result.files.map((f, i) => (
                                 <li key={i} className="text-muted-foreground">
                                     {f.kind === "invoices" && `📄 ${f.name}: ${f.docs} facturas (${f.created} nuevas, ${f.updated} actualizadas), ${f.items} líneas`}
+                                    {f.kind === "credit_notes" && `📄 ${f.name}: ${f.docs} notas de crédito (${f.created} nuevas, ${f.updated} actualizadas), ${f.items} líneas`}
                                     {f.kind === "payments" && `💰 ${f.name}: ${f.created} pagos nuevos, ${f.updated} actualizados, ${f.skipped} omitidos`}
+                                    {f.kind === "receivables" && `🧾 ${f.name}: ${f.docs} facturas por cobrar, saldo ${(f.outstanding ?? 0).toLocaleString("es-AR", { style: "currency", currency: "ARS" })}`}
                                     {f.kind === "skipped" && `⏭️ ${f.name}: formato no reconocido, salteado`}
                                 </li>
                             ))}

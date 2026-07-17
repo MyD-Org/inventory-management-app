@@ -155,6 +155,35 @@
 .dark .text-muted {
   color: var(--color-muted, #a1a1aa);
 }
+/* Asistente IA expandido: acotamos el área para que respete el layout del app-shell (no tape
+   el sidebar ni la topbar). El widget lee estas variables en .aichat-drawer-expanded.
+   Topbar sticky = 56px (todos los breakpoints); sidebar fijo = 256px, solo en lg (≥1024px). */
+:root {
+  --aichat-expanded-top: 72px;    /* 56 topbar + 16 de margen */
+  --aichat-expanded-right: 16px;
+  --aichat-expanded-bottom: 16px;
+  --aichat-expanded-left: 16px;   /* mobile: el sidebar es un drawer, no ocupa espacio */
+}
+@media (min-width: 1024px) {
+  :root {
+    --aichat-expanded-left: 272px; /* 256 sidebar + 16 de margen */
+  }
+}
+/* Ocultamos el scrollbar del log de mensajes (sigue scrolleando con rueda/touch/teclado).
+   Override solo-Avantec: mayor especificidad (.aichat-root …) para ganarle al CSS del paquete
+   sin tener que rebuildear/re-vendorizar el widget (que comparte el copiloto del CRM). */
+.aichat-root .aichat-log,
+.aichat-root .aichat-input {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE/Edge legacy */
+}
+.aichat-root .aichat-log::-webkit-scrollbar,
+.aichat-root .aichat-input::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;                /* Chrome/Safari */
+}
+
 /* Impresión: solo se ve el contenido del documento (presupuesto en PDF). */
 @media print {
   .no-print { display: none !important; }

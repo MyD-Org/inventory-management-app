@@ -4,6 +4,7 @@
 // Encoding de Alegra: Windows-1252, separador ';', decimales con coma.
 
 import { sql } from "@/lib/database"
+import ExcelJS from "exceljs"
 
 export interface AlegraFile {
     name: string
@@ -12,12 +13,13 @@ export interface AlegraFile {
 
 export interface FileResult {
     name: string
-    kind: "invoices" | "credit_notes" | "payments" | "skipped"
+    kind: "invoices" | "credit_notes" | "payments" | "receivables" | "skipped"
     docs?: number
     created?: number
     updated?: number
     items?: number
     skipped?: number
+    outstanding?: number
 }
 
 export interface ImportSummary {
@@ -53,6 +55,39 @@ function parseCsv(text: string): string[][] {
     return rows
 }
 
+// El reporte "Cuentas por cobrar" de Alegra solo se exporta en Excel (.xlsx), no en CSV.
+// Lo leemos con exceljs y lo pasamos por el mismo pipeline (stripPreamble + detectKind).
+// Devolvemos cada celda como string (fechas → dd/mm/yyyy para reusar parseDate).
+function cellToString(v: unknown): string {
+    if (v === null || v === undefined) return ""
+    if (v instanceof Date) return `${v.getUTCDate()}/${v.getUTCMonth() + 1}/${v.getUTCFullYear()}`
+    if (typeof v === "object") {
+        const o = v as Record<string, unknown>
+        if (Array.isArray(o.richText)) return (o.richText as Array<{ text: string }>).map((t) => t.text).join("")
+        if ("text" in o) return String(o.text)
+        if ("result" in o) return String(o.result) // celda con fórmula
+        return ""
+    }
+    return String(v)
+}
+
+async function readXlsx(buffer: ArrayBuffer): Promise<string[][]> {
+    const wb = new ExcelJS.Workbook()
+    // Cast: fricción de tipos entre Buffer<ArrayBuffer> (@types/node) y el Buffer que
+    // declara exceljs; en runtime es un Buffer de Node válido.
+    await wb.xlsx.load(Buffer.from(buffer) as unknown as Buffer)
+    const ws = wb.worksheets[0]
+    if (!ws) return []
+    const colCount = ws.columnCount
+    const rows: string[][] = []
+    ws.eachRow({ includeEmpty: false }, (row) => {
+        const vals: string[] = []
+        for (let c = 1; c <= colCount; c++) vals.push(cellToString(row.getCell(c).value))
+        rows.push(vals)
+    })
+    return rows
+}
+
 function parseDate(s: string | undefined): string | null {
     const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((s || "").trim())
     if (!m) return null
@@ -81,8 +116,11 @@ function stripPreamble(rows: string[][]): { header: string[]; data: string[][] }
     return { header, data: rows.slice(start + 1) }
 }
 
-function detectKind(header: string[]): "invoices" | "credit_notes" | "payments" | null {
+function detectKind(header: string[]): "invoices" | "credit_notes" | "payments" | "receivables" | null {
     const h = header.join("|")
+    // Cuentas por cobrar (Excel): trae el saldo real por factura. No tiene columnas de
+    // ÍTEM (a diferencia de facturas/NC), así que POR COBRAR + COBRADO es inequívoco.
+    if (h.includes("POR COBRAR") && h.includes("COBRADO")) return "receivables"
     // NC: tiene "TOTAL - NOTA CRÉDITO" (columnas distintas a facturas).
     if (h.includes("TOTAL - NOTA CRÉDITO") && h.includes("ÍTEM - NOMBRE")) return "credit_notes"
     if (h.includes("TOTAL - FACTURA") && h.includes("ÍTEM - NOMBRE")) return "invoices"
@@ -215,6 +253,43 @@ async function importPayments(header: string[], data: string[][], sourceFile: st
     return { name: sourceFile, kind: "payments", created, updated, skipped }
 }
 
+// Cuentas por cobrar: el SALDO REAL por factura tal como lo reporta Alegra (columna
+// POR COBRAR). Es una FOTO del momento → se reemplaza entera en cada import. Cuando esta
+// tabla tiene datos, la MV alegra_client_balances la usa como fuente del balance (en vez
+// de reconstruir total − pagos), así el saldo del bot coincide exacto con Alegra e incluye
+// facturas viejas que no vienen en el CSV de facturas. Ver scripts/12-alegra-receivables.sql.
+async function importReceivables(header: string[], data: string[][], sourceFile: string, cache: ClientCache): Promise<FileResult> {
+    const col = (name: string) => header.findIndex((h) => h === name)
+    const C = {
+        docLabel: col("COMPROBANTE"), code: col("NÚMERO DE COMPROBANTE"),
+        client: col("CLIENTE"), clientId: col("IDENTIFICACIÓN"),
+        created: col("CREACIÓN"), due: col("VENCIMIENTO"),
+        total: col("TOTAL"), collected: col("COBRADO"), outstanding: col("POR COBRAR"),
+    }
+    // Foto del momento: vaciamos y recargamos.
+    await sql`DELETE FROM alegra_receivables`
+    let docs = 0
+    let outstanding = 0
+    for (const r of data) {
+        const code = (r[C.code] || "").trim()
+        if (!code) continue
+        const clientName = (r[C.client] || "").trim()
+        const clientId = await upsertClient(cache, clientName)
+        const out = parseNum(r[C.outstanding])
+        await sql`
+            INSERT INTO alegra_receivables
+                (code, doc_label, client_id, client_name, client_name_normalized,
+                 total, collected, outstanding, issue_date, due_date, source_file)
+            VALUES (${code}, ${C.docLabel !== -1 ? r[C.docLabel] || null : null}, ${clientId},
+                    ${clientName || null}, ${normalizeName(clientName)},
+                    ${parseNum(r[C.total])}, ${parseNum(r[C.collected])}, ${out},
+                    ${parseDate(r[C.created])}, ${parseDate(r[C.due])}, ${sourceFile})`
+        docs++
+        outstanding += out
+    }
+    return { name: sourceFile, kind: "receivables", docs, outstanding: Math.round(outstanding * 100) / 100 }
+}
+
 // Reconstruye cuánto se pagó de cada documento asignando cada pago a sus facturas
 // asociadas en orden (greedy, como aplica Alegra). Alegra tiene PAGOS PARCIALES: una
 // factura queda "Por cobrar" hasta cubrirse entera, y un recibo puede repartirse entre
@@ -265,12 +340,17 @@ export async function importAlegraFiles(files: AlegraFile[]): Promise<ImportSumm
     const cache: ClientCache = new Map()
     const results: FileResult[] = []
     for (const f of files) {
-        const text = new TextDecoder("windows-1252").decode(f.buffer)
-        const { header, data } = stripPreamble(parseCsv(text))
+        // Los CSV de Alegra son Windows-1252 con separador ';'; el reporte de cuentas por
+        // cobrar solo se baja en Excel (.xlsx) y lo leemos con exceljs.
+        const rows = f.name.toLowerCase().endsWith(".xlsx")
+            ? await readXlsx(f.buffer)
+            : parseCsv(new TextDecoder("windows-1252").decode(f.buffer))
+        const { header, data } = stripPreamble(rows)
         const kind = detectKind(header)
         if (kind === "invoices") results.push(await importInvoices(header, data, f.name, cache, "invoice"))
         else if (kind === "credit_notes") results.push({ ...(await importInvoices(header, data, f.name, cache, "credit_note")), kind: "credit_notes" as const })
         else if (kind === "payments") results.push(await importPayments(header, data, f.name, cache))
+        else if (kind === "receivables") results.push(await importReceivables(header, data, f.name, cache))
         else results.push({ name: f.name, kind: "skipped" })
     }
     const [{ documents }] = await sql`SELECT COUNT(*)::int AS documents FROM alegra_sales_documents`
