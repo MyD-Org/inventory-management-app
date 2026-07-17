@@ -18,6 +18,7 @@ interface Material {
     barcode: string
     current_stock?: number
     unit_of_measure?: string
+    unit_cost?: number | string | null
 }
 
 interface StockMovementDialogProps {
@@ -45,6 +46,9 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
         notes: "",
         reference_number: "",
     })
+    // Precio unitario del ingreso. Solo se muestra/manda en ENTRADAS. Prefill con
+    // el unit_cost actual del material (evita pisar el costo con "" si se deja vacío).
+    const [unitCost, setUnitCost] = useState("")
 
     const [materialError, setMaterialError] = useState(false)
     const [quantityError, setQuantityError] = useState(false)
@@ -73,6 +77,9 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
         setNotFoundCode(null)
         setSuggestOpen(false)
         setBarcode(m.barcode || m.name)
+        // Prefill precio con el unit_cost actual (viene como string desde Postgres DECIMAL).
+        const currentCost = Number(m.unit_cost ?? 0)
+        setUnitCost(currentCost > 0 ? String(currentCost) : "")
         setTimeout(() => quantityInputRef.current?.focus(), 100)
     }
 
@@ -90,6 +97,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
         if (open) {
             setFormData({ material_id: "", quantity: "", notes: "", reference_number: "" })
             setBarcode("")
+            setUnitCost("")
             setMaterialError(false)
             setQuantityError(false)
             setNotFoundCode(null)
@@ -171,6 +179,8 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                     quantity: parseInt(formData.quantity), // Changed to parseInt
                     reference_number: formData.reference_number || null,
                     notes: formData.notes || null,
+                    // Precio solo aplica en entradas. Vacío → null (no pisa el unit_cost del material).
+                    unit_cost: type === "entrada" && unitCost ? Number(unitCost) : null,
                     // El usuario se toma de la sesión en el servidor (ver /api/stock/movement)
                 }),
             })
@@ -192,6 +202,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                 reference_number: "",
             })
             setBarcode("")
+            setUnitCost("")
             router.refresh()
         } catch (error) {
             // Se muestra dentro del modal (banner) para que no se pierda como el toast.
@@ -324,6 +335,21 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                                 disabled={!selectedMaterial}
                             />
                         </div>
+                        {type === "entrada" && (
+                            <div className="space-y-2">
+                                <Label htmlFor="unit-cost">Precio unitario (opcional)</Label>
+                                <Input
+                                    id="unit-cost"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="Ej: 1250.50"
+                                    value={unitCost}
+                                    onChange={(e) => setUnitCost(e.target.value)}
+                                    disabled={!selectedMaterial}
+                                />
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <Label htmlFor="notes">Notas (Opcional)</Label>
                             <Input

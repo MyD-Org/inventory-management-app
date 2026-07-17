@@ -298,9 +298,6 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
                     onChange={(e) => setUnitCost(e.target.value)}
                     placeholder="Ej: 1250.50"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Si lo cargás, actualiza el costo del material (se usa para calcular costos de fabricación).
-                  </p>
                 </div>
               )}
 
