@@ -55,7 +55,11 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
     const [notFoundCode, setNotFoundCode] = useState<string | null>(null)
     const [submitError, setSubmitError] = useState<string | null>(null)
     const [suggestOpen, setSuggestOpen] = useState(false)
+    // Índice de la sugerencia resaltada para navegación con ↑/↓ + Enter.
+    // -1 = nada resaltado (Enter cae al fallback: buscar por código exacto).
+    const [activeIndex, setActiveIndex] = useState(-1)
     const scanBoxRef = useRef<HTMLDivElement>(null)
+    const suggestionsRef = useRef<HTMLDivElement>(null)
 
     const quantityInputRef = useRef<HTMLInputElement>(null)
     const barcodeInputRef = useRef<HTMLInputElement>(null)
@@ -92,6 +96,12 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
         return () => document.removeEventListener("mousedown", onDoc)
     }, [])
 
+    // Cada vez que cambian las sugerencias (por nueva query), reseteamos el índice
+    // resaltado — así no queda apuntando a un item que ya no existe en la lista.
+    useEffect(() => {
+        setActiveIndex(-1)
+    }, [query])
+
     // Al abrir: resetear a estado limpio (no reabrir con lo de la vez anterior) y enfocar.
     useEffect(() => {
         if (open) {
@@ -103,15 +113,40 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
             setNotFoundCode(null)
             setSubmitError(null)
             setSuggestOpen(false)
+            setActiveIndex(-1)
             setTimeout(() => {
                 barcodeInputRef.current?.focus()
             }, 100)
         }
     }, [open])
 
+    // Navegación por teclado del dropdown de sugerencias: ↑/↓ mueven el resaltado
+    // (con wrap), Enter selecciona la activa o cae a búsqueda por código exacto si
+    // no hay ninguna resaltada, Esc cierra el dropdown sin perder el foco.
     const handleBarcodeSubmit = (e: React.KeyboardEvent) => {
+        const hasSuggestions = suggestOpen && suggestions.length > 0
+        if (e.key === 'ArrowDown' && hasSuggestions) {
+            e.preventDefault()
+            setActiveIndex(prev => (prev + 1) % suggestions.length)
+            return
+        }
+        if (e.key === 'ArrowUp' && hasSuggestions) {
+            e.preventDefault()
+            setActiveIndex(prev => (prev <= 0 ? suggestions.length - 1 : prev - 1))
+            return
+        }
+        if (e.key === 'Escape' && suggestOpen) {
+            e.preventDefault()
+            setSuggestOpen(false)
+            setActiveIndex(-1)
+            return
+        }
         if (e.key === 'Enter') {
             e.preventDefault()
+            if (hasSuggestions && activeIndex >= 0) {
+                selectMaterial(suggestions[activeIndex])
+                return
+            }
             findMaterialByBarcode(barcode)
         }
     }
@@ -268,13 +303,21 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                                 </Button>
                             </div>
                             {suggestOpen && !selectedMaterial && suggestions.length > 0 && (
-                                <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-md max-h-60 overflow-auto">
-                                    {suggestions.map(m => (
+                                <div
+                                    ref={suggestionsRef}
+                                    className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-md max-h-60 overflow-auto"
+                                >
+                                    {suggestions.map((m, i) => (
                                         <button
                                             key={m.id}
                                             type="button"
                                             onClick={() => selectMaterial(m)}
-                                            className="flex w-full items-center justify-between gap-3 p-2.5 text-left text-sm hover:bg-muted"
+                                            onMouseEnter={() => setActiveIndex(i)}
+                                            ref={i === activeIndex ? (el) => {
+                                                // Autoscroll para mantener visible la opción activa al navegar con flechas.
+                                                el?.scrollIntoView({ block: "nearest" })
+                                            } : undefined}
+                                            className={`flex w-full items-center justify-between gap-3 p-2.5 text-left text-sm ${i === activeIndex ? "bg-muted" : "hover:bg-muted"}`}
                                         >
                                             <span className="min-w-0">
                                                 <span className="font-medium">{m.name}</span>
