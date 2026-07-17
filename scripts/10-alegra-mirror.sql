@@ -120,19 +120,45 @@ BEGIN
     END IF;
 END $$;
 
--- La definición cambió (saldo con pagos parciales): recrear siempre para converger.
+-- Cuentas por cobrar (saldo REAL importado del reporte Excel de Alegra). El balance de
+-- la MV sale de acá cuando esta tabla tiene datos; ver scripts/12-alegra-receivables.sql
+-- (misma definición) y lib/alegra-import.ts. Se crea acá para que un setup desde cero
+-- quede consistente aunque no se corra el 12.
+CREATE TABLE IF NOT EXISTS alegra_receivables (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(50) NOT NULL,
+    doc_label VARCHAR(50),
+    client_id INTEGER REFERENCES alegra_clients(id),
+    client_name VARCHAR(200),
+    client_name_normalized VARCHAR(200),
+    total NUMERIC(14,2) NOT NULL DEFAULT 0,
+    collected NUMERIC(14,2) NOT NULL DEFAULT 0,
+    outstanding NUMERIC(14,2) NOT NULL DEFAULT 0,
+    issue_date DATE,
+    due_date DATE,
+    source_file VARCHAR(200),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_alegra_receivables_client ON alegra_receivables(client_id);
+
+-- La definición cambió (saldo real desde alegra_receivables, con fallback a la
+-- reconstrucción total − paid_amount): recrear siempre para converger.
 DROP MATERIALIZED VIEW IF EXISTS alegra_client_balances;
 
 CREATE MATERIALIZED VIEW alegra_client_balances AS
+WITH recv_flag AS (
+    SELECT EXISTS (SELECT 1 FROM alegra_receivables) AS present
+)
 SELECT
     c.id AS client_id,
     c.name,
     COALESCE(d.billed, 0)::NUMERIC(14,2) AS billed,
     COALESCE(p.paid, 0)::NUMERIC(14,2) AS paid,
-    COALESCE(o.balance, 0)::NUMERIC(14,2) AS balance,
+    CASE WHEN rf.present THEN COALESCE(r.outstanding, 0) ELSE COALESCE(o.balance, 0) END::NUMERIC(14,2) AS balance,
     d.last_invoice_date,
     p.last_payment_date
 FROM alegra_clients c
+CROSS JOIN recv_flag rf
 LEFT JOIN (
     SELECT client_id,
            SUM(CASE WHEN doc_type = 'credit_note' THEN -total ELSE total END) AS billed,
@@ -153,7 +179,13 @@ LEFT JOIN (
     WHERE doc_type IN ('invoice','debit_note')
       AND LOWER(COALESCE(status, '')) = 'por cobrar'
     GROUP BY client_id
-) o ON o.client_id = c.id;
+) o ON o.client_id = c.id
+LEFT JOIN (
+    SELECT client_id, SUM(outstanding) AS outstanding
+    FROM alegra_receivables
+    WHERE client_id IS NOT NULL
+    GROUP BY client_id
+) r ON r.client_id = c.id;
 
 -- Índices para la MV: UNIQUE necesario para REFRESH CONCURRENTLY (sin lock de lectura);
 -- el de balance acelera el ORDER BY balance DESC del list_receivables.
