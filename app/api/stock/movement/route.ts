@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const user_name = session.user.name || session.user.email || "Desconocido"
 
     const body = await request.json()
-    const { material_id, movement_type, quantity, reference_number, notes } = body
+    const { material_id, movement_type, quantity, reference_number, notes, unit_cost } = body
 
     // Validaciones
     if (!material_id || !movement_type || !quantity) {
@@ -24,6 +24,18 @@ export async function POST(request: NextRequest) {
 
     if (!["entrada", "salida", "ajuste"].includes(movement_type)) {
       return NextResponse.json({ error: "Tipo de movimiento inválido" }, { status: 400 })
+    }
+
+    // Precio opcional: solo tiene sentido para entradas. Aceptamos number o null;
+    // si viene, tiene que ser >= 0. Si es 0 o null lo guardamos como null (evita
+    // pisar el unit_cost del material con 0 cuando el usuario deja el campo vacío).
+    let unitCost: number | null = null
+    if (unit_cost !== undefined && unit_cost !== null && unit_cost !== "") {
+      const parsed = Number(unit_cost)
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return NextResponse.json({ error: "Precio unitario inválido" }, { status: 400 })
+      }
+      unitCost = parsed > 0 ? parsed : null
     }
 
     // Obtener stock actual
@@ -64,14 +76,15 @@ export async function POST(request: NextRequest) {
       // Registrar el movimiento
       const movementResult = await sql`
         INSERT INTO stock_movements (
-          material_id, 
-          movement_type, 
-          quantity, 
-          previous_stock, 
-          new_stock, 
-          reference_number, 
-          notes, 
-          user_name
+          material_id,
+          movement_type,
+          quantity,
+          previous_stock,
+          new_stock,
+          reference_number,
+          notes,
+          user_name,
+          unit_cost
         )
         VALUES (
           ${material_id},
@@ -81,19 +94,34 @@ export async function POST(request: NextRequest) {
           ${newStock},
           ${reference_number},
           ${notes},
-          ${user_name}
+          ${user_name},
+          ${unitCost}
         )
         RETURNING id, created_at
       `
 
       // Actualizar el inventario
       await sql`
-        UPDATE inventory 
-        SET 
+        UPDATE inventory
+        SET
           current_stock = ${newStock},
           last_updated = NOW()
         WHERE material_id = ${material_id}
       `
+
+      // Política "último precio pisa": si es una entrada con precio, actualizamos
+      // el unit_cost del material. Así el costo de fabricación en /costos usa el
+      // precio de la última compra sin que el usuario tenga que editar la ficha.
+      // El histórico queda en stock_movements por si en el futuro cambiamos a
+      // promedio ponderado o FIFO. Para salidas/ajustes no aplica: no representan
+      // una compra al proveedor.
+      if (movement_type === "entrada" && unitCost !== null) {
+        await sql`
+          UPDATE materials
+          SET unit_cost = ${unitCost}, updated_at = NOW()
+          WHERE id = ${material_id}
+        `
+      }
 
       // Revalidar las rutas que muestran el inventario
       revalidatePath("/inventory")

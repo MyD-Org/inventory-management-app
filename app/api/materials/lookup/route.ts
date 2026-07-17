@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
         m.unit_of_measure,
         m.min_stock,
         m.max_stock,
+        m.unit_cost,
         i.current_stock,
         i.available_stock,
         i.reserved_stock,

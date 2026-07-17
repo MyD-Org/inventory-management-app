@@ -18,6 +18,7 @@ interface Material {
     barcode: string
     current_stock?: number
     unit_of_measure?: string
+    unit_cost?: number | string | null
 }
 
 interface StockMovementDialogProps {
@@ -45,13 +46,20 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
         notes: "",
         reference_number: "",
     })
+    // Precio unitario del ingreso. Solo se muestra/manda en ENTRADAS. Prefill con
+    // el unit_cost actual del material (evita pisar el costo con "" si se deja vacío).
+    const [unitCost, setUnitCost] = useState("")
 
     const [materialError, setMaterialError] = useState(false)
     const [quantityError, setQuantityError] = useState(false)
     const [notFoundCode, setNotFoundCode] = useState<string | null>(null)
     const [submitError, setSubmitError] = useState<string | null>(null)
     const [suggestOpen, setSuggestOpen] = useState(false)
+    // Índice de la sugerencia resaltada para navegación con ↑/↓ + Enter.
+    // -1 = nada resaltado (Enter cae al fallback: buscar por código exacto).
+    const [activeIndex, setActiveIndex] = useState(-1)
     const scanBoxRef = useRef<HTMLDivElement>(null)
+    const suggestionsRef = useRef<HTMLDivElement>(null)
 
     const quantityInputRef = useRef<HTMLInputElement>(null)
     const barcodeInputRef = useRef<HTMLInputElement>(null)
@@ -73,6 +81,9 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
         setNotFoundCode(null)
         setSuggestOpen(false)
         setBarcode(m.barcode || m.name)
+        // Prefill precio con el unit_cost actual (viene como string desde Postgres DECIMAL).
+        const currentCost = Number(m.unit_cost ?? 0)
+        setUnitCost(currentCost > 0 ? String(currentCost) : "")
         setTimeout(() => quantityInputRef.current?.focus(), 100)
     }
 
@@ -85,25 +96,57 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
         return () => document.removeEventListener("mousedown", onDoc)
     }, [])
 
+    // Cada vez que cambian las sugerencias (por nueva query), reseteamos el índice
+    // resaltado — así no queda apuntando a un item que ya no existe en la lista.
+    useEffect(() => {
+        setActiveIndex(-1)
+    }, [query])
+
     // Al abrir: resetear a estado limpio (no reabrir con lo de la vez anterior) y enfocar.
     useEffect(() => {
         if (open) {
             setFormData({ material_id: "", quantity: "", notes: "", reference_number: "" })
             setBarcode("")
+            setUnitCost("")
             setMaterialError(false)
             setQuantityError(false)
             setNotFoundCode(null)
             setSubmitError(null)
             setSuggestOpen(false)
+            setActiveIndex(-1)
             setTimeout(() => {
                 barcodeInputRef.current?.focus()
             }, 100)
         }
     }, [open])
 
+    // Navegación por teclado del dropdown de sugerencias: ↑/↓ mueven el resaltado
+    // (con wrap), Enter selecciona la activa o cae a búsqueda por código exacto si
+    // no hay ninguna resaltada, Esc cierra el dropdown sin perder el foco.
     const handleBarcodeSubmit = (e: React.KeyboardEvent) => {
+        const hasSuggestions = suggestOpen && suggestions.length > 0
+        if (e.key === 'ArrowDown' && hasSuggestions) {
+            e.preventDefault()
+            setActiveIndex(prev => (prev + 1) % suggestions.length)
+            return
+        }
+        if (e.key === 'ArrowUp' && hasSuggestions) {
+            e.preventDefault()
+            setActiveIndex(prev => (prev <= 0 ? suggestions.length - 1 : prev - 1))
+            return
+        }
+        if (e.key === 'Escape' && suggestOpen) {
+            e.preventDefault()
+            setSuggestOpen(false)
+            setActiveIndex(-1)
+            return
+        }
         if (e.key === 'Enter') {
             e.preventDefault()
+            if (hasSuggestions && activeIndex >= 0) {
+                selectMaterial(suggestions[activeIndex])
+                return
+            }
             findMaterialByBarcode(barcode)
         }
     }
@@ -171,6 +214,8 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                     quantity: parseInt(formData.quantity), // Changed to parseInt
                     reference_number: formData.reference_number || null,
                     notes: formData.notes || null,
+                    // Precio solo aplica en entradas. Vacío → null (no pisa el unit_cost del material).
+                    unit_cost: type === "entrada" && unitCost ? Number(unitCost) : null,
                     // El usuario se toma de la sesión en el servidor (ver /api/stock/movement)
                 }),
             })
@@ -192,6 +237,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                 reference_number: "",
             })
             setBarcode("")
+            setUnitCost("")
             router.refresh()
         } catch (error) {
             // Se muestra dentro del modal (banner) para que no se pierda como el toast.
@@ -257,13 +303,21 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                                 </Button>
                             </div>
                             {suggestOpen && !selectedMaterial && suggestions.length > 0 && (
-                                <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-md max-h-60 overflow-auto">
-                                    {suggestions.map(m => (
+                                <div
+                                    ref={suggestionsRef}
+                                    className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-md max-h-60 overflow-auto"
+                                >
+                                    {suggestions.map((m, i) => (
                                         <button
                                             key={m.id}
                                             type="button"
                                             onClick={() => selectMaterial(m)}
-                                            className="flex w-full items-center justify-between gap-3 p-2.5 text-left text-sm hover:bg-muted"
+                                            onMouseEnter={() => setActiveIndex(i)}
+                                            ref={i === activeIndex ? (el) => {
+                                                // Autoscroll para mantener visible la opción activa al navegar con flechas.
+                                                el?.scrollIntoView({ block: "nearest" })
+                                            } : undefined}
+                                            className={`flex w-full items-center justify-between gap-3 p-2.5 text-left text-sm ${i === activeIndex ? "bg-muted" : "hover:bg-muted"}`}
                                         >
                                             <span className="min-w-0">
                                                 <span className="font-medium">{m.name}</span>
@@ -324,6 +378,21 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                                 disabled={!selectedMaterial}
                             />
                         </div>
+                        {type === "entrada" && (
+                            <div className="space-y-2">
+                                <Label htmlFor="unit-cost">Precio unitario (opcional)</Label>
+                                <Input
+                                    id="unit-cost"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="Ej: 1250.50"
+                                    value={unitCost}
+                                    onChange={(e) => setUnitCost(e.target.value)}
+                                    disabled={!selectedMaterial}
+                                />
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <Label htmlFor="notes">Notas (Opcional)</Label>
                             <Input

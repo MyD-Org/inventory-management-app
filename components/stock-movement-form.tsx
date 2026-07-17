@@ -22,6 +22,7 @@ interface Material {
   available_stock: number
   min_stock: number
   max_stock: number
+  unit_cost?: number | string | null
 }
 
 interface StockMovementFormProps {
@@ -34,6 +35,10 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
   const [quantity, setQuantity] = useState("")
   const [referenceNumber, setReferenceNumber] = useState("")
   const [notes, setNotes] = useState("")
+  // Solo se muestra/manda en ENTRADAS. Se prefill con el unit_cost del material
+  // cuando se selecciona (para no pisar el precio actual con "" si el usuario
+  // deja el campo vacío por error, y para editarlo cómodo cuando cambia).
+  const [unitCost, setUnitCost] = useState("")
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const { toast } = useToast()
@@ -75,6 +80,10 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
 
       const foundMaterial = await response.json()
       setMaterial(foundMaterial)
+      // Prefill del precio con el unit_cost actual (viene como string desde
+      // Postgres DECIMAL). El usuario lo confirma o lo cambia si compró a otro precio.
+      const currentCost = Number(foundMaterial?.unit_cost ?? 0)
+      setUnitCost(currentCost > 0 ? String(currentCost) : "")
     } catch (error) {
       toast.error("Error", {
         description: "Material no encontrado en el sistema",
@@ -132,6 +141,9 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
           quantity: movementType === "salida" ? -Number.parseInt(quantity) : Number.parseInt(quantity),
           reference_number: referenceNumber || null,
           notes: notes || null,
+          // Precio solo tiene sentido en entradas. En salida/ajuste no lo mandamos
+          // (el server igual lo ignora). Vacío = null → no pisa el unit_cost del material.
+          unit_cost: movementType === "entrada" && unitCost ? Number(unitCost) : null,
           // El usuario se toma de la sesión en el servidor (ver /api/stock/movement)
         }),
       })
@@ -156,6 +168,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
         setQuantity("")
         setReferenceNumber("")
         setNotes("")
+        setUnitCost("")
         setSuccess(false)
       }, 2000)
     } catch (error) {
@@ -172,6 +185,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
     setQuantity("")
     setReferenceNumber("")
     setNotes("")
+    setUnitCost("")
     setSuccess(false)
   }
 
@@ -271,6 +285,21 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
                   <p className="text-xs text-muted-foreground mt-1">Máximo disponible: {material.available_stock}</p>
                 )}
               </div>
+
+              {movementType === "entrada" && (
+                <div>
+                  <Label htmlFor="unitCost">Precio unitario (opcional)</Label>
+                  <Input
+                    id="unitCost"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={unitCost}
+                    onChange={(e) => setUnitCost(e.target.value)}
+                    placeholder="Ej: 1250.50"
+                  />
+                </div>
+              )}
 
               <div>
                 <Label htmlFor="referenceNumber">Número de Referencia</Label>

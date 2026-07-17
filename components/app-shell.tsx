@@ -35,6 +35,7 @@ interface Material {
   barcode: string
   current_stock?: number
   unit_of_measure?: string
+  unit_cost?: number | string | null
 }
 
 interface AppShellProps {
