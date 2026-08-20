@@ -9,11 +9,10 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
-import { KanbanSquare, List, ListChecks, Plus, ArrowLeftRight, LogOut } from "lucide-react"
+import { KanbanSquare, ListChecks, Plus, ArrowLeftRight, LogOut } from "lucide-react"
 
 const NAV = [
-    { label: "Tablero", href: "/pedidos", icon: KanbanSquare, exact: true },
-    { label: "Lista", href: "/pedidos/lista", icon: List },
+    { label: "Pedidos", href: "/pedidos", icon: KanbanSquare, exact: true },
     { label: "Nuevo", href: "/pedidos/nuevo", icon: Plus },
     { label: "Opciones", href: "/pedidos/opciones", icon: ListChecks, adminOnly: true },
 ]

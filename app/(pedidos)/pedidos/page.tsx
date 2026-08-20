@@ -1,20 +1,32 @@
 import { sql } from "@/lib/database"
+import { auth } from "@/auth"
 import { OrdersBoard, type BoardCard } from "@/components/orders-board"
+import { OrdersTable } from "@/components/orders-table"
+import { ViewToggle } from "@/components/view-toggle"
 
 export const dynamic = 'force-dynamic';
 
 // Tablero del taller. Vista principal del módulo: cada columna es un estado y
 // las tarjetas se mueven de una a otra. La lista está en /pedidos/lista.
-export default async function OrdersBoardPage() {
+export default async function OrdersPage({
+    searchParams,
+}: {
+    searchParams: { vista?: string; q?: string }
+}) {
+    // Tablero y lista son la MISMA información vista distinto, así que viven en
+    // la misma ruta con un interruptor, no en dos entradas del menú.
+    const lista = searchParams.vista === "lista"
+    const session = await auth()
+
     const rows = await sql`
         SELECT o.id, o.order_number, o.external_id, o.customer_name, o.customer_external_id,
-               o.status, o.priority, o.delivery_date_estimate::text AS delivery_date_estimate, o.created_at,
+               o.status, o.priority, o.origin, o.source_conversation,
+               o.delivery_date_estimate::text AS delivery_date_estimate, o.created_at,
                COUNT(i.id) AS line_count,
                COALESCE(SUM(i.quantity), 0) AS units,
                BOOL_OR(i.needs_review) AS needs_review
         FROM orders o
         LEFT JOIN order_items i ON i.order_id = o.id
-        WHERE o.status <> 'cancelado'
         GROUP BY o.id
         ORDER BY
             CASE o.priority WHEN 'alta' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
@@ -30,6 +42,9 @@ export default async function OrdersBoardPage() {
         customer_external_id: r.customer_external_id,
         status: r.status,
         priority: r.priority,
+        origin: r.origin,
+        source_conversation: r.source_conversation,
+        created_at: r.created_at,
         delivery_date_estimate: r.delivery_date_estimate,
         line_count: Number(r.line_count),
         units: Number(r.units),
@@ -38,13 +53,25 @@ export default async function OrdersBoardPage() {
 
     return (
         <div className="h-full flex flex-col container mx-auto px-4 py-6">
-            <div className="mb-6 shrink-0">
-                <h1 className="text-2xl font-bold">Tablero</h1>
-                <p className="text-sm text-muted-foreground">
-                    Arrastrá una tarjeta para cambiarle el estado
-                </p>
+            <div className="mb-6 shrink-0 flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                    <h1 className="text-2xl font-bold">Pedidos</h1>
+                    <p className="text-sm text-muted-foreground">
+                        {lista
+                            ? "Todos los pedidos, incluidos los cancelados"
+                            : "Arrastrá una tarjeta para cambiarle el estado"}
+                    </p>
+                </div>
+                <ViewToggle lista={lista} />
             </div>
-            <OrdersBoard cards={cards} />
+
+            {lista ? (
+                <div className="overflow-y-auto scrollbar-hide">
+                    <OrdersTable orders={cards} isAdmin={session?.user?.role === "admin"} />
+                </div>
+            ) : (
+                <OrdersBoard cards={cards.filter((c) => c.status !== "cancelado")} />
+            )}
         </div>
     )
 }

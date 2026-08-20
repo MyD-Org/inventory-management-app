@@ -8,52 +8,20 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Trash2, ExternalLink, AlertTriangle, Search } from "lucide-react"
+import { Trash2, ExternalLink, AlertTriangle } from "lucide-react"
 import { deleteOrder } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
+import { STATUS_LABELS } from "@/lib/order-statuses"
+import type { BoardCard } from "@/components/orders-board"
 
-export interface OrderRow {
-    id: number
-    order_number: number
-    external_id: string
-    customer_external_id: string
-    customer_name: string | null
-    status: OrderStatus
-    origin: string
-    priority: string
-    delivery_date_estimate: string | null
-    source_conversation: string | null
-    created_at: string
-    line_count: number
-    units: number
-    needs_review: boolean
-}
-
-export function OrdersTable({
-    orders,
-    initialFilter,
-    isAdmin,
-}: {
-    orders: OrderRow[]
-    initialFilter: string
-    isAdmin: boolean
-}) {
+export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin: boolean }) {
     const router = useRouter()
     const { toast } = useToast()
-    const [filter, setFilter] = useState(initialFilter)
     const [pendingId, setPendingId] = useState<number | null>(null)
     const [deleting, setDeleting] = useState(false)
-
-    function applyFilter(e: React.FormEvent) {
-        e.preventDefault()
-        const q = filter.trim()
-        router.push(q ? `/pedidos/lista?cliente=${encodeURIComponent(q)}` : "/pedidos/lista")
-    }
 
     async function doDelete() {
         if (pendingId == null) return
@@ -71,20 +39,9 @@ export function OrdersTable({
 
     return (
         <div className="space-y-4">
-            <form onSubmit={applyFilter} className="flex gap-2 max-w-md">
-                <Input
-                    placeholder="Buscar por cliente (ID externo o nombre)"
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                />
-                <Button type="submit" variant="secondary">
-                    <Search className="h-4 w-4" />
-                </Button>
-            </form>
-
             {orders.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-8 text-center">
-                    {initialFilter ? "No hay pedidos de ese cliente." : "Todavía no hay pedidos."}
+                    Todavía no hay pedidos.
                 </p>
             ) : (
                 <div className="rounded-md border overflow-x-auto">

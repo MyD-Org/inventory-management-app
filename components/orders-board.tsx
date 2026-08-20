@@ -4,9 +4,8 @@
 // columna a otra, y solo así: el selector vive en el detalle del pedido.
 // Drag & drop con la HTML5 Drag and Drop API nativa, sin dependencias.
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle, CalendarClock, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -24,6 +23,9 @@ export interface BoardCard {
     status: OrderStatus
     priority: string
     delivery_date_estimate: string | null
+    origin: string
+    source_conversation: string | null
+    created_at: string
     line_count: number
     units: number
     needs_review: boolean
@@ -53,6 +55,9 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
     const [query, setQuery] = useState("")
     const [onlyIssues, setOnlyIssues] = useState(false)
     const [dragging, setDragging] = useState<number | null>(null)
+    // Sin esto, soltar la tarjeta al final de un arrastre dispara el click y
+    // navega al detalle sin que nadie lo haya pedido.
+    const draggedRef = useRef(false)
     const [over, setOver] = useState<string | null>(null)
     // Estado optimista: la tarjeta salta de columna al soltar, sin esperar al server.
     const [moved, setMoved] = useState<Record<number, OrderStatus>>({})
@@ -141,19 +146,32 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                 <div
                                     key={card.id}
                                     draggable
-                                    onDragStart={() => setDragging(card.id)}
+                                    onDragStart={() => {
+                                        draggedRef.current = true
+                                        setDragging(card.id)
+                                    }}
                                     onDragEnd={() => setDragging(null)}
-                                    className={`rounded-md border bg-background p-3 space-y-2 cursor-grab active:cursor-grabbing ${
+                                    onClick={() => {
+                                        if (draggedRef.current) {
+                                            draggedRef.current = false
+                                            return
+                                        }
+                                        router.push(`/pedidos/${card.id}`)
+                                    }}
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault()
+                                            router.push(`/pedidos/${card.id}`)
+                                        }
+                                    }}
+                                    className={`rounded-md border bg-background p-3 space-y-2 cursor-pointer hover:border-primary/60 hover:shadow-sm transition-all active:cursor-grabbing ${
                                         dragging === card.id ? "opacity-50" : ""
                                     }`}
                                 >
                                     <div className="flex items-start justify-between gap-2">
-                                        <Link
-                                            href={`/pedidos/${card.id}`}
-                                            className="font-medium text-sm hover:underline"
-                                        >
-                                            #{card.order_number}
-                                        </Link>
+                                        <span className="font-medium text-sm">#{card.order_number}</span>
                                         {card.priority === "alta" && (
                                             <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
                                                 Urgente
