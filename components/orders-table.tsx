@@ -1,21 +1,20 @@
 "use client"
 
-// Lista de pedidos con filtro por cliente. El estado se muestra de solo lectura:
-// se cambia arrastrando en el tablero, o con el selector del detalle.
-// Sin importes: el módulo de pedidos no maneja plata (ver lib/orders.ts).
+// Vista de lista, la otra mitad del interruptor del tablero. Filas densas de una
+// línea al estilo Linear, sin marco de tabla: glifo de estado, número, cliente y
+// metadatos a la derecha. El estado es de solo lectura acá — se cambia
+// arrastrando en el tablero o con el selector del detalle.
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Trash2, ExternalLink, AlertTriangle } from "lucide-react"
+import { Trash2, ExternalLink, PackageX, CalendarClock } from "lucide-react"
 import { deleteOrder } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { STATUS_LABELS } from "@/lib/order-statuses"
-import type { BoardCard } from "@/components/orders-board"
+import { PriorityIcon, StatusIcon } from "@/components/order-glyphs"
+import { formatDate, isOverdue, type BoardCard } from "@/components/orders-board"
 
 export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin: boolean }) {
     const router = useRouter()
@@ -37,92 +36,96 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
         }
     }
 
+    if (orders.length === 0) {
+        return <p className="text-sm text-muted-foreground py-12 text-center">Todavía no hay pedidos.</p>
+    }
+
     return (
-        <div className="space-y-4">
-            {orders.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">
-                    Todavía no hay pedidos.
-                </p>
-            ) : (
-                <div className="rounded-md border overflow-x-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Pedido</TableHead>
-                                <TableHead>Cliente</TableHead>
-                                <TableHead className="text-right">Unidades</TableHead>
-                                <TableHead>Entrega</TableHead>
-                                <TableHead>Estado</TableHead>
-                                <TableHead className="w-[100px]"></TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {orders.map((o) => (
-                                <TableRow key={o.id}>
-                                    <TableCell>
-                                        <Link href={`/pedidos/${o.id}`} className="font-medium hover:underline">
-                                            #{o.order_number}
-                                        </Link>
-                                        {o.priority === "alta" && (
-                                            <Badge variant="destructive" className="ml-2">Urgente</Badge>
-                                        )}
-                                        {o.needs_review && (
-                                            <Badge variant="destructive" className="ml-2 gap-1">
-                                                <AlertTriangle className="h-3 w-3" />
-                                                Sin receta
-                                            </Badge>
-                                        )}
-                                        <div className="text-xs text-muted-foreground">
-                                            {o.origin} · {new Date(o.created_at).toLocaleDateString("es-AR")}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div>{o.customer_name ?? "—"}</div>
-                                        <div className="text-xs text-muted-foreground">{o.customer_external_id}</div>
-                                    </TableCell>
-                                    <TableCell className="text-right tabular-nums">{o.units}</TableCell>
-                                    <TableCell className="text-sm">
-                                        {o.delivery_date_estimate
-                                            ? new Date(o.delivery_date_estimate).toLocaleDateString("es-AR")
-                                            : "—"}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant={o.status === "cancelado" ? "destructive" : "secondary"}>
-                                            {STATUS_LABELS[o.status]}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center justify-end gap-1">
-                                            {o.source_conversation && (
-                                                <a
-                                                    href={o.source_conversation}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    title="Ver la conversación en el CRM"
-                                                >
-                                                    <Button variant="ghost" size="icon">
-                                                        <ExternalLink className="h-4 w-4" />
-                                                    </Button>
-                                                </a>
-                                            )}
-                                            {isAdmin && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => setPendingId(o.id)}
-                                                    title="Eliminar pedido"
-                                                >
-                                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </div>
-            )}
+        <>
+            <div className="border rounded-lg divide-y">
+                {orders.map((o) => {
+                    const overdue = isOverdue(o.delivery_date_estimate, o.status)
+                    return (
+                        <div
+                            key={o.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => router.push(`/pedidos/${o.id}`)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") router.push(`/pedidos/${o.id}`)
+                            }}
+                            className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer focus:outline-none focus:bg-muted/50 first:rounded-t-lg last:rounded-b-lg"
+                        >
+                            <PriorityIcon priority={o.priority} />
+                            <StatusIcon status={o.status} />
+
+                            <span className="text-[11px] text-muted-foreground tabular-nums w-10 shrink-0">
+                                #{o.order_number}
+                            </span>
+
+                            <span className="text-[13px] font-medium truncate min-w-0 flex-1">
+                                {o.customer_name ?? o.customer_external_id}
+                            </span>
+
+                            {o.needs_review && (
+                                <PackageX className="h-3.5 w-3.5 text-destructive shrink-0" aria-label="Sin receta" />
+                            )}
+
+                            <span className="text-[11px] text-muted-foreground tabular-nums hidden sm:block shrink-0">
+                                {o.units} u.
+                            </span>
+
+                            <span className="text-[11px] text-muted-foreground hidden md:block shrink-0 w-24 truncate">
+                                {STATUS_LABELS[o.status]}
+                            </span>
+
+                            <span
+                                className={`text-[11px] flex items-center gap-1 shrink-0 w-20 justify-end ${
+                                    overdue ? "text-destructive font-medium" : "text-muted-foreground"
+                                }`}
+                            >
+                                {o.delivery_date_estimate && (
+                                    <>
+                                        <CalendarClock className="h-3 w-3" />
+                                        {formatDate(o.delivery_date_estimate)}
+                                    </>
+                                )}
+                            </span>
+
+                            <div className="flex items-center gap-0.5 shrink-0 w-14 justify-end">
+                                {o.source_conversation && (
+                                    <a
+                                        href={o.source_conversation}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        title="Ver la conversación en el CRM"
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                                            <ExternalLink className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </a>
+                                )}
+                                {isAdmin && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            setPendingId(o.id)
+                                        }}
+                                        title="Eliminar pedido"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
 
             <ConfirmDialog
                 open={pendingId !== null}
@@ -134,6 +137,6 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                 loading={deleting}
                 onConfirm={doDelete}
             />
-        </div>
+        </>
     )
 }

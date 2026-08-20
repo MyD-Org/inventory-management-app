@@ -13,7 +13,6 @@ import { KanbanSquare, ListChecks, Plus, ArrowLeftRight, LogOut } from "lucide-r
 
 const NAV = [
     { label: "Pedidos", href: "/pedidos", icon: KanbanSquare, exact: true },
-    { label: "Nuevo", href: "/pedidos/nuevo", icon: Plus },
     { label: "Opciones", href: "/pedidos/opciones", icon: ListChecks, adminOnly: true },
 ]
 
@@ -40,6 +39,12 @@ export function OrdersShell({
                             </span>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
+                            <Link href="/pedidos/nuevo">
+                                <Button size="sm" className="mr-1">
+                                    <Plus className="h-4 w-4 sm:mr-2" />
+                                    <span className="hidden sm:inline">Nuevo pedido</span>
+                                </Button>
+                            </Link>
                             <Link href="/" title="Ir al sistema de inventario">
                                 <Button variant="ghost" size="sm">
                                     <ArrowLeftRight className="h-4 w-4 sm:mr-2" />

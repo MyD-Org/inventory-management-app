@@ -1,18 +1,18 @@
 "use client"
 
-// Tablero kanban de pedidos. El estado se cambia ARRASTRANDO la tarjeta de una
-// columna a otra, y solo así: el selector vive en el detalle del pedido.
+// Tablero kanban al estilo Linear: columnas sin marco, glifo de estado en el
+// encabezado, tarjetas densas y filtros explícitos. El estado se cambia
+// ARRASTRANDO la tarjeta; el selector vive en el detalle del pedido.
 // Drag & drop con la HTML5 Drag and Drop API nativa, sin dependencias.
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, CalendarClock, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import { AlertTriangle, CalendarClock, Search, PackageX } from "lucide-react"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import { BOARD_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
+import { PriorityIcon, StatusIcon } from "@/components/order-glyphs"
 
 export interface BoardCard {
     id: number
@@ -31,17 +31,17 @@ export interface BoardCard {
     needs_review: boolean
 }
 
-function formatDate(d: string | null): string | null {
+export function formatDate(d: string | null): string | null {
     if (!d) return null
-    // El valor viene como "2026-09-05": lo parseamos a mano para que no lo
-    // corra la zona horaria (new Date("2026-09-05") es UTC medianoche).
+    // Viene como "2026-09-05": lo parseamos a mano porque new Date("2026-09-05")
+    // es medianoche UTC y en Argentina mostraría el día anterior.
     const [y, m, day] = d.split("-").map(Number)
     return new Date(y, m - 1, day).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })
 }
 
 // Entrega vencida: la fecha ya pasó y el pedido todavía no salió.
-function isOverdue(d: string | null, status: string): boolean {
-    if (!d || status === "retirado") return false
+export function isOverdue(d: string | null, status: string): boolean {
+    if (!d || status === "retirado" || status === "cancelado") return false
     const [y, m, day] = d.split("-").map(Number)
     const eta = new Date(y, m - 1, day)
     const today = new Date()
@@ -49,24 +49,79 @@ function isOverdue(d: string | null, status: string): boolean {
     return eta < today
 }
 
+function FilterChip({
+    active,
+    onClick,
+    icon: Icon,
+    children,
+    count,
+}: {
+    active: boolean
+    onClick: () => void
+    icon: typeof AlertTriangle
+    children: React.ReactNode
+    count: number
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={count === 0 && !active}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-40 ${
+                active
+                    ? "border-foreground/30 bg-foreground/10 text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            }`}
+        >
+            <Icon className="h-3.5 w-3.5" />
+            {children}
+            <span className="tabular-nums opacity-60">{count}</span>
+        </button>
+    )
+}
+
 export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
     const router = useRouter()
     const { toast } = useToast()
     const [query, setQuery] = useState("")
-    const [onlyIssues, setOnlyIssues] = useState(false)
+    const [sinReceta, setSinReceta] = useState(false)
+    const [atrasados, setAtrasados] = useState(false)
     const [dragging, setDragging] = useState<number | null>(null)
-    // Sin esto, soltar la tarjeta al final de un arrastre dispara el click y
-    // navega al detalle sin que nadie lo haya pedido.
-    const draggedRef = useRef(false)
     const [over, setOver] = useState<string | null>(null)
     // Estado optimista: la tarjeta salta de columna al soltar, sin esperar al server.
     const [moved, setMoved] = useState<Record<number, OrderStatus>>({})
+    // Sin esto, soltar la tarjeta dispara el click y navega al detalle sin que
+    // nadie lo haya pedido.
+    const draggedRef = useRef(false)
+    const searchRef = useRef<HTMLInputElement>(null)
+
+    // Atajos al estilo Linear: "/" para buscar, "c" para crear.
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            const target = e.target as HTMLElement
+            if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return
+            if (e.metaKey || e.ctrlKey || e.altKey) return
+            if (e.key === "/") {
+                e.preventDefault()
+                searchRef.current?.focus()
+            } else if (e.key === "c") {
+                e.preventDefault()
+                router.push("/pedidos/nuevo")
+            }
+        }
+        window.addEventListener("keydown", onKey)
+        return () => window.removeEventListener("keydown", onKey)
+    }, [router])
 
     const statusOf = (c: BoardCard) => moved[c.id] ?? c.status
 
+    const nSinReceta = cards.filter((c) => c.needs_review).length
+    const nAtrasados = cards.filter((c) => isOverdue(c.delivery_date_estimate, statusOf(c))).length
+
     const q = query.trim().toLowerCase()
     const visible = cards.filter((c) => {
-        if (onlyIssues && !c.needs_review && !isOverdue(c.delivery_date_estimate, statusOf(c))) return false
+        if (sinReceta && !c.needs_review) return false
+        if (atrasados && !isOverdue(c.delivery_date_estimate, statusOf(c))) return false
         if (!q) return true
         return (
             String(c.order_number).includes(q) ||
@@ -76,8 +131,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
     })
 
     async function move(id: number, status: OrderStatus) {
-        const previous = cards.find((c) => c.id === id)?.status
-        if (previous === status) return
+        if ((cards.find((c) => c.id === id)?.status ?? null) === status) return
 
         setMoved((m) => ({ ...m, [id]: status }))
         const result = await updateOrderStatus(id, status)
@@ -94,134 +148,150 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
     }
 
     return (
-        // min-h-0 deja que el flex hijo se encoja en vez de estirar la página;
-        // scrollbar-hide oculta la barra horizontal sin desactivar el scroll.
         <>
-        <div className="flex gap-2 mb-4 shrink-0 flex-wrap">
-            <div className="relative max-w-xs flex-1 min-w-[180px]">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                    className="pl-8"
-                    placeholder="Buscar por número o cliente"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                />
+            <div className="flex gap-2 mb-4 shrink-0 flex-wrap items-center">
+                <div className="relative max-w-xs flex-1 min-w-[180px]">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                        ref={searchRef}
+                        className="pl-8 h-9 text-sm"
+                        placeholder="Buscar por número o cliente"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                    />
+                    <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground border rounded px-1 hidden sm:block">
+                        /
+                    </kbd>
+                </div>
+
+                <FilterChip
+                    active={sinReceta}
+                    onClick={() => setSinReceta((v) => !v)}
+                    icon={PackageX}
+                    count={nSinReceta}
+                >
+                    Sin receta
+                </FilterChip>
+                <FilterChip
+                    active={atrasados}
+                    onClick={() => setAtrasados((v) => !v)}
+                    icon={AlertTriangle}
+                    count={nAtrasados}
+                >
+                    Atrasados
+                </FilterChip>
             </div>
-            <Button
-                variant={onlyIssues ? "default" : "outline"}
-                onClick={() => setOnlyIssues((v) => !v)}
-            >
-                <AlertTriangle className="mr-2 h-4 w-4" />
-                Solo con problemas
-            </Button>
-        </div>
-        <div className="flex-1 min-h-0 flex gap-4 overflow-x-auto scrollbar-hide pb-2">
-            {BOARD_STATUSES.map((status) => {
-                const column = visible.filter((c) => statusOf(c) === status)
-                return (
-                    <div
-                        key={status}
-                        onDragOver={(e) => {
-                            e.preventDefault()
-                            setOver(status)
-                        }}
-                        onDragLeave={() => setOver((o) => (o === status ? null : o))}
-                        onDrop={(e) => {
-                            e.preventDefault()
-                            setOver(null)
-                            if (dragging !== null) move(dragging, status)
-                            setDragging(null)
-                        }}
-                        className={`w-72 shrink-0 h-full flex flex-col rounded-lg border bg-muted/30 p-3 transition-colors ${
-                            over === status ? "border-primary bg-primary/5" : ""
-                        }`}
-                    >
-                        <div className="flex items-center justify-between mb-3 shrink-0">
-                            <h2 className="text-sm font-semibold">{STATUS_LABELS[status]}</h2>
-                            <span className="text-xs text-muted-foreground tabular-nums">{column.length}</span>
-                        </div>
 
-                        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide space-y-2">
-                            {column.map((card) => (
-                                <div
-                                    key={card.id}
-                                    draggable
-                                    onDragStart={() => {
-                                        draggedRef.current = true
-                                        setDragging(card.id)
-                                    }}
-                                    onDragEnd={() => setDragging(null)}
-                                    onClick={() => {
-                                        if (draggedRef.current) {
-                                            draggedRef.current = false
-                                            return
-                                        }
-                                        router.push(`/pedidos/${card.id}`)
-                                    }}
-                                    role="button"
-                                    tabIndex={0}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter" || e.key === " ") {
-                                            e.preventDefault()
-                                            router.push(`/pedidos/${card.id}`)
-                                        }
-                                    }}
-                                    className={`rounded-md border bg-background p-3 space-y-2 cursor-pointer hover:border-primary/60 hover:shadow-sm transition-all active:cursor-grabbing ${
-                                        dragging === card.id ? "opacity-50" : ""
-                                    }`}
-                                >
-                                    <div className="flex items-start justify-between gap-2">
-                                        <span className="font-medium text-sm">#{card.order_number}</span>
-                                        {card.priority === "alta" && (
-                                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                                                Urgente
-                                            </Badge>
-                                        )}
-                                    </div>
+            <div className="flex-1 min-h-0 flex gap-5 overflow-x-auto scrollbar-hide pb-2">
+                {BOARD_STATUSES.map((status) => {
+                    const column = visible.filter((c) => statusOf(c) === status)
+                    return (
+                        <div
+                            key={status}
+                            onDragOver={(e) => {
+                                e.preventDefault()
+                                setOver(status)
+                            }}
+                            onDragLeave={() => setOver((o) => (o === status ? null : o))}
+                            onDrop={(e) => {
+                                e.preventDefault()
+                                setOver(null)
+                                if (dragging !== null) move(dragging, status)
+                                setDragging(null)
+                            }}
+                            className={`w-[272px] shrink-0 h-full flex flex-col rounded-lg transition-colors ${
+                                over === status ? "bg-primary/5 ring-1 ring-primary/30" : ""
+                            }`}
+                        >
+                            <div className="flex items-center gap-2 px-1 pb-2.5 shrink-0">
+                                <StatusIcon status={status} />
+                                <h2 className="text-[13px] font-medium">{STATUS_LABELS[status]}</h2>
+                                <span className="text-xs text-muted-foreground tabular-nums">
+                                    {column.length}
+                                </span>
+                            </div>
 
-                                    <div className="text-sm truncate">{card.customer_name ?? card.customer_external_id}</div>
-
-                                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                                        <span>
-                                            {card.units} u. · {card.line_count} {card.line_count === 1 ? "línea" : "líneas"}
-                                        </span>
-                                        {card.delivery_date_estimate && (
-                                            <span
-                                                className={`flex items-center gap-1 ${
-                                                    isOverdue(card.delivery_date_estimate, statusOf(card))
-                                                        ? "text-destructive font-medium"
-                                                        : ""
-                                                }`}
-                                                title={
-                                                    isOverdue(card.delivery_date_estimate, statusOf(card))
-                                                        ? "La fecha de entrega ya pasó"
-                                                        : "Entrega estimada"
+                            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide space-y-1.5">
+                                {column.map((card) => {
+                                    const overdue = isOverdue(card.delivery_date_estimate, statusOf(card))
+                                    return (
+                                        <div
+                                            key={card.id}
+                                            draggable
+                                            onDragStart={() => {
+                                                draggedRef.current = true
+                                                setDragging(card.id)
+                                            }}
+                                            onDragEnd={() => setDragging(null)}
+                                            onClick={() => {
+                                                if (draggedRef.current) {
+                                                    draggedRef.current = false
+                                                    return
                                                 }
-                                            >
-                                                <CalendarClock className="h-3 w-3" />
-                                                {formatDate(card.delivery_date_estimate)}
-                                            </span>
-                                        )}
-                                    </div>
+                                                router.push(`/pedidos/${card.id}`)
+                                            }}
+                                            role="button"
+                                            tabIndex={0}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                    e.preventDefault()
+                                                    router.push(`/pedidos/${card.id}`)
+                                                }
+                                            }}
+                                            className={`rounded-md border bg-card px-3 py-2.5 cursor-pointer hover:border-foreground/25 focus:outline-none focus:ring-1 focus:ring-primary transition-colors ${
+                                                dragging === card.id ? "opacity-40" : ""
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between gap-2 mb-1">
+                                                <span className="text-[11px] text-muted-foreground tabular-nums">
+                                                    #{card.order_number}
+                                                </span>
+                                                <div className="flex items-center gap-1.5">
+                                                    {card.needs_review && (
+                                                        <PackageX
+                                                            className="h-3.5 w-3.5 text-destructive"
+                                                            aria-label="Sin receta"
+                                                        />
+                                                    )}
+                                                    <PriorityIcon priority={card.priority} />
+                                                </div>
+                                            </div>
 
-                                    {card.needs_review && (
-                                        <div className="flex items-center gap-1 text-xs text-destructive">
-                                            <AlertTriangle className="h-3 w-3" />
-                                            Sin receta
+                                            <div className="text-[13px] font-medium leading-snug truncate mb-1.5">
+                                                {card.customer_name ?? card.customer_external_id}
+                                            </div>
+
+                                            <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground">
+                                                <span className="tabular-nums">{card.units} u.</span>
+                                                <span className="tabular-nums">
+                                                    {card.line_count} {card.line_count === 1 ? "línea" : "líneas"}
+                                                </span>
+                                                {card.delivery_date_estimate && (
+                                                    <span
+                                                        className={`flex items-center gap-1 ml-auto ${
+                                                            overdue ? "text-destructive font-medium" : ""
+                                                        }`}
+                                                        title={overdue ? "La entrega ya venció" : "Entrega estimada"}
+                                                    >
+                                                        <CalendarClock className="h-3 w-3" />
+                                                        {formatDate(card.delivery_date_estimate)}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
-                                    )}
+                                    )
+                                })}
 
-                                </div>
-                            ))}
-
-                            {column.length === 0 && (
-                                <p className="text-xs text-muted-foreground text-center py-4">Vacío</p>
-                            )}
+                                {column.length === 0 && (
+                                    <div className="rounded-md border border-dashed py-6 text-center text-[11px] text-muted-foreground">
+                                        Vacío
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                )
-            })}
-        </div>
+                    )
+                })}
+            </div>
         </>
     )
 }
