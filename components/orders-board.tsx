@@ -195,7 +195,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                     router.push(`/pedidos/${card.id}`)
                                                 }
                                             }}
-                                            className={`select-none rounded-md border bg-card px-3 py-2.5 cursor-pointer hover:border-foreground/25 focus:outline-none focus:ring-1 focus:ring-primary transition-colors ${
+                                            className={`select-none rounded-md border bg-card px-3 py-2.5 cursor-pointer hover:border-foreground/25 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary transition-colors ${
                                                 dragging === card.id ? "opacity-40" : ""
                                             }`}
                                         >

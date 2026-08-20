@@ -54,7 +54,7 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                             onKeyDown={(e) => {
                                 if (e.key === "Enter") router.push(`/pedidos/${o.id}`)
                             }}
-                            className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer focus:outline-none focus:bg-muted/50 first:rounded-t-lg last:rounded-b-lg"
+                            className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer outline-none focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary first:rounded-t-lg last:rounded-b-lg"
                         >
                             <PriorityIcon priority={o.priority} />
                             <StatusIcon status={o.status} />
