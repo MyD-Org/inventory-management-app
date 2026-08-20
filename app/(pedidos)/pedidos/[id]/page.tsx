@@ -87,7 +87,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 <PrintIconButton />
             </div>
 
-            <div className="grid gap-8 lg:grid-cols-[1fr_250px] items-start">
+            <div className="orden-trabajo grid gap-8 lg:grid-cols-[1fr_250px] items-start">
                 {/* ---------- El trabajo ---------- */}
                 <div className="min-w-0 space-y-7">
                     {/* 1. Qué armar */}

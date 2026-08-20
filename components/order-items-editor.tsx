@@ -69,6 +69,10 @@ export function OrderItemsEditor({
         return true
     }
 
+    // Una columna por campo del vocabulario, en su orden. Las celdas vacías
+    // muestran solo qué falta especificar, sin necesidad de un cartel aparte.
+    const columnas = Object.entries(vocab)
+
     // Specs de corrido, solo los valores, en el orden del vocabulario.
     const specsLine = (specs: Record<string, string>) =>
         Object.keys(vocab)
@@ -81,46 +85,75 @@ export function OrderItemsEditor({
 
     return (
         <>
-            <div className="border rounded-lg divide-y">
+            <div className="border rounded-lg overflow-x-auto scrollbar-hide">
+                <table className="w-full">
+                    <thead>
+                        <tr className="text-left">
+                            <th className="px-3 py-2 text-[11px] font-medium text-muted-foreground text-right w-16">
+                                Cant.
+                            </th>
+                            <th className="px-3 py-2 text-[11px] font-medium text-muted-foreground">
+                                Producto
+                            </th>
+                            {columnas.map(([key, field]) => (
+                                <th
+                                    key={key}
+                                    className="px-3 py-2 text-[11px] font-medium text-muted-foreground whitespace-nowrap"
+                                >
+                                    {field.label}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
                 {items.map((item) => {
                     const abierto = editing === item.id
                     const faltan = faltantes(item.specs)
 
                     if (!abierto) {
                         return (
-                            <div
+                            <tr
                                 key={item.id}
-                                className="group flex items-baseline gap-3 px-4 py-2.5 min-w-0 hover:bg-muted/40 cursor-pointer"
                                 onClick={() => abrir(item)}
-                                role="button"
                                 tabIndex={0}
                                 onKeyDown={(e) => e.key === "Enter" && abrir(item)}
+                                className="border-t hover:bg-muted/40 cursor-pointer outline-none focus-visible:bg-muted/40"
                             >
-                                <span className="text-xl font-semibold tabular-nums w-10 shrink-0">
-                                    {item.quantity}
-                                </span>
-                                <span className="text-[15px] font-medium shrink-0">{item.product}</span>
-                                {specsLine(item.specs) && (
-                                    <span className="text-[14px] text-muted-foreground truncate">
-                                        {specsLine(item.specs)}
+                                <td className="px-3 py-2 text-right align-middle">
+                                    <span className="text-[17px] font-semibold tabular-nums">
+                                        {item.quantity}
                                     </span>
-                                )}
-                                {faltan.length > 0 && (
-                                    <span
-                                        className="text-[12px] text-muted-foreground ml-auto shrink-0 border border-dashed rounded px-1.5 py-0.5"
-                                        title={`Sin especificar: ${faltan.map(([, f]) => f.label).join(", ")}`}
-                                    >
-                                        {faltan.length > 2
-                                            ? `faltan ${faltan.length} datos`
-                                            : `falta${faltan.length > 1 ? "n" : ""} ${faltan
-                                                  .map(([, f]) => f.label.toLowerCase())
-                                                  .join(" y ")}`}
+                                </td>
+                                <td className="px-3 py-2 text-[14px] font-medium">
+                                    <span className="block max-w-[180px] truncate" title={item.product}>
+                                        {item.product}
                                     </span>
-                                )}
-                                <span className="text-[11px] text-muted-foreground opacity-0 group-hover:opacity-100 ml-auto shrink-0 no-print">
-                                    editar
-                                </span>
-                            </div>
+                                </td>
+                                {columnas.map(([key, field]) => {
+                                    const v = item.specs[key]
+                                    return (
+                                        <td
+                                            key={key}
+                                            className={`px-3 py-2 text-[13px] ${
+                                                v ? "" : "text-muted-foreground/40"
+                                            }`}
+                                            title={v ? v : `${field.label} sin especificar`}
+                                        >
+                                            {/* El texto libre puede ser largo: se corta con
+                                                puntos suspensivos para que la tabla no crezca
+                                                a lo ancho. El texto completo va en el title y
+                                                se ve entero al abrir la fila. */}
+                                            <span
+                                                className={`block truncate ${
+                                                    field.free_text ? "max-w-[180px]" : "max-w-[120px]"
+                                                }`}
+                                            >
+                                                {v ? field.labels[v] ?? v : "—"}
+                                            </span>
+                                        </td>
+                                    )
+                                })}
+                            </tr>
                         )
                     }
 
@@ -130,7 +163,8 @@ export function OrderItemsEditor({
                             JSON.stringify(draft.specs) !== JSON.stringify(item.specs))
 
                     return (
-                        <div key={item.id} className="px-4 py-3 space-y-3 bg-muted/30">
+                        <tr key={item.id} className="border-t bg-muted/30">
+                          <td colSpan={2 + columnas.length} className="px-4 py-3 space-y-3">
                             <div className="flex items-center gap-3">
                                 <Input
                                     type="number"
@@ -238,12 +272,15 @@ export function OrderItemsEditor({
                                     Guardar
                                 </Button>
                             </div>
-                        </div>
+                          </td>
+                        </tr>
                     )
                 })}
 
                 {adding && (
-                    <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
+                    <tr className="border-t bg-muted/30">
+                      <td colSpan={2 + columnas.length} className="px-4 py-3">
+                       <div className="flex items-center gap-3">
                         <span className="text-[13px] text-muted-foreground shrink-0">Agregar</span>
                         <ProductPicker
                             products={products}
@@ -258,8 +295,12 @@ export function OrderItemsEditor({
                                 )
                             }}
                         />
-                    </div>
+                       </div>
+                      </td>
+                    </tr>
                 )}
+                    </tbody>
+                </table>
             </div>
 
             {!adding && (

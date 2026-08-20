@@ -189,4 +189,47 @@
   .no-print { display: none !important; }
   .aichat-root { display: none !important; }
   body { background: #fff !important; }
+
+  /* La app puede estar en modo oscuro, y el navegador no imprime fondos: sin
+     esto sale texto casi blanco sobre papel blanco, o sea una hoja vacía.
+     Forzamos la paleta clara para imprimir, venga de donde venga el tema. */
+  :root, .dark {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.40 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.45 0.20 27.3);
+    --border: oklch(0.80 0 0);
+    --input: oklch(0.80 0 0);
+  }
+
+  /* La orden de trabajo: una sola columna, las propiedades debajo del trabajo
+     en vez de en una barra lateral, y sin cortar una fila entre dos hojas. */
+  .orden-trabajo {
+    display: block !important;
+  }
+  .orden-trabajo aside {
+    position: static !important;
+    border-left: 0 !important;
+    padding-left: 0 !important;
+    margin-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.75rem;
+  }
+  .orden-trabajo table { border-collapse: collapse; }
+  .orden-trabajo thead { display: table-header-group; }
+  .orden-trabajo tr { break-inside: avoid; }
+  .orden-trabajo th,
+  .orden-trabajo td { border-bottom: 1px solid var(--border); }
+  .orden-trabajo section { break-inside: avoid; }
 }
