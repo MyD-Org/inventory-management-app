@@ -13,6 +13,7 @@ import { Plus, Trash2, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { addOrderItem, deleteOrderItem, updateOrderItem } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { ProductPicker } from "@/components/product-picker"
 import type { SpecField } from "@/lib/orders"
 
 interface Item {
@@ -42,7 +43,6 @@ export function OrderItemsEditor({
     const [pendingDelete, setPendingDelete] = useState<number | null>(null)
     const [deleting, setDeleting] = useState(false)
     const [adding, setAdding] = useState(false)
-    const [draft, setDraft] = useState({ product: "", quantity: 1 })
 
     async function run(fn: () => Promise<{ error?: string }>, ok: string) {
         const result = await fn()
@@ -191,47 +191,20 @@ export function OrderItemsEditor({
 
                 {adding && (
                     <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
-                        <Input
-                            type="number"
-                            min={1}
-                            value={draft.quantity}
-                            onChange={(e) => setDraft((d) => ({ ...d, quantity: Number(e.target.value) }))}
-                            className="h-8 w-20 text-[14px]"
-                        />
-                        <Select
-                            value={draft.product}
-                            onValueChange={(v) => setDraft((d) => ({ ...d, product: v }))}
-                        >
-                            <SelectTrigger className="h-8 flex-1 text-[13px]">
-                                <SelectValue placeholder="Elegí un producto" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {products.map((p) => (
-                                    <SelectItem key={p} value={p}>
-                                        {p}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Button
-                            size="sm"
-                            disabled={!draft.product}
-                            onClick={async () => {
-                                const ok = await run(
-                                    () => addOrderItem(orderId, draft),
-                                    "Producto agregado",
+                        <span className="text-[13px] text-muted-foreground shrink-0">Agregar</span>
+                        <ProductPicker
+                            products={products}
+                            onCancel={() => setAdding(false)}
+                            onPick={async (product) => {
+                                setAdding(false)
+                                // Entra con cantidad 1; se ajusta tocando la línea,
+                                // igual que las specs. Un campo, no un formulario.
+                                await run(
+                                    () => addOrderItem(orderId, { product, quantity: 1 }),
+                                    `${product} agregado`,
                                 )
-                                if (ok) {
-                                    setDraft({ product: "", quantity: 1 })
-                                    setAdding(false)
-                                }
                             }}
-                        >
-                            Agregar
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAdding(false)}>
-                            <X className="h-3.5 w-3.5" />
-                        </Button>
+                        />
                     </div>
                 )}
             </div>

@@ -4,11 +4,12 @@
 // Deliberadamente NO muestra inventario, costos ni dashboards. El link "Sistema
 // de inventario" cruza al otro módulo para quien tenga que ver las dos cosas.
 
-import type { ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
+import { NewOrderDialog } from "@/components/new-order-dialog"
 import { KanbanSquare, ListChecks, Plus, ArrowLeftRight, LogOut } from "lucide-react"
 
 const NAV = [
@@ -25,6 +26,22 @@ export function OrdersShell({
 }) {
     const pathname = usePathname()
     const isAdmin = user?.role === "admin"
+    const [creating, setCreating] = useState(false)
+
+    // "c" abre el alta desde cualquier pantalla del módulo, como en Linear.
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            const t = e.target as HTMLElement
+            if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return
+            if (e.metaKey || e.ctrlKey || e.altKey) return
+            if (e.key === "c") {
+                e.preventDefault()
+                setCreating(true)
+            }
+        }
+        window.addEventListener("keydown", onKey)
+        return () => window.removeEventListener("keydown", onKey)
+    }, [])
 
     return (
         <div className="h-dvh bg-background flex flex-col overflow-hidden">
@@ -39,12 +56,10 @@ export function OrdersShell({
                             </span>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                            <Link href="/pedidos/nuevo">
-                                <Button size="sm" className="mr-1">
-                                    <Plus className="h-4 w-4 sm:mr-2" />
-                                    <span className="hidden sm:inline">Nuevo pedido</span>
-                                </Button>
-                            </Link>
+                            <Button size="sm" className="mr-1" onClick={() => setCreating(true)}>
+                                <Plus className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Nuevo pedido</span>
+                            </Button>
                             <Link href="/" title="Ir al sistema de inventario">
                                 <Button variant="ghost" size="sm">
                                     <ArrowLeftRight className="h-4 w-4 sm:mr-2" />
@@ -81,6 +96,8 @@ export function OrdersShell({
             </header>
 
             <main className="flex-1 min-h-0 overflow-y-auto">{children}</main>
+
+            <NewOrderDialog open={creating} onOpenChange={setCreating} />
         </div>
     )
 }

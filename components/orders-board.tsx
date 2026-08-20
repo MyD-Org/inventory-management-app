@@ -71,9 +71,6 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
             if (e.key === "/") {
                 e.preventDefault()
                 searchRef.current?.focus()
-            } else if (e.key === "c") {
-                e.preventDefault()
-                router.push("/pedidos/nuevo")
             }
         }
         window.addEventListener("keydown", onKey)

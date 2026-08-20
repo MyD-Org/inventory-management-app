@@ -8,6 +8,7 @@
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import { sql } from '@/lib/database';
+import { getCostedProducts } from '@/lib/costed-products';
 import {
     createOrder,
     getSpecs,
@@ -401,4 +402,14 @@ export async function searchCustomers(q: string) {
         console.error('Error en searchCustomers:', error);
         return [];
     }
+}
+
+// Opciones para el modal de alta. Se piden al abrirlo, no en cada carga de
+// página: el modal vive en el layout y no siempre se usa.
+export async function getNewOrderOptions() {
+    const session = await auth();
+    if (!session?.user) return { specs: {}, products: [] };
+
+    const [specs, costed] = await Promise.all([getSpecs(), getCostedProducts()]);
+    return { specs, products: costed.map((p) => p.name) };
 }
