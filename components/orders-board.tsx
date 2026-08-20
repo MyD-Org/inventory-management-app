@@ -1,14 +1,13 @@
 "use client"
 
-// Tablero kanban de pedidos. Drag & drop con la HTML5 Drag and Drop API nativa:
-// no vale sumar una dependencia para esto, y funciona con mouse. En touch no hay
-// arrastre, por eso cada tarjeta tiene además un desplegable de estado.
+// Tablero kanban de pedidos. El estado se cambia ARRASTRANDO la tarjeta de una
+// columna a otra, y solo así: el selector vive en el detalle del pedido.
+// Drag & drop con la HTML5 Drag and Drop API nativa, sin dependencias.
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertTriangle, CalendarClock } from "lucide-react"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
@@ -62,7 +61,9 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
     }
 
     return (
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        // min-h-0 deja que el flex hijo se encoja en vez de estirar la página;
+        // scrollbar-hide oculta la barra horizontal sin desactivar el scroll.
+        <div className="flex-1 min-h-0 flex gap-4 overflow-x-auto scrollbar-hide pb-2">
             {BOARD_STATUSES.map((status) => {
                 const column = cards.filter((c) => statusOf(c) === status)
                 return (
@@ -79,16 +80,16 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                             if (dragging !== null) move(dragging, status)
                             setDragging(null)
                         }}
-                        className={`w-72 shrink-0 rounded-lg border bg-muted/30 p-3 transition-colors ${
+                        className={`w-72 shrink-0 h-full flex flex-col rounded-lg border bg-muted/30 p-3 transition-colors ${
                             over === status ? "border-primary bg-primary/5" : ""
                         }`}
                     >
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center justify-between mb-3 shrink-0">
                             <h2 className="text-sm font-semibold">{STATUS_LABELS[status]}</h2>
                             <span className="text-xs text-muted-foreground tabular-nums">{column.length}</span>
                         </div>
 
-                        <div className="space-y-2 min-h-[60px]">
+                        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide space-y-2">
                             {column.map((card) => (
                                 <div
                                     key={card.id}
@@ -134,22 +135,6 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                         </div>
                                     )}
 
-                                    {/* Alternativa al arrastre, para touch */}
-                                    <Select
-                                        value={statusOf(card)}
-                                        onValueChange={(v) => move(card.id, v as OrderStatus)}
-                                    >
-                                        <SelectTrigger className="h-7 text-xs">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {BOARD_STATUSES.map((s) => (
-                                                <SelectItem key={s} value={s} className="text-xs">
-                                                    {STATUS_LABELS[s]}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
                                 </div>
                             ))}
 

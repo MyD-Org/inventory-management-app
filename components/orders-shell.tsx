@@ -29,8 +29,8 @@ export function OrdersShell({
     const isAdmin = user?.role === "admin"
 
     return (
-        <div className="min-h-screen bg-background flex flex-col">
-            <header className="border-b sticky top-0 bg-background z-10">
+        <div className="h-dvh bg-background flex flex-col overflow-hidden">
+            <header className="border-b bg-background z-10 shrink-0">
                 <div className="container mx-auto px-4">
                     <div className="flex items-center justify-between h-14 gap-4">
                         <div className="flex items-center gap-2 min-w-0">
@@ -53,7 +53,7 @@ export function OrdersShell({
                         </div>
                     </div>
 
-                    <nav className="flex gap-1 -mb-px overflow-x-auto">
+                    <nav className="flex gap-1 -mb-px overflow-x-auto scrollbar-hide">
                         {NAV.filter((n) => !n.adminOnly || isAdmin).map((item) => {
                             const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
                             const Icon = item.icon
@@ -76,7 +76,7 @@ export function OrdersShell({
                 </div>
             </header>
 
-            <main className="flex-1">{children}</main>
+            <main className="flex-1 min-h-0 overflow-y-auto">{children}</main>
         </div>
     )
 }

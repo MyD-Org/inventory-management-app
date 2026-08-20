@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { AlertTriangle, CalendarClock, ExternalLink, PackageX } from "lucide-react"
 import { PrintBar } from "@/components/print-button"
+import { OrderStatusSelect } from "@/components/order-status-select"
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +37,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     </p>
                 </div>
                 <div className="text-right space-y-1">
-                    <Badge>{STATUS_LABELS[order.status]}</Badge>
+                    <div className="no-print"><OrderStatusSelect id={order.id} status={order.status} /></div>
+                    <div className="hidden print:block"><Badge>{STATUS_LABELS[order.status]}</Badge></div>
                     {order.priority === "alta" && (
                         <div><Badge variant="destructive">Urgente</Badge></div>
                     )}

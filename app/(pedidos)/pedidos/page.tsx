@@ -37,8 +37,8 @@ export default async function OrdersBoardPage() {
     }))
 
     return (
-        <div className="container mx-auto px-4 py-6">
-            <div className="mb-6">
+        <div className="h-full flex flex-col container mx-auto px-4 py-6">
+            <div className="mb-6 shrink-0">
                 <h1 className="text-2xl font-bold">Tablero</h1>
                 <p className="text-sm text-muted-foreground">
                     Arrastrá una tarjeta para cambiarle el estado

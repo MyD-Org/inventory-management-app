@@ -1,6 +1,7 @@
 "use client"
 
-// Lista de pedidos con filtro por cliente y cambio de estado en línea.
+// Lista de pedidos con filtro por cliente. El estado se muestra de solo lectura:
+// se cambia arrastrando en el tablero, o con el selector del detalle.
 // Sin importes: el módulo de pedidos no maneja plata (ver lib/orders.ts).
 
 import { useState } from "react"
@@ -10,12 +11,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Trash2, ExternalLink, AlertTriangle, Search } from "lucide-react"
-import { deleteOrder, updateOrderStatus } from "@/lib/order-actions"
+import { deleteOrder } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { ORDER_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
+import { STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
 
 export interface OrderRow {
     id: number
@@ -53,15 +53,6 @@ export function OrdersTable({
         e.preventDefault()
         const q = filter.trim()
         router.push(q ? `/pedidos/lista?cliente=${encodeURIComponent(q)}` : "/pedidos/lista")
-    }
-
-    async function changeStatus(id: number, status: string) {
-        const result = await updateOrderStatus(id, status)
-        if (result.error) toast.error("Error", { description: result.error })
-        else {
-            toast.success("Estado actualizado")
-            router.refresh()
-        }
     }
 
     async function doDelete() {
@@ -139,18 +130,9 @@ export function OrdersTable({
                                             : "—"}
                                     </TableCell>
                                     <TableCell>
-                                        <Select value={o.status} onValueChange={(v) => changeStatus(o.id, v)}>
-                                            <SelectTrigger className="w-[170px]">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {ORDER_STATUSES.map((s) => (
-                                                    <SelectItem key={s} value={s}>
-                                                        {STATUS_LABELS[s]}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <Badge variant={o.status === "cancelado" ? "destructive" : "secondary"}>
+                                            {STATUS_LABELS[o.status]}
+                                        </Badge>
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center justify-end gap-1">
