@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
-import { AlertTriangle, CalendarClock, Search, PackageX } from "lucide-react"
+import { CalendarClock, Search, PackageX } from "lucide-react"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import { BOARD_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
@@ -49,43 +49,10 @@ export function isOverdue(d: string | null, status: string): boolean {
     return eta < today
 }
 
-function FilterChip({
-    active,
-    onClick,
-    icon: Icon,
-    children,
-    count,
-}: {
-    active: boolean
-    onClick: () => void
-    icon: typeof AlertTriangle
-    children: React.ReactNode
-    count: number
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            disabled={count === 0 && !active}
-            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-40 ${
-                active
-                    ? "border-foreground/30 bg-foreground/10 text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
-        >
-            <Icon className="h-3.5 w-3.5" />
-            {children}
-            <span className="tabular-nums opacity-60">{count}</span>
-        </button>
-    )
-}
-
 export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
     const router = useRouter()
     const { toast } = useToast()
     const [query, setQuery] = useState("")
-    const [sinReceta, setSinReceta] = useState(false)
-    const [atrasados, setAtrasados] = useState(false)
     const [dragging, setDragging] = useState<number | null>(null)
     const [over, setOver] = useState<string | null>(null)
     // Estado optimista: la tarjeta salta de columna al soltar, sin esperar al server.
@@ -115,13 +82,8 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
 
     const statusOf = (c: BoardCard) => moved[c.id] ?? c.status
 
-    const nSinReceta = cards.filter((c) => c.needs_review).length
-    const nAtrasados = cards.filter((c) => isOverdue(c.delivery_date_estimate, statusOf(c))).length
-
     const q = query.trim().toLowerCase()
     const visible = cards.filter((c) => {
-        if (sinReceta && !c.needs_review) return false
-        if (atrasados && !isOverdue(c.delivery_date_estimate, statusOf(c))) return false
         if (!q) return true
         return (
             String(c.order_number).includes(q) ||
@@ -164,22 +126,6 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                     </kbd>
                 </div>
 
-                <FilterChip
-                    active={sinReceta}
-                    onClick={() => setSinReceta((v) => !v)}
-                    icon={PackageX}
-                    count={nSinReceta}
-                >
-                    Sin receta
-                </FilterChip>
-                <FilterChip
-                    active={atrasados}
-                    onClick={() => setAtrasados((v) => !v)}
-                    icon={AlertTriangle}
-                    count={nAtrasados}
-                >
-                    Atrasados
-                </FilterChip>
             </div>
 
             <div className="flex-1 min-h-0 flex gap-5 overflow-x-auto scrollbar-hide pb-2">
