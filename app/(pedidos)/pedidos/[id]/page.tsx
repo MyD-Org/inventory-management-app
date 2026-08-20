@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { getSpecs, missingMaterials, readOrder } from "@/lib/orders"
 import { STATUS_LABELS } from "@/lib/order-statuses"
 import { AlertTriangle, ChevronRight, ExternalLink, MessageSquare, PackageX, Phone } from "lucide-react"
-import { PrintBar } from "@/components/print-button"
+import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
 import { PriorityIcon } from "@/components/order-glyphs"
 
@@ -49,6 +49,17 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     const unanswered = (specs: Record<string, string>) =>
         Object.entries(vocab).filter(([k, f]) => !f.free_text && !specs[k])
 
+    // Lo primero que necesita saber el taller es QUÉ fabricar, así que ese es el
+    // titular. Con muchas líneas no entra todo: mostramos las dos primeras y
+    // contamos el resto.
+    const partes = order.items.map((i) => `${i.quantity} × ${i.product}`)
+    const titulo =
+        partes.length === 0
+            ? `Pedido #${order.order_number}`
+            : partes.length <= 2
+              ? partes.join("  +  ")
+              : `${partes.slice(0, 2).join("  +  ")}  + ${partes.length - 2} más`
+
     return (
         <div className="container mx-auto px-4 py-5 max-w-6xl">
             <div className="flex items-center justify-between gap-4 mb-5 no-print">
@@ -59,15 +70,18 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     <ChevronRight className="h-3.5 w-3.5 shrink-0" />
                     <span className="text-foreground tabular-nums">#{order.order_number}</span>
                 </div>
-                <PrintBar backHref="/pedidos" />
+                <PrintIconButton />
             </div>
 
             <div className="grid gap-8 lg:grid-cols-[1fr_260px] items-start">
                 {/* ---------- Contenido ---------- */}
                 <div className="min-w-0 space-y-5">
-                    <h1 className="text-xl font-semibold">
-                        {order.customer_name ?? order.customer_external_id}
-                    </h1>
+                    <div>
+                        <h1 className="text-2xl font-semibold leading-tight">{titulo}</h1>
+                        <p className="text-[13px] text-muted-foreground mt-1">
+                            para {order.customer_name ?? order.customer_external_id}
+                        </p>
+                    </div>
 
                     {order.source_conversation ? (
                         <a
@@ -122,18 +136,22 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
                     <div className="space-y-4">
                         <h2 className="text-[13px] font-medium text-muted-foreground">
-                            A fabricar
+                            Qué hay que fabricar
                         </h2>
 
                         {order.items.map((item) => {
                             const faltan = unanswered(item.specs)
                             return (
                                 <div key={item.id} className="rounded-md border">
-                                    <div className="px-3 py-2.5 border-b">
-                                        <div className="text-[13px] font-medium">
-                                            {item.quantity} × {item.product}
+                                    <div className="px-3 py-3 border-b">
+                                        <div className="flex items-baseline gap-2.5">
+                                            <span className="text-2xl font-semibold tabular-nums leading-none">
+                                                {item.quantity}
+                                            </span>
+                                            <span className="text-[13px] text-muted-foreground">unidades de</span>
+                                            <span className="text-[15px] font-medium">{item.product}</span>
                                         </div>
-                                        <div className="flex gap-1.5 flex-wrap mt-2">
+                                        <div className="flex gap-1.5 flex-wrap mt-2.5">
                                             {Object.entries(item.specs)
                                                 .filter(([, v]) => v !== "")
                                                 .map(([k, v]) => (
@@ -175,6 +193,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                                         </div>
                                     ) : (
                                         <div className="divide-y">
+                                            <div className="px-3 py-1.5 text-[12px] text-muted-foreground bg-muted/30">
+                                                Materiales a preparar
+                                            </div>
                                             {item.materials.map((m, idx) => (
                                                 <div
                                                     key={idx}
@@ -182,7 +203,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                                                 >
                                                     <span className="flex-1 min-w-0 truncate">{m.label}</span>
                                                     <span className="text-[12px] text-muted-foreground tabular-nums">
-                                                        {m.qty_per_unit} c/u
+                                                        {m.qty_per_unit} por unidad
                                                     </span>
                                                     <span className="font-medium tabular-nums w-14 text-right">
                                                         {m.qty_total}
