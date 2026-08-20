@@ -22,7 +22,6 @@ import {
   LayoutDashboard,
   BellRing,
   ClipboardList,
-  ListChecks,
   type LucideIcon,
 } from "lucide-react"
 import type { FlagKey } from "@/lib/feature-flags"
@@ -107,7 +106,6 @@ const sections: NavSection[] = [
   {
     title: "Administración",
     items: [
-      { label: "Opciones de Pedido", href: "/settings/specs", icon: ListChecks, adminOnly: true },
       { label: "Configuración", href: "/settings", icon: Settings, activePrefixes: ["/settings/"] },
     ],
   },

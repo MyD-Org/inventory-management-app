@@ -1,8 +1,8 @@
 "use client"
 
-// Carga manual de un pedido. Los desplegables de specs salen del MISMO vocabulario
-// que consume el bot, así una persona no puede cargar un valor que el bot no puede
-// ofrecer (ni al revés).
+// Alta manual de un pedido. Los desplegables de specs salen del MISMO vocabulario
+// que consume el bot, así una persona no puede cargar un valor que el bot no
+// puede ofrecer (ni al revés). Sin precios: este módulo no maneja plata.
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
@@ -18,7 +18,7 @@ import type { SpecField } from "@/lib/orders"
 
 interface Line {
     product: string
-    qty: number
+    quantity: number
     specs: Record<string, string>
 }
 
@@ -29,7 +29,7 @@ export function OrderEditor({
     products,
 }: {
     specs: Record<string, SpecField>
-    products: { name: string; salePrice: number }[]
+    products: string[]
 }) {
     const router = useRouter()
     const { toast } = useToast()
@@ -37,8 +37,11 @@ export function OrderEditor({
     const [externalId, setExternalId] = useState("")
     const [customerId, setCustomerId] = useState("")
     const [customerName, setCustomerName] = useState("")
+    const [customerPhone, setCustomerPhone] = useState("")
+    const [priority, setPriority] = useState("normal")
+    const [eta, setEta] = useState("")
     const [notes, setNotes] = useState("")
-    const [lines, setLines] = useState<Line[]>([{ product: "", qty: 1, specs: {} }])
+    const [lines, setLines] = useState<Line[]>([{ product: "", quantity: 1, specs: {} }])
 
     function updateLine(idx: number, patch: Partial<Line>) {
         setLines((ls) => ls.map((l, i) => (i === idx ? { ...l, ...patch } : l)))
@@ -49,8 +52,7 @@ export function OrderEditor({
             ls.map((l, i) => {
                 if (i !== idx) return l
                 const next = { ...l.specs }
-                // "Sin especificar" saca la clave: no mandamos specs vacías.
-                if (value === SIN_ESPECIFICAR) delete next[key]
+                if (value === SIN_ESPECIFICAR || value === "") delete next[key]
                 else next[key] = value
                 return { ...l, specs: next }
             }),
@@ -61,10 +63,16 @@ export function OrderEditor({
         setSaving(true)
         const result = await createOrderManual({
             external_id: externalId,
-            customer_external_id: customerId,
-            customer_name: customerName || null,
+            origin: "manual",
+            customer: {
+                external_id: customerId,
+                name: customerName || null,
+                phone: customerPhone || null,
+            },
+            items: lines.map((l) => ({ product: l.product, quantity: l.quantity, specs: l.specs })),
+            delivery_date_estimate: eta || null,
+            priority,
             notes: notes || null,
-            items: lines.map((l) => ({ product: l.product, qty: l.qty, specs: l.specs })),
         })
         setSaving(false)
 
@@ -72,13 +80,9 @@ export function OrderEditor({
             toast.error("No se pudo guardar", { description: result.error })
             return
         }
-        if (result.created === false) {
-            toast.warning?.("Ese pedido ya existía", {
-                description: "El identificador ya estaba usado; te llevo al pedido original.",
-            }) ?? toast.success("Ese pedido ya existía")
-        } else {
-            toast.success("Pedido creado")
-        }
+        toast.success(
+            result.created === false ? "Ese pedido ya existía, te llevo al original" : "Pedido creado",
+        )
         router.push(`/pedidos/${result.id}`)
     }
 
@@ -92,11 +96,10 @@ export function OrderEditor({
                             id="external_id"
                             value={externalId}
                             onChange={(e) => setExternalId(e.target.value)}
-                            placeholder="ej: MANUAL-0001"
+                            placeholder="ej: MOSTRADOR-0001"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                            Tiene que ser único. Si repetís uno existente se abre el pedido original en vez
-                            de crear un duplicado.
+                            Único. Si repetís uno existente se abre el pedido original en vez de duplicarlo.
                         </p>
                     </div>
                     <div>
@@ -105,7 +108,7 @@ export function OrderEditor({
                             id="customer_id"
                             value={customerId}
                             onChange={(e) => setCustomerId(e.target.value)}
-                            placeholder="ej: cli-77"
+                            placeholder="ej: alegra:1234"
                         />
                     </div>
                     <div>
@@ -117,9 +120,35 @@ export function OrderEditor({
                             placeholder="opcional"
                         />
                     </div>
+                    <div>
+                        <Label htmlFor="customer_phone">Teléfono</Label>
+                        <Input
+                            id="customer_phone"
+                            value={customerPhone}
+                            onChange={(e) => setCustomerPhone(e.target.value)}
+                            placeholder="opcional"
+                        />
+                    </div>
+                    <div>
+                        <Label htmlFor="eta">Entrega estimada</Label>
+                        <Input id="eta" type="date" value={eta} onChange={(e) => setEta(e.target.value)} />
+                    </div>
+                    <div>
+                        <Label>Prioridad</Label>
+                        <Select value={priority} onValueChange={setPriority}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="baja">Baja</SelectItem>
+                                <SelectItem value="normal">Normal</SelectItem>
+                                <SelectItem value="alta">Alta (urgente)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
                 <div>
-                    <Label htmlFor="notes">Notas</Label>
+                    <Label htmlFor="notes">Notas para el taller</Label>
                     <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
                 </div>
             </div>
@@ -148,8 +177,8 @@ export function OrderEditor({
                                 </SelectTrigger>
                                 <SelectContent>
                                     {products.map((p) => (
-                                        <SelectItem key={p.name} value={p.name}>
-                                            {p.name}
+                                        <SelectItem key={p} value={p}>
+                                            {p}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -166,34 +195,45 @@ export function OrderEditor({
                                 id={`qty-${idx}`}
                                 type="number"
                                 min={1}
-                                value={line.qty}
-                                onChange={(e) => updateLine(idx, { qty: Number(e.target.value) })}
+                                value={line.quantity}
+                                onChange={(e) => updateLine(idx, { quantity: Number(e.target.value) })}
                             />
                         </div>
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
-                        {Object.entries(specs).map(([key, field]) => (
-                            <div key={key}>
-                                <Label>{field.label}</Label>
-                                <Select
-                                    value={line.specs[key] ?? SIN_ESPECIFICAR}
-                                    onValueChange={(v) => setSpec(idx, key, v)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value={SIN_ESPECIFICAR}>Sin especificar</SelectItem>
-                                        {field.options.map((o) => (
-                                            <SelectItem key={o} value={o}>
-                                                {o}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        ))}
+                        {Object.entries(specs).map(([key, field]) =>
+                            field.free_text ? (
+                                <div key={key} className="sm:col-span-2">
+                                    <Label>{field.label}</Label>
+                                    <Input
+                                        value={line.specs[key] ?? ""}
+                                        onChange={(e) => setSpec(idx, key, e.target.value)}
+                                        placeholder="opcional"
+                                    />
+                                </div>
+                            ) : (
+                                <div key={key}>
+                                    <Label>{field.label}</Label>
+                                    <Select
+                                        value={line.specs[key] ?? SIN_ESPECIFICAR}
+                                        onValueChange={(v) => setSpec(idx, key, v)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value={SIN_ESPECIFICAR}>Sin especificar</SelectItem>
+                                            {field.options.map((o) => (
+                                                <SelectItem key={o} value={o}>
+                                                    {o}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            ),
+                        )}
                     </div>
                 </div>
             ))}
@@ -201,7 +241,7 @@ export function OrderEditor({
             <div className="flex justify-between">
                 <Button
                     variant="outline"
-                    onClick={() => setLines((ls) => [...ls, { product: "", qty: 1, specs: {} }])}
+                    onClick={() => setLines((ls) => [...ls, { product: "", quantity: 1, specs: {} }])}
                 >
                     <Plus className="mr-2 h-4 w-4" />
                     Agregar línea

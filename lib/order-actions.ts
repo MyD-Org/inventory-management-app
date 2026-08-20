@@ -20,6 +20,7 @@ export async function createOrderManual(payload: OrderPayload) {
 
         const { created, order } = await createOrder(payload);
         revalidatePath('/pedidos');
+        revalidatePath('/pedidos/lista');
         // No es un error: el external_id ya existía y devolvemos el pedido original.
         return { id: order?.id, created };
     } catch (error) {
@@ -36,6 +37,7 @@ export async function updateOrderStatus(id: number, status: string) {
     try {
         await sql`UPDATE orders SET status = ${status} WHERE id = ${id}`;
         revalidatePath('/pedidos');
+        revalidatePath('/pedidos/lista');
         revalidatePath(`/pedidos/${id}`);
         return { ok: true };
     } catch (error) {
@@ -52,6 +54,7 @@ export async function deleteOrder(id: number) {
         // Las líneas y el BOM caen por CASCADE.
         await sql`DELETE FROM orders WHERE id = ${id}`;
         revalidatePath('/pedidos');
+        revalidatePath('/pedidos/lista');
         return { ok: true };
     } catch (error) {
         console.error('Error en deleteOrder:', error);
@@ -63,7 +66,7 @@ export async function deleteOrder(id: number) {
 // Es el punto del módulo: el equipo de inventario agrega opciones acá y el bot
 // las descubre solo por GET /api/specs, sin tocar código ni el CRM.
 
-export async function createSpecField(key: string, label: string) {
+export async function createSpecField(key: string, label: string, freeText = false) {
     const session = await auth();
     if (session?.user?.role !== 'admin') return { error: 'Solo un admin puede editar el vocabulario' };
 
@@ -76,8 +79,8 @@ export async function createSpecField(key: string, label: string) {
         if (exists) return { error: `Ya existe un campo con la clave "${cleanKey}"` };
 
         const [{ next }] = await sql`SELECT COALESCE(MAX(position), 0) + 1 AS next FROM spec_fields`;
-        await sql`INSERT INTO spec_fields (key, label, position) VALUES (${cleanKey}, ${label.trim()}, ${next})`;
-        revalidatePath('/settings/specs');
+        await sql`INSERT INTO spec_fields (key, label, free_text, position) VALUES (${cleanKey}, ${label.trim()}, ${freeText}, ${next})`;
+        revalidatePath('/pedidos/opciones');
         return { ok: true, key: cleanKey };
     } catch (error) {
         console.error('Error en createSpecField:', error);
@@ -100,7 +103,7 @@ export async function createSpecOption(fieldKey: string, value: string, label: s
         if (exists) {
             if (exists.active) return { error: `"${cleanValue}" ya está en la lista` };
             await sql`UPDATE spec_options SET active = TRUE WHERE id = ${exists.id}`;
-            revalidatePath('/settings/specs');
+            revalidatePath('/pedidos/opciones');
             return { ok: true, reactivated: true };
         }
 
@@ -111,7 +114,7 @@ export async function createSpecOption(fieldKey: string, value: string, label: s
             INSERT INTO spec_options (field_key, value, label, position)
             VALUES (${fieldKey}, ${cleanValue}, ${label.trim() || cleanValue}, ${next})
         `;
-        revalidatePath('/settings/specs');
+        revalidatePath('/pedidos/opciones');
         return { ok: true };
     } catch (error) {
         console.error('Error en createSpecOption:', error);
@@ -127,7 +130,7 @@ export async function toggleSpecOption(id: number, active: boolean) {
 
     try {
         await sql`UPDATE spec_options SET active = ${active} WHERE id = ${id}`;
-        revalidatePath('/settings/specs');
+        revalidatePath('/pedidos/opciones');
         return { ok: true };
     } catch (error) {
         console.error('Error en toggleSpecOption:', error);
@@ -141,7 +144,7 @@ export async function toggleSpecField(key: string, active: boolean) {
 
     try {
         await sql`UPDATE spec_fields SET active = ${active} WHERE key = ${key}`;
-        revalidatePath('/settings/specs');
+        revalidatePath('/pedidos/opciones');
         return { ok: true };
     } catch (error) {
         console.error('Error en toggleSpecField:', error);

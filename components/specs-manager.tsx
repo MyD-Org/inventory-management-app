@@ -25,6 +25,7 @@ export interface SpecOptionRow {
 export interface SpecFieldRow {
     key: string
     label: string
+    free_text: boolean
     active: boolean
     options: SpecOptionRow[]
 }
@@ -112,6 +113,9 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                         <div>
                             <h2 className="font-semibold">{field.label}</h2>
                             <code className="text-xs text-muted-foreground">{field.key}</code>
+                            {field.free_text && (
+                                <Badge variant="outline" className="ml-2">Texto libre</Badge>
+                            )}
                         </div>
                         <Button
                             variant="ghost"
@@ -132,6 +136,12 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                         </Button>
                     </div>
 
+                    {field.free_text ? (
+                        <p className="text-sm text-muted-foreground">
+                            El asistente escribe acá lo que le pida el cliente. No tiene lista de opciones.
+                        </p>
+                    ) : (
+                    <>
                     <div className="flex flex-wrap gap-2 mb-3">
                         {field.options.length === 0 && (
                             <p className="text-sm text-muted-foreground">Sin opciones todavía.</p>
@@ -175,6 +185,8 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                             <Plus className="h-4 w-4" />
                         </Button>
                     </div>
+                    </>
+                    )}
                 </div>
             ))}
         </div>

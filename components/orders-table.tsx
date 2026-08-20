@@ -1,10 +1,9 @@
 "use client"
 
-// Tabla de pedidos con filtro por cliente y cambio de estado en línea.
-// El estado que se guarda es el INTERNO del tablero; el cliente ve la traducción
-// que devuelve GET /api/pedidos (customer_status en lib/orders.ts).
+// Lista de pedidos con filtro por cliente y cambio de estado en línea.
+// Sin importes: el módulo de pedidos no maneja plata (ver lib/orders.ts).
 
-import { useState, useTransition } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -16,30 +15,23 @@ import { Trash2, ExternalLink, AlertTriangle, Search } from "lucide-react"
 import { deleteOrder, updateOrderStatus } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useToast } from "@/hooks/use-toast"
+import { ORDER_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/orders"
 
 export interface OrderRow {
     id: number
+    order_number: number
     external_id: string
     customer_external_id: string
     customer_name: string | null
-    status: string
+    status: OrderStatus
+    origin: string
+    priority: string
+    delivery_date_estimate: string | null
     source_conversation: string | null
     created_at: string
     line_count: number
-    total: number
+    units: number
     needs_review: boolean
-}
-
-const STATUS_LABELS: Record<string, string> = {
-    recibido: "Recibido",
-    en_produccion: "En producción",
-    listo: "Listo",
-    entregado: "Entregado",
-    cancelado: "Cancelado",
-}
-
-function formatArs(n: number): string {
-    return `$${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`
 }
 
 export function OrdersTable({
@@ -56,21 +48,19 @@ export function OrdersTable({
     const [filter, setFilter] = useState(initialFilter)
     const [pendingId, setPendingId] = useState<number | null>(null)
     const [deleting, setDeleting] = useState(false)
-    const [isPending, startTransition] = useTransition()
 
     function applyFilter(e: React.FormEvent) {
         e.preventDefault()
         const q = filter.trim()
-        router.push(q ? `/pedidos?cliente=${encodeURIComponent(q)}` : "/pedidos")
+        router.push(q ? `/pedidos/lista?cliente=${encodeURIComponent(q)}` : "/pedidos/lista")
     }
 
     async function changeStatus(id: number, status: string) {
         const result = await updateOrderStatus(id, status)
-        if (result.error) {
-            toast.error("Error", { description: result.error })
-        } else {
+        if (result.error) toast.error("Error", { description: result.error })
+        else {
             toast.success("Estado actualizado")
-            startTransition(() => router.refresh())
+            router.refresh()
         }
     }
 
@@ -92,7 +82,7 @@ export function OrdersTable({
         <div className="space-y-4">
             <form onSubmit={applyFilter} className="flex gap-2 max-w-md">
                 <Input
-                    placeholder="Filtrar por cliente (ID externo o nombre)"
+                    placeholder="Buscar por cliente (ID externo o nombre)"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                 />
@@ -112,8 +102,8 @@ export function OrdersTable({
                             <TableRow>
                                 <TableHead>Pedido</TableHead>
                                 <TableHead>Cliente</TableHead>
-                                <TableHead className="text-right">Líneas</TableHead>
-                                <TableHead className="text-right">Total</TableHead>
+                                <TableHead className="text-right">Unidades</TableHead>
+                                <TableHead>Entrega</TableHead>
                                 <TableHead>Estado</TableHead>
                                 <TableHead className="w-[100px]"></TableHead>
                             </TableRow>
@@ -123,33 +113,40 @@ export function OrdersTable({
                                 <TableRow key={o.id}>
                                     <TableCell>
                                         <Link href={`/pedidos/${o.id}`} className="font-medium hover:underline">
-                                            {o.external_id}
+                                            #{o.order_number}
                                         </Link>
+                                        {o.priority === "alta" && (
+                                            <Badge variant="destructive" className="ml-2">Urgente</Badge>
+                                        )}
                                         {o.needs_review && (
                                             <Badge variant="destructive" className="ml-2 gap-1">
                                                 <AlertTriangle className="h-3 w-3" />
-                                                Revisar
+                                                Sin receta
                                             </Badge>
                                         )}
                                         <div className="text-xs text-muted-foreground">
-                                            {new Date(o.created_at).toLocaleDateString("es-AR")}
+                                            {o.origin} · {new Date(o.created_at).toLocaleDateString("es-AR")}
                                         </div>
                                     </TableCell>
                                     <TableCell>
                                         <div>{o.customer_name ?? "—"}</div>
                                         <div className="text-xs text-muted-foreground">{o.customer_external_id}</div>
                                     </TableCell>
-                                    <TableCell className="text-right">{o.line_count}</TableCell>
-                                    <TableCell className="text-right">{formatArs(o.total)}</TableCell>
+                                    <TableCell className="text-right tabular-nums">{o.units}</TableCell>
+                                    <TableCell className="text-sm">
+                                        {o.delivery_date_estimate
+                                            ? new Date(o.delivery_date_estimate).toLocaleDateString("es-AR")
+                                            : "—"}
+                                    </TableCell>
                                     <TableCell>
                                         <Select value={o.status} onValueChange={(v) => changeStatus(o.id, v)}>
-                                            <SelectTrigger className="w-[150px]">
+                                            <SelectTrigger className="w-[170px]">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                                                    <SelectItem key={value} value={value}>
-                                                        {label}
+                                                {ORDER_STATUSES.map((s) => (
+                                                    <SelectItem key={s} value={s}>
+                                                        {STATUS_LABELS[s]}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
