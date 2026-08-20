@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
-import { Plus, Trash2, X } from "lucide-react"
+import { Loader2, Plus, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { addOrderItem, deleteOrderItem, updateOrderItem } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -40,6 +40,20 @@ export function OrderItemsEditor({
     const router = useRouter()
     const { toast } = useToast()
     const [editing, setEditing] = useState<number | null>(null)
+    // Borrador: lo que se toca queda acá hasta apretar Guardar. Antes cada
+    // cambio pegaba solo contra el server y no se entendía qué había pasado.
+    const [draft, setDraft] = useState<{ quantity: number; specs: Record<string, string> } | null>(null)
+    const [savingLine, setSavingLine] = useState(false)
+
+    function abrir(item: Item) {
+        setEditing(item.id)
+        setDraft({ quantity: item.quantity, specs: { ...item.specs } })
+    }
+
+    function cerrar() {
+        setEditing(null)
+        setDraft(null)
+    }
     const [pendingDelete, setPendingDelete] = useState<number | null>(null)
     const [deleting, setDeleting] = useState(false)
     const [adding, setAdding] = useState(false)
@@ -77,10 +91,10 @@ export function OrderItemsEditor({
                             <div
                                 key={item.id}
                                 className="group flex items-baseline gap-3 px-4 py-2.5 min-w-0 hover:bg-muted/40 cursor-pointer"
-                                onClick={() => setEditing(item.id)}
+                                onClick={() => abrir(item)}
                                 role="button"
                                 tabIndex={0}
-                                onKeyDown={(e) => e.key === "Enter" && setEditing(item.id)}
+                                onKeyDown={(e) => e.key === "Enter" && abrir(item)}
                             >
                                 <span className="text-xl font-semibold tabular-nums w-10 shrink-0">
                                     {item.quantity}
@@ -110,23 +124,22 @@ export function OrderItemsEditor({
                         )
                     }
 
+                    const sucio =
+                        draft !== null &&
+                        (draft.quantity !== item.quantity ||
+                            JSON.stringify(draft.specs) !== JSON.stringify(item.specs))
+
                     return (
                         <div key={item.id} className="px-4 py-3 space-y-3 bg-muted/30">
                             <div className="flex items-center gap-3">
                                 <Input
                                     type="number"
                                     min={1}
-                                    defaultValue={item.quantity}
+                                    value={draft?.quantity ?? item.quantity}
                                     className="h-8 w-20 text-[14px]"
-                                    onBlur={(e) => {
-                                        const q = Number(e.target.value)
-                                        if (q !== item.quantity) {
-                                            run(
-                                                () => updateOrderItem(item.id, { quantity: q }),
-                                                `${item.product}: ${q} unidades`,
-                                            )
-                                        }
-                                    }}
+                                    onChange={(e) =>
+                                        setDraft((d) => (d ? { ...d, quantity: Number(e.target.value) } : d))
+                                    }
                                 />
                                 <span className="text-[15px] font-medium flex-1 min-w-0 truncate">
                                     {item.product}
@@ -140,63 +153,47 @@ export function OrderItemsEditor({
                                 >
                                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
                                 </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setEditing(null)}
-                                    title="Cerrar (los cambios ya están guardados)"
-                                >
-                                    Listo
-                                </Button>
                             </div>
-
-                            <p className="text-[11px] text-muted-foreground">
-                                Los cambios se guardan solos.
-                            </p>
 
                             <div className="grid gap-2 sm:grid-cols-2">
                                 {Object.entries(vocab).map(([key, field]) =>
                                     field.free_text ? (
                                         <Input
                                             key={key}
-                                            defaultValue={item.specs[key] ?? ""}
+                                            value={draft?.specs[key] ?? ""}
                                             placeholder={field.label}
                                             className="h-8 text-[13px]"
-                                            onBlur={(e) => {
-                                                const next = { ...item.specs }
-                                                if (e.target.value) next[key] = e.target.value
-                                                else delete next[key]
-                                                if ((item.specs[key] ?? "") !== e.target.value) {
-                                                    run(
-                                                        () => updateOrderItem(item.id, { specs: next }),
-                                                        `${field.label} guardado`,
-                                                    )
-                                                }
-                                            }}
+                                            onChange={(e) =>
+                                                setDraft((d) => {
+                                                    if (!d) return d
+                                                    const specs = { ...d.specs }
+                                                    if (e.target.value) specs[key] = e.target.value
+                                                    else delete specs[key]
+                                                    return { ...d, specs }
+                                                })
+                                            }
                                         />
                                     ) : (
                                         <Select
                                             key={key}
-                                            value={item.specs[key] ?? SIN}
-                                            onValueChange={(v) => {
-                                                const next = { ...item.specs }
-                                                if (v === SIN) delete next[key]
-                                                else next[key] = v
-                                                run(
-                                                    () => updateOrderItem(item.id, { specs: next }),
-                                                    v === SIN
-                                                        ? `${field.label} sin especificar`
-                                                        : `${field.label}: ${field.labels[v] ?? v}`,
-                                                )
-                                            }}
+                                            value={draft?.specs[key] ?? SIN}
+                                            onValueChange={(v) =>
+                                                setDraft((d) => {
+                                                    if (!d) return d
+                                                    const specs = { ...d.specs }
+                                                    if (v === SIN) delete specs[key]
+                                                    else specs[key] = v
+                                                    return { ...d, specs }
+                                                })
+                                            }
                                         >
                                             {/* La etiqueta del campo va acá una vez; las opciones
                                                 muestran solo el valor, sin repetirla. */}
                                             <SelectTrigger className="h-8 text-[13px]">
                                                 <span className="truncate">
                                                     <span className="text-muted-foreground">{field.label}</span>
-                                                    {item.specs[key] && (
-                                                        <>: {field.labels[item.specs[key]] ?? item.specs[key]}</>
+                                                    {draft?.specs[key] && (
+                                                        <>: {field.labels[draft.specs[key]] ?? draft.specs[key]}</>
                                                     )}
                                                 </span>
                                             </SelectTrigger>
@@ -213,6 +210,33 @@ export function OrderItemsEditor({
                                         </Select>
                                     ),
                                 )}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2">
+                                <Button variant="ghost" size="sm" onClick={cerrar} disabled={savingLine}>
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    disabled={!sucio || savingLine}
+                                    onClick={async () => {
+                                        if (!draft) return
+                                        setSavingLine(true)
+                                        const ok = await run(
+                                            () =>
+                                                updateOrderItem(item.id, {
+                                                    quantity: draft.quantity,
+                                                    specs: draft.specs,
+                                                }),
+                                            "Cambios guardados",
+                                        )
+                                        setSavingLine(false)
+                                        if (ok) cerrar()
+                                    }}
+                                >
+                                    {savingLine && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                                    Guardar
+                                </Button>
                             </div>
                         </div>
                     )
@@ -264,7 +288,7 @@ export function OrderItemsEditor({
                     await run(() => deleteOrderItem(pendingDelete), "Producto quitado")
                     setDeleting(false)
                     setPendingDelete(null)
-                    setEditing(null)
+                    cerrar()
                 }}
             />
         </>
