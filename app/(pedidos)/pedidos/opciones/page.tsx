@@ -1,6 +1,8 @@
+import Link from "next/link"
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
+import { ChevronRight } from "lucide-react"
 import { SpecsManager, type SpecFieldRow } from "@/components/specs-manager"
 import { CustomerStatusMap } from "@/components/customer-status-map"
 import { getCustomerStatusMap } from "@/lib/orders"
@@ -46,6 +48,13 @@ export default async function SpecsPage() {
 
     return (
         <div className="container mx-auto px-4 py-6 max-w-3xl">
+            <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground mb-4">
+                <Link href="/pedidos" className="hover:text-foreground">
+                    Pedidos
+                </Link>
+                <ChevronRight className="h-3.5 w-3.5" />
+                <span className="text-foreground">Opciones</span>
+            </div>
             <h1 className="text-2xl font-bold mb-1">Opciones de pedido</h1>
             <p className="text-sm text-muted-foreground mb-6">
                 El vocabulario que usa el asistente del CRM para tomar pedidos. Si una opción no está

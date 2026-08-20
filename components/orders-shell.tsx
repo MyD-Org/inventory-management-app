@@ -1,21 +1,19 @@
 "use client"
 
-// Shell del módulo de pedidos: navegación corta, pensada para el taller.
-// Deliberadamente NO muestra inventario, costos ni dashboards. El link "Sistema
-// de inventario" cruza al otro módulo para quien tenga que ver las dos cosas.
+// Shell del módulo de pedidos: barra única, pensada para el taller.
+// Deliberadamente NO muestra inventario, costos ni dashboards. El link
+// "Inventario" cruza al otro módulo para quien tenga que ver las dos cosas.
+//
+// Sin barra de pestañas: la única sección real es Pedidos (el interruptor
+// Tablero/Lista vive dentro de la página) y la configuración del vocabulario se
+// toca cada varios meses, así que va detrás de un engranaje, no en el camino.
 
 import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { NewOrderDialog } from "@/components/new-order-dialog"
-import { KanbanSquare, ListChecks, Plus, ArrowLeftRight, LogOut } from "lucide-react"
-
-const NAV = [
-    { label: "Pedidos", href: "/pedidos", icon: KanbanSquare, exact: true },
-    { label: "Opciones", href: "/pedidos/opciones", icon: ListChecks, adminOnly: true },
-]
+import { ArrowLeftRight, LogOut, Plus, Settings } from "lucide-react"
 
 export function OrdersShell({
     user,
@@ -24,7 +22,6 @@ export function OrdersShell({
     user: { name?: string | null; email?: string | null; role?: string }
     children: ReactNode
 }) {
-    const pathname = usePathname()
     const isAdmin = user?.role === "admin"
     const [creating, setCreating] = useState(false)
 
@@ -45,53 +42,45 @@ export function OrdersShell({
 
     return (
         <div className="h-dvh bg-background flex flex-col overflow-hidden">
-            <header className="border-b bg-background z-10 shrink-0">
-                <div className="container mx-auto px-4">
-                    <div className="flex items-center justify-between h-14 gap-4">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-semibold shrink-0">Pedidos</span>
-                            <span className="text-muted-foreground hidden sm:inline">·</span>
-                            <span className="text-sm text-muted-foreground truncate hidden sm:inline">
-                                Taller Avantec
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                            <Button size="sm" className="mr-1" onClick={() => setCreating(true)}>
-                                <Plus className="h-4 w-4 sm:mr-2" />
-                                <span className="hidden sm:inline">Nuevo pedido</span>
-                            </Button>
-                            <Link href="/" title="Ir al sistema de inventario">
-                                <Button variant="ghost" size="sm">
-                                    <ArrowLeftRight className="h-4 w-4 sm:mr-2" />
-                                    <span className="hidden sm:inline">Inventario</span>
+            <header className="border-b bg-background shrink-0">
+                <div className="container mx-auto px-4 flex items-center justify-between h-14 gap-4">
+                    <Link href="/pedidos" className="flex items-center gap-2 min-w-0">
+                        <span className="font-semibold shrink-0">Pedidos</span>
+                        <span className="text-muted-foreground hidden sm:inline">·</span>
+                        <span className="text-sm text-muted-foreground truncate hidden sm:inline">
+                            Taller Avantec
+                        </span>
+                    </Link>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                        <Button size="sm" className="mr-1" onClick={() => setCreating(true)}>
+                            <Plus className="h-4 w-4 sm:mr-2" />
+                            <span className="hidden sm:inline">Nuevo pedido</span>
+                        </Button>
+
+                        {isAdmin && (
+                            <Link href="/pedidos/opciones" title="Opciones de pedido">
+                                <Button variant="ghost" size="icon">
+                                    <Settings className="h-4 w-4" />
                                 </Button>
                             </Link>
-                            <Button variant="ghost" size="sm" onClick={() => signOut({ callbackUrl: "/login" })}>
-                                <LogOut className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    </div>
+                        )}
 
-                    <nav className="flex gap-1 -mb-px overflow-x-auto scrollbar-hide">
-                        {NAV.filter((n) => !n.adminOnly || isAdmin).map((item) => {
-                            const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
-                            const Icon = item.icon
-                            return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    className={`flex items-center gap-2 px-3 py-2 text-sm border-b-2 whitespace-nowrap transition-colors ${
-                                        active
-                                            ? "border-primary text-foreground font-medium"
-                                            : "border-transparent text-muted-foreground hover:text-foreground"
-                                    }`}
-                                >
-                                    <Icon className="h-4 w-4" />
-                                    {item.label}
-                                </Link>
-                            )
-                        })}
-                    </nav>
+                        <Link href="/" title="Ir al sistema de inventario">
+                            <Button variant="ghost" size="icon">
+                                <ArrowLeftRight className="h-4 w-4" />
+                            </Button>
+                        </Link>
+
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Cerrar sesión"
+                            onClick={() => signOut({ callbackUrl: "/login" })}
+                        >
+                            <LogOut className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </header>
 
