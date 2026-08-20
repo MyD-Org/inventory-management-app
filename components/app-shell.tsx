@@ -21,6 +21,8 @@ import {
   LogOut,
   LayoutDashboard,
   BellRing,
+  ClipboardList,
+  ListChecks,
   type LucideIcon,
 } from "lucide-react"
 import type { FlagKey } from "@/lib/feature-flags"
@@ -73,6 +75,7 @@ const sections: NavSection[] = [
   {
     title: "Operaciones",
     items: [
+      { label: "Pedidos", href: "/pedidos", icon: ClipboardList, activePrefixes: ["/pedidos/"] },
       { label: "Entrada de Stock", href: "/stock/entrada", icon: ArrowDownToLine, quickAction: "entrada" },
       { label: "Salida de Stock", href: "/stock/salida", icon: ArrowUpFromLine, quickAction: "salida" },
     ],
@@ -104,6 +107,7 @@ const sections: NavSection[] = [
   {
     title: "Administración",
     items: [
+      { label: "Opciones de Pedido", href: "/settings/specs", icon: ListChecks, adminOnly: true },
       { label: "Configuración", href: "/settings", icon: Settings, activePrefixes: ["/settings/"] },
     ],
   },

@@ -97,3 +97,177 @@ export async function resolveProduct(name: string): Promise<ResolvedProduct | nu
         unitPrice: Math.round(cost * (1 + marginPct / 100)),
     }
 }
+
+export interface OrderItemPayload {
+    product: string
+    qty: number
+    specs?: Record<string, unknown>
+}
+
+export interface OrderPayload {
+    external_id: string
+    customer_external_id: string
+    customer_name?: string | null
+    source_conversation?: string | null
+    notes?: string | null
+    items: OrderItemPayload[]
+}
+
+export interface OrderMaterial {
+    material_id: number | null
+    label: string
+    qty_per_unit: number
+    qty_total: number
+    unit_cost: number
+}
+
+export interface OrderItem {
+    id: number
+    line_no: number
+    budget_id: number | null
+    label: string
+    specs: Record<string, string>
+    qty: number
+    unit_price: number
+    needs_review: boolean
+    materials: OrderMaterial[]
+}
+
+export interface Order {
+    id: number
+    external_id: string
+    customer_external_id: string
+    customer_name: string | null
+    status: OrderStatus
+    customer_status: string
+    source_conversation: string | null
+    notes: string | null
+    created_at: string
+    updated_at: string
+    items: OrderItem[]
+}
+
+// Devuelve el pedido completo con sus líneas y el BOM de cada una.
+export async function readOrder(orderId: number): Promise<Order | null> {
+    const [order] = await sql`
+        SELECT id, external_id, customer_external_id, customer_name, status,
+               source_conversation, notes, created_at, updated_at
+        FROM orders WHERE id = ${orderId}
+    `
+    if (!order) return null
+
+    const items = await sql`
+        SELECT id, line_no, budget_id, label, specs, qty, unit_price, needs_review
+        FROM order_items WHERE order_id = ${orderId} ORDER BY line_no ASC
+    `
+    const itemIds = (items as any[]).map((i) => i.id)
+    const materials = itemIds.length
+        ? await sql`
+            SELECT order_item_id, material_id, label, qty_per_unit, qty_total, unit_cost
+            FROM order_item_materials
+            WHERE order_item_id = ANY(${itemIds})
+            ORDER BY id ASC
+        `
+        : []
+
+    return {
+        ...(order as any),
+        customer_status: customerStatus(order.status),
+        items: (items as any[]).map((i) => ({
+            ...i,
+            qty: Number(i.qty),
+            unit_price: Number(i.unit_price),
+            materials: (materials as any[])
+                .filter((m) => m.order_item_id === i.id)
+                .map(({ order_item_id, ...m }) => ({
+                    ...m,
+                    qty_per_unit: Number(m.qty_per_unit),
+                    qty_total: Number(m.qty_total),
+                    unit_cost: Number(m.unit_cost),
+                })),
+        })),
+    } as Order
+}
+
+// Valida el payload contra el vocabulario vigente. Devuelve los errores como
+// texto legible: los lee una persona (en la vista) o el bot (en el 400 del POST).
+export async function validateOrderPayload(payload: OrderPayload): Promise<string[]> {
+    const errors: string[] = []
+    if (!payload.external_id?.trim()) errors.push("Falta external_id")
+    if (!payload.customer_external_id?.trim()) errors.push("Falta customer_external_id")
+    if (!payload.items || payload.items.length === 0) errors.push("El pedido no tiene items")
+    if (errors.length > 0) return errors
+
+    const vocab = await getSpecs()
+    payload.items.forEach((item, idx) => {
+        if (!String(item?.product ?? "").trim()) errors.push(`Item ${idx + 1}: falta el producto`)
+        const qty = Number(item?.qty ?? 1)
+        if (!Number.isFinite(qty) || qty <= 0) errors.push(`Item ${idx + 1}: cantidad inválida`)
+        for (const e of validateSpecs(item?.specs ?? {}, vocab)) errors.push(`Item ${idx + 1}: ${e}`)
+    })
+    return errors
+}
+
+// Crea el pedido y explota el BOM de cada línea desde la hoja de costo.
+// IDEMPOTENTE: si el external_id ya existe no escribe nada y devuelve el pedido
+// original con created = false. La usan el POST de la API y la vista manual, para
+// que las dos rutas se comporten igual.
+export async function createOrder(payload: OrderPayload) {
+    const inserted = await sql`
+        INSERT INTO orders (external_id, customer_external_id, customer_name, source_conversation, notes)
+        VALUES (
+            ${payload.external_id.trim()},
+            ${payload.customer_external_id.trim()},
+            ${payload.customer_name ?? null},
+            ${payload.source_conversation ?? null},
+            ${payload.notes ?? null}
+        )
+        ON CONFLICT (external_id) DO NOTHING
+        RETURNING id
+    `
+    if (inserted.length === 0) {
+        const [existing] = await sql`SELECT id FROM orders WHERE external_id = ${payload.external_id.trim()}`
+        return { created: false, order: await readOrder(existing.id) }
+    }
+
+    const orderId = inserted[0].id as number
+
+    try {
+        for (const [idx, item] of payload.items.entries()) {
+            const productName = String(item.product).trim()
+            const qty = Number(item.qty ?? 1)
+            const resolved = await resolveProduct(productName)
+
+            const [line] = await sql`
+                INSERT INTO order_items (order_id, line_no, budget_id, label, specs, qty, unit_price, needs_review)
+                VALUES (
+                    ${orderId}, ${idx + 1}, ${resolved?.budgetId ?? null},
+                    ${resolved?.label ?? productName},
+                    ${JSON.stringify(item.specs ?? {})}::jsonb,
+                    ${qty}, ${resolved?.unitPrice ?? 0}, ${resolved === null}
+                )
+                RETURNING id
+            `
+
+            // BOM: copia congelada de la receta. Si el producto no matcheó, la
+            // línea queda sin BOM y marcada needs_review para el taller.
+            if (resolved) {
+                await sql`
+                    INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total, unit_cost)
+                    SELECT ${line.id}, bm.material_id, bm.label, bm.qty, bm.qty * ${qty}, bm.unit_cost
+                    FROM budget_materials bm
+                    WHERE bm.budget_id = ${resolved.budgetId}
+                    ORDER BY bm.id ASC
+                `
+            }
+        }
+    } catch (error) {
+        // El driver HTTP de neon no da transacciones interactivas: si falla a mitad
+        // borramos el pedido (las líneas caen por CASCADE). Sin esto quedaría un
+        // pedido incompleto que el external_id impide recrear.
+        await sql`DELETE FROM orders WHERE id = ${orderId}`
+        throw error
+    }
+
+    return { created: true, order: await readOrder(orderId) }
+}
