@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, Loader2 } from "lucide-react"
 import { createOrderManual } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
+import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker"
 import type { SpecField } from "@/lib/orders"
 
 interface Line {
@@ -34,10 +35,7 @@ export function OrderEditor({
     const router = useRouter()
     const { toast } = useToast()
     const [saving, setSaving] = useState(false)
-    const [externalId, setExternalId] = useState("")
-    const [customerId, setCustomerId] = useState("")
-    const [customerName, setCustomerName] = useState("")
-    const [customerPhone, setCustomerPhone] = useState("")
+    const [customer, setCustomer] = useState<PickedCustomer | null>(null)
     const [priority, setPriority] = useState("normal")
     const [eta, setEta] = useState("")
     const [notes, setNotes] = useState("")
@@ -59,15 +57,20 @@ export function OrderEditor({
         )
     }
 
+    const listo = customer !== null && lines.every((l) => l.product && l.quantity > 0)
+
     async function save() {
+        if (!listo) return
         setSaving(true)
         const result = await createOrderManual({
-            external_id: externalId,
+            // external_id lo genera el server: es para la idempotencia del bot,
+            // no algo que una persona tenga que inventar.
+            external_id: "",
             origin: "manual",
             customer: {
-                external_id: customerId,
-                name: customerName || null,
-                phone: customerPhone || null,
+                external_id: customer?.external_id ?? "",
+                name: customer?.name ?? null,
+                phone: customer?.phone ?? null,
             },
             items: lines.map((l) => ({ product: l.product, quantity: l.quantity, specs: l.specs })),
             delivery_date_estimate: eta || null,
@@ -89,54 +92,23 @@ export function OrderEditor({
     return (
         <div className="space-y-6">
             <div className="rounded-md border p-4 space-y-4">
+                <CustomerPicker value={customer} onChange={setCustomer} />
+
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <Label htmlFor="external_id">Identificador del pedido</Label>
-                        <Input
-                            id="external_id"
-                            value={externalId}
-                            onChange={(e) => setExternalId(e.target.value)}
-                            placeholder="ej: MOSTRADOR-0001"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Único. Si repetís uno existente se abre el pedido original en vez de duplicarlo.
-                        </p>
-                    </div>
-                    <div>
-                        <Label htmlFor="customer_id">ID del cliente</Label>
-                        <Input
-                            id="customer_id"
-                            value={customerId}
-                            onChange={(e) => setCustomerId(e.target.value)}
-                            placeholder="ej: alegra:1234"
-                        />
-                    </div>
-                    <div>
-                        <Label htmlFor="customer_name">Nombre del cliente</Label>
-                        <Input
-                            id="customer_name"
-                            value={customerName}
-                            onChange={(e) => setCustomerName(e.target.value)}
-                            placeholder="opcional"
-                        />
-                    </div>
-                    <div>
-                        <Label htmlFor="customer_phone">Teléfono</Label>
-                        <Input
-                            id="customer_phone"
-                            value={customerPhone}
-                            onChange={(e) => setCustomerPhone(e.target.value)}
-                            placeholder="opcional"
-                        />
-                    </div>
-                    <div>
                         <Label htmlFor="eta">Entrega estimada</Label>
-                        <Input id="eta" type="date" value={eta} onChange={(e) => setEta(e.target.value)} />
+                        <Input
+                            id="eta"
+                            type="date"
+                            className="mt-1.5"
+                            value={eta}
+                            onChange={(e) => setEta(e.target.value)}
+                        />
                     </div>
                     <div>
                         <Label>Prioridad</Label>
                         <Select value={priority} onValueChange={setPriority}>
-                            <SelectTrigger>
+                            <SelectTrigger className="mt-1.5">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -147,9 +119,16 @@ export function OrderEditor({
                         </Select>
                     </div>
                 </div>
+
                 <div>
                     <Label htmlFor="notes">Notas para el taller</Label>
-                    <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+                    <Textarea
+                        id="notes"
+                        className="mt-1.5"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        rows={2}
+                    />
                 </div>
             </div>
 
@@ -246,7 +225,7 @@ export function OrderEditor({
                     <Plus className="mr-2 h-4 w-4" />
                     Agregar línea
                 </Button>
-                <Button onClick={save} disabled={saving}>
+                <Button onClick={save} disabled={saving || !listo}>
                     {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Crear pedido
                 </Button>

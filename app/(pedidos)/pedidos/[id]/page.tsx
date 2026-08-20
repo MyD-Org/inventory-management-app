@@ -2,10 +2,12 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getSpecs, missingMaterials, readOrder } from "@/lib/orders"
 import { STATUS_LABELS } from "@/lib/order-statuses"
-import { AlertTriangle, ChevronRight, ExternalLink, MessageSquare, PackageX, Phone } from "lucide-react"
+import { AlertTriangle, ChevronRight, ExternalLink, MessageSquare, PackageX } from "lucide-react"
 import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
-import { PriorityIcon } from "@/components/order-glyphs"
+import { OrderItemsEditor } from "@/components/order-items-editor"
+import { DateField, NotesField, PriorityField, TextField } from "@/components/order-props-editor"
+import { getCostedProducts } from "@/lib/costed-products"
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +43,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     const order = await readOrder(id)
     if (!order) notFound()
 
-    const [missing, vocab] = await Promise.all([missingMaterials(id), getSpecs()])
+    const [missing, vocab, costed] = await Promise.all([
+        missingMaterials(id),
+        getSpecs(),
+        getCostedProducts(),
+    ])
 
     // Specs en el orden del vocabulario y solo los valores: "ámbar · grampa larga · 25°"
     // se lee de corrido, mientras que con etiquetas ocupa el triple.
@@ -87,33 +93,18 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     {/* 1. Qué armar */}
                     <section>
                         <h1 className="text-[13px] font-medium text-muted-foreground mb-2">Qué armar</h1>
-                        <div className="border rounded-lg divide-y">
-                            {order.items.map((item) => {
-                                const faltan = unanswered(item.specs)
-                                const linea = specsLine(item.specs)
-                                return (
-                                    <div
-                                        key={item.id}
-                                        className="flex items-baseline gap-3 px-4 py-2.5 min-w-0"
-                                    >
-                                        <span className="text-xl font-semibold tabular-nums w-10 shrink-0">
-                                            {item.quantity}
-                                        </span>
-                                        <span className="text-[15px] font-medium shrink-0">{item.product}</span>
-                                        {linea && (
-                                            <span className="text-[14px] text-muted-foreground truncate">
-                                                {linea}
-                                            </span>
-                                        )}
-                                        {faltan.length > 0 && (
-                                            <span className="text-[12px] text-muted-foreground ml-auto shrink-0 border border-dashed rounded px-1.5 py-0.5">
-                                                falta{faltan.length > 1 ? "n" : ""} {faltan.map(([, f]) => f.label.toLowerCase()).join(", ")}
-                                            </span>
-                                        )}
-                                    </div>
-                                )
-                            })}
-                        </div>
+                        <OrderItemsEditor
+                            orderId={order.id}
+                            items={order.items.map((i) => ({
+                                id: i.id,
+                                product: i.product,
+                                quantity: i.quantity,
+                                specs: i.specs,
+                                needs_review: i.needs_review,
+                            }))}
+                            vocab={vocab}
+                            products={costed.map((p) => p.name)}
+                        />
                     </section>
 
                     {/* 2. Qué buscar al depósito */}
@@ -194,8 +185,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                         </a>
                     )}
 
+                    <div className="mb-3 no-print">
+                        <NotesField id={order.id} value={order.notes} />
+                    </div>
                     {order.notes && (
-                        <div className="rounded-md bg-muted/50 p-2.5 text-[13px] mb-3">{order.notes}</div>
+                        <div className="hidden print:block rounded-md bg-muted/50 p-2.5 text-[13px] mb-3">
+                            {order.notes}
+                        </div>
                     )}
 
                     <Prop label="Estado">
@@ -206,34 +202,53 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     </Prop>
 
                     <Prop label="Prioridad">
-                        <span className="flex items-center gap-2">
-                            <PriorityIcon priority={order.priority} />
+                        <span className="no-print block">
+                            <PriorityField id={order.id} value={order.priority} />
+                        </span>
+                        <span className="hidden print:inline">
                             {PRIORITY_LABELS[order.priority] ?? order.priority}
                         </span>
                     </Prop>
 
-                    <Prop label="Entrega">{formatDate(order.delivery_date_estimate)}</Prop>
+                    <Prop label="Entrega">
+                        <span className="no-print block">
+                            <DateField id={order.id} value={order.delivery_date_estimate} />
+                        </span>
+                        <span className="hidden print:inline">
+                            {formatDate(order.delivery_date_estimate)}
+                        </span>
+                    </Prop>
 
                     <div className="h-px bg-border my-2.5" />
 
                     <Prop label="Cliente">
-                        <span className="block truncate">{order.customer_name ?? "—"}</span>
-                        <span className="block text-[12px] text-muted-foreground truncate">
+                        <span className="no-print block">
+                            <TextField
+                                id={order.id}
+                                value={order.customer_name}
+                                field="customer_name"
+                                placeholder="Sin nombre"
+                                label="Cliente"
+                            />
+                        </span>
+                        <span className="hidden print:inline">{order.customer_name ?? "—"}</span>
+                        <span className="block text-[12px] text-muted-foreground truncate px-1.5 -ml-1.5">
                             {order.customer_external_id}
                         </span>
                     </Prop>
 
-                    {order.customer_phone && (
-                        <Prop label="Teléfono">
-                            <a
-                                href={`tel:${order.customer_phone}`}
-                                className="flex items-center gap-1.5 text-primary hover:underline"
-                            >
-                                <Phone className="h-3 w-3 shrink-0" />
-                                {order.customer_phone}
-                            </a>
-                        </Prop>
-                    )}
+                    <Prop label="Teléfono">
+                        <span className="no-print block">
+                            <TextField
+                                id={order.id}
+                                value={order.customer_phone}
+                                field="customer_phone"
+                                placeholder="Sin teléfono"
+                                label="Teléfono"
+                            />
+                        </span>
+                        <span className="hidden print:inline">{order.customer_phone ?? "—"}</span>
+                    </Prop>
 
                     <div className="h-px bg-border my-2.5" />
 

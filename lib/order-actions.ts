@@ -8,11 +8,39 @@
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import { sql } from '@/lib/database';
-import { createOrder, ORDER_STATUSES, validateOrderPayload, type OrderPayload } from '@/lib/orders';
+import {
+    createOrder,
+    getSpecs,
+    ORDER_PRIORITIES,
+    ORDER_STATUSES,
+    resolveProduct,
+    validateOrderPayload,
+    validateSpecs,
+    type OrderPayload,
+} from '@/lib/orders';
 
 export async function createOrderManual(payload: OrderPayload) {
     const session = await auth();
     if (!session?.user) return { error: 'No autenticado' };
+
+    // El external_id existe para la idempotencia del bot. A una persona no le
+    // pedimos que invente uno: lo generamos, único y con fecha para que se
+    // entienda de dónde salió.
+    if (!payload.external_id?.trim()) {
+        const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        payload = { ...payload, external_id: `MAN-${stamp}-${Math.random().toString(36).slice(2, 7)}` };
+    }
+    // Cliente sin ficha en Alegra: le damos un id derivado del nombre, para no
+    // obligar a elegir de la lista cuando es alguien nuevo del mostrador.
+    if (!payload.customer?.external_id?.trim() && payload.customer?.name?.trim()) {
+        payload = {
+            ...payload,
+            customer: {
+                ...payload.customer,
+                external_id: `manual:${payload.customer.name.trim().toLowerCase().replace(/\s+/g, '-')}`,
+            },
+        };
+    }
 
     try {
         const errors = await validateOrderPayload(payload);
@@ -177,5 +205,200 @@ export async function saveCustomerStatusMap(map: Record<string, string>) {
     } catch (error) {
         console.error('Error en saveCustomerStatusMap:', error);
         return { error: 'No se pudo guardar' };
+    }
+}
+
+// ---------- Edición de un pedido ----------
+// Hasta acá lo único editable era el estado. Un pedido que entra del bot con la
+// cantidad mal, o al que hay que correrle la fecha, tenía que borrarse y
+// rehacerse.
+
+export async function updateOrderFields(
+    id: number,
+    patch: {
+        customer_name?: string | null;
+        customer_phone?: string | null;
+        priority?: string;
+        delivery_date_estimate?: string | null;
+        notes?: string | null;
+    },
+) {
+    const session = await auth();
+    if (!session?.user) return { error: 'No autenticado' };
+    if (patch.priority && !ORDER_PRIORITIES.includes(patch.priority as any)) {
+        return { error: 'Prioridad inválida' };
+    }
+
+    try {
+        // COALESCE con el valor actual: así un patch parcial no pisa lo demás.
+        // Para los campos que sí se pueden vaciar mandamos '' y lo pasamos a NULL.
+        await sql`
+            UPDATE orders SET
+                customer_name = COALESCE(${patch.customer_name ?? null}, customer_name),
+                customer_phone = COALESCE(${patch.customer_phone ?? null}, customer_phone),
+                priority = COALESCE(${patch.priority ?? null}, priority),
+                delivery_date_estimate = CASE
+                    WHEN ${patch.delivery_date_estimate === undefined} THEN delivery_date_estimate
+                    WHEN ${patch.delivery_date_estimate ?? ''} = '' THEN NULL
+                    ELSE ${patch.delivery_date_estimate ?? null}::date
+                END,
+                notes = CASE
+                    WHEN ${patch.notes === undefined} THEN notes
+                    WHEN ${patch.notes ?? ''} = '' THEN NULL
+                    ELSE ${patch.notes ?? null}
+                END
+            WHERE id = ${id}
+        `;
+        revalidatePath('/pedidos');
+        revalidatePath(`/pedidos/${id}`);
+        return { ok: true };
+    } catch (error) {
+        console.error('Error en updateOrderFields:', error);
+        return { error: 'No se pudo guardar' };
+    }
+}
+
+// Cambiar cantidad o specs de una línea. La cantidad REESCALA el BOM guardado:
+// mantenemos el qty_per_unit congelado del pedido y recalculamos el total, para
+// no traer una receta que pudo cambiar después de tomar el pedido.
+export async function updateOrderItem(
+    itemId: number,
+    patch: { quantity?: number; specs?: Record<string, string> },
+) {
+    const session = await auth();
+    if (!session?.user) return { error: 'No autenticado' };
+
+    try {
+        const [item] = await sql`SELECT order_id, quantity FROM order_items WHERE id = ${itemId}`;
+        if (!item) return { error: 'La línea no existe' };
+
+        if (patch.specs) {
+            const errors = validateSpecs(patch.specs, await getSpecs());
+            if (errors.length > 0) return { error: errors.join('. ') };
+        }
+
+        const quantity = patch.quantity ?? Number(item.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) return { error: 'Cantidad inválida' };
+
+        await sql`
+            UPDATE order_items SET
+                quantity = ${quantity},
+                specs = COALESCE(${patch.specs ? JSON.stringify(patch.specs) : null}::jsonb, specs)
+            WHERE id = ${itemId}
+        `;
+
+        if (patch.quantity !== undefined) {
+            await sql`
+                UPDATE order_item_materials
+                SET qty_total = qty_per_unit * ${quantity}
+                WHERE order_item_id = ${itemId}
+            `;
+        }
+
+        revalidatePath('/pedidos');
+        revalidatePath(`/pedidos/${item.order_id}`);
+        return { ok: true };
+    } catch (error) {
+        console.error('Error en updateOrderItem:', error);
+        return { error: 'No se pudo guardar la línea' };
+    }
+}
+
+export async function deleteOrderItem(itemId: number) {
+    const session = await auth();
+    if (!session?.user) return { error: 'No autenticado' };
+
+    try {
+        const [item] = await sql`SELECT order_id FROM order_items WHERE id = ${itemId}`;
+        if (!item) return { error: 'La línea no existe' };
+
+        const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM order_items WHERE order_id = ${item.order_id}`;
+        if (count <= 1) return { error: 'Un pedido no puede quedar sin líneas' };
+
+        await sql`DELETE FROM order_items WHERE id = ${itemId}`;
+        revalidatePath('/pedidos');
+        revalidatePath(`/pedidos/${item.order_id}`);
+        return { ok: true };
+    } catch (error) {
+        console.error('Error en deleteOrderItem:', error);
+        return { error: 'No se pudo borrar la línea' };
+    }
+}
+
+// Agregar una línea a un pedido existente. Acá SÍ tomamos la receta vigente:
+// es una línea nueva, se congela en este momento.
+export async function addOrderItem(
+    orderId: number,
+    payload: { product: string; quantity: number; specs?: Record<string, string> },
+) {
+    const session = await auth();
+    if (!session?.user) return { error: 'No autenticado' };
+
+    if (!payload.product?.trim()) return { error: 'Elegí un producto' };
+    if (!Number.isFinite(payload.quantity) || payload.quantity <= 0) return { error: 'Cantidad inválida' };
+
+    const errors = validateSpecs(payload.specs ?? {}, await getSpecs());
+    if (errors.length > 0) return { error: errors.join('. ') };
+
+    try {
+        const resolved = await resolveProduct(payload.product.trim());
+        const [{ next }] = await sql`
+            SELECT COALESCE(MAX(line_no), 0) + 1 AS next FROM order_items WHERE order_id = ${orderId}
+        `;
+
+        const [line] = await sql`
+            INSERT INTO order_items (order_id, line_no, budget_id, product, specs, quantity, needs_review)
+            VALUES (
+                ${orderId}, ${next}, ${resolved?.budgetId ?? null},
+                ${resolved?.label ?? payload.product.trim()},
+                ${JSON.stringify(payload.specs ?? {})}::jsonb,
+                ${payload.quantity}, ${resolved === null}
+            )
+            RETURNING id
+        `;
+
+        if (resolved) {
+            await sql`
+                INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total)
+                SELECT ${line.id}, bm.material_id, bm.label, bm.qty, bm.qty * ${payload.quantity}
+                FROM budget_materials bm WHERE bm.budget_id = ${resolved.budgetId}
+                ORDER BY bm.id ASC
+            `;
+        }
+
+        revalidatePath('/pedidos');
+        revalidatePath(`/pedidos/${orderId}`);
+        return { ok: true, needs_review: resolved === null };
+    } catch (error) {
+        console.error('Error en addOrderItem:', error);
+        return { error: 'No se pudo agregar la línea' };
+    }
+}
+
+// Clientes reales para el alta, del espejo de Alegra. Evita que alguien tenga
+// que tipear a mano un customer_external_id como "alegra:1234".
+export async function searchCustomers(q: string) {
+    const session = await auth();
+    if (!session?.user) return [];
+
+    const term = q.trim();
+    if (term.length < 2) return [];
+
+    try {
+        const rows = await sql`
+            SELECT alegra_id, name, phone
+            FROM alegra_clients
+            WHERE name ILIKE ${`%${term}%`}
+            ORDER BY name ASC
+            LIMIT 8
+        `;
+        return (rows as any[]).map((r) => ({
+            external_id: r.alegra_id ? `alegra:${r.alegra_id}` : `manual:${r.name}`,
+            name: r.name as string,
+            phone: (r.phone as string) ?? null,
+        }));
+    } catch (error) {
+        console.error('Error en searchCustomers:', error);
+        return [];
     }
 }
