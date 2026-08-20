@@ -145,11 +145,13 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                 if (dragging !== null) move(dragging, status)
                                 setDragging(null)
                             }}
-                            className={`w-[272px] shrink-0 h-full flex flex-col rounded-lg transition-colors ${
-                                over === status ? "bg-primary/5 ring-1 ring-primary/30" : ""
+                            className={`w-[272px] shrink-0 h-full flex flex-col rounded-lg p-1 -m-1 transition-colors ${
+                                over === status && dragging !== null
+                                    ? "bg-primary/10 ring-2 ring-primary/60"
+                                    : ""
                             }`}
                         >
-                            <div className="flex items-center gap-2 px-1 pb-2.5 shrink-0">
+                            <div className="flex items-center gap-2 px-1 pb-2.5 shrink-0 select-none">
                                 <StatusIcon status={status} />
                                 <h2 className="text-[13px] font-medium">{STATUS_LABELS[status]}</h2>
                                 <span className="text-xs text-muted-foreground tabular-nums">
@@ -164,9 +166,18 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                         <div
                                             key={card.id}
                                             draggable
-                                            onDragStart={() => {
+                                            onDragStart={(e) => {
                                                 draggedRef.current = true
-                                                setDragging(card.id)
+                                                // Firefox no inicia el arrastre sin dataTransfer cargado.
+                                                e.dataTransfer.effectAllowed = "move"
+                                                e.dataTransfer.setData("text/plain", String(card.id))
+                                                // La foto del arrastre se saca DESPUÉS del render, así que
+                                                // si atenuamos la tarjeta ya mismo, arrastramos una copia
+                                                // translúcida y sin definición. Fijamos la imagen con la
+                                                // tarjeta todavía opaca y recién ahí atenuamos.
+                                                e.dataTransfer.setDragImage(e.currentTarget, 20, 20)
+                                                const id = card.id
+                                                setTimeout(() => setDragging(id), 0)
                                             }}
                                             onDragEnd={() => setDragging(null)}
                                             onClick={() => {
@@ -184,7 +195,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                     router.push(`/pedidos/${card.id}`)
                                                 }
                                             }}
-                                            className={`rounded-md border bg-card px-3 py-2.5 cursor-pointer hover:border-foreground/25 focus:outline-none focus:ring-1 focus:ring-primary transition-colors ${
+                                            className={`select-none rounded-md border bg-card px-3 py-2.5 cursor-pointer hover:border-foreground/25 focus:outline-none focus:ring-1 focus:ring-primary transition-colors ${
                                                 dragging === card.id ? "opacity-40" : ""
                                             }`}
                                         >
