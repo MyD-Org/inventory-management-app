@@ -92,32 +92,24 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                                 const faltan = unanswered(item.specs)
                                 const linea = specsLine(item.specs)
                                 return (
-                                    <div key={item.id} className="flex items-baseline gap-4 px-4 py-3.5">
-                                        <span className="text-3xl font-semibold tabular-nums leading-none w-14 shrink-0">
+                                    <div
+                                        key={item.id}
+                                        className="flex items-baseline gap-3 px-4 py-2.5 min-w-0"
+                                    >
+                                        <span className="text-xl font-semibold tabular-nums w-10 shrink-0">
                                             {item.quantity}
                                         </span>
-                                        <div className="min-w-0 flex-1">
-                                            <div className="text-[17px] font-medium leading-tight">
-                                                {item.product}
-                                            </div>
-                                            {linea && (
-                                                <div className="text-[14px] text-muted-foreground mt-0.5">
-                                                    {linea}
-                                                </div>
-                                            )}
-                                            {faltan.length > 0 && (
-                                                <div className="flex gap-1.5 flex-wrap mt-2">
-                                                    {faltan.map(([k, f]) => (
-                                                        <span
-                                                            key={k}
-                                                            className="rounded border border-dashed px-1.5 py-0.5 text-[11px] text-muted-foreground"
-                                                        >
-                                                            {f.label}: sin confirmar
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
+                                        <span className="text-[15px] font-medium shrink-0">{item.product}</span>
+                                        {linea && (
+                                            <span className="text-[14px] text-muted-foreground truncate">
+                                                {linea}
+                                            </span>
+                                        )}
+                                        {faltan.length > 0 && (
+                                            <span className="text-[12px] text-muted-foreground ml-auto shrink-0 border border-dashed rounded px-1.5 py-0.5">
+                                                falta{faltan.length > 1 ? "n" : ""} {faltan.map(([, f]) => f.label.toLowerCase()).join(", ")}
+                                            </span>
+                                        )}
                                     </div>
                                 )
                             })}
