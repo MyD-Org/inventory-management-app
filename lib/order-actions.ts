@@ -151,3 +151,31 @@ export async function toggleSpecField(key: string, active: boolean) {
         return { error: 'No se pudo cambiar el campo' };
     }
 }
+
+// Mapa estado interno -> texto al cliente. El doc del CRM pide que sea
+// configurable: la jerga del tablero no siempre es lo que conviene mostrarle
+// al cliente. Se guarda en app_settings, la misma tabla clave/valor del
+// módulo de costos.
+export async function saveCustomerStatusMap(map: Record<string, string>) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') return { error: 'Solo un admin puede editar esto' };
+
+    const clean: Record<string, string> = {};
+    for (const status of ORDER_STATUSES) {
+        const text = (map[status] ?? '').trim();
+        if (text) clean[status] = text;
+    }
+
+    try {
+        await sql`
+            INSERT INTO app_settings (key, value)
+            VALUES ('order_customer_status', ${JSON.stringify(clean)}::jsonb)
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+        `;
+        revalidatePath('/pedidos/opciones');
+        return { ok: true };
+    } catch (error) {
+        console.error('Error en saveCustomerStatusMap:', error);
+        return { error: 'No se pudo guardar' };
+    }
+}

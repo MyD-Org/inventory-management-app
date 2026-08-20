@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation"
-import { missingMaterials, readOrder, STATUS_LABELS } from "@/lib/orders"
+import { getSpecs, missingMaterials, readOrder, STATUS_LABELS } from "@/lib/orders"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { AlertTriangle, CalendarClock, ExternalLink, PackageX } from "lucide-react"
+import { AlertTriangle, CalendarClock, ExternalLink, MessageSquare, PackageX, Phone } from "lucide-react"
 import { PrintBar } from "@/components/print-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
 
@@ -19,7 +19,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     const order = await readOrder(id)
     if (!order) notFound()
 
-    const missing = await missingMaterials(id)
+    const [missing, vocab] = await Promise.all([missingMaterials(id), getSpecs()])
+
+    // Specs del vocabulario que la línea NO trae: el doc pide que el taller vea
+    // "qué falta" cuando el bot cortó la charla a medias. Los campos de texto
+    // libre no cuentan como faltantes: son opcionales por naturaleza.
+    const unanswered = (specs: Record<string, string>) =>
+        Object.entries(vocab).filter(([k, f]) => !f.free_text && !specs[k])
 
     return (
         <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -30,7 +36,17 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     <h1 className="text-2xl font-bold">Pedido #{order.order_number}</h1>
                     <p className="text-sm text-muted-foreground">
                         {order.customer_name ?? "Sin nombre"} · {order.customer_external_id}
-                        {order.customer_phone && ` · ${order.customer_phone}`}
+                    </p>
+                    {order.customer_phone && (
+                        <a
+                            href={`tel:${order.customer_phone}`}
+                            className="text-sm text-primary hover:underline inline-flex items-center gap-1 mt-1"
+                        >
+                            <Phone className="h-3 w-3" />
+                            {order.customer_phone}
+                        </a>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1">
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                         {order.origin} · <code>{order.external_id}</code>
@@ -51,16 +67,26 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 </div>
             </div>
 
-            {order.source_conversation && (
+            {order.source_conversation ? (
                 <a
                     href={order.source_conversation}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-primary hover:underline mb-6 no-print"
+                    className="flex items-center gap-3 rounded-md border p-3 mb-6 hover:bg-muted/50 transition-colors no-print"
                 >
-                    <ExternalLink className="h-4 w-4" />
-                    Ver qué pidió el cliente en el CRM
+                    <MessageSquare className="h-5 w-5 text-primary shrink-0" />
+                    <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium">Leer la conversación original</div>
+                        <div className="text-xs text-muted-foreground">
+                            Si la comanda parece rara, acá está lo que dijo el cliente textualmente
+                        </div>
+                    </div>
+                    <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
                 </a>
+            ) : (
+                <p className="text-xs text-muted-foreground mb-6 no-print">
+                    Sin conversación asociada (pedido cargado a mano).
+                </p>
             )}
 
             {order.notes && <p className="text-sm bg-muted rounded-md p-3 mb-6">{order.notes}</p>}
@@ -103,16 +129,29 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                             <h2 className="font-semibold">
                                 {item.quantity} × {item.product}
                             </h2>
-                            {Object.entries(item.specs).filter(([, v]) => v !== "").length > 0 && (
-                                <div className="flex gap-2 flex-wrap mt-2">
-                                    {Object.entries(item.specs)
-                                        .filter(([, v]) => v !== "")
-                                        .map(([k, v]) => (
-                                            <Badge key={k} variant="secondary">
-                                                {k}: {String(v)}
-                                            </Badge>
-                                        ))}
-                                </div>
+                            <div className="flex gap-2 flex-wrap mt-2">
+                                {Object.entries(item.specs)
+                                    .filter(([, v]) => v !== "")
+                                    .map(([k, v]) => (
+                                        <Badge key={k} variant="secondary">
+                                            {vocab[k]?.label ?? k}: {String(v)}
+                                        </Badge>
+                                    ))}
+                                {unanswered(item.specs).map(([k, f]) => (
+                                    <Badge
+                                        key={k}
+                                        variant="outline"
+                                        className="border-dashed text-muted-foreground"
+                                    >
+                                        {f.label}: sin confirmar
+                                    </Badge>
+                                ))}
+                            </div>
+                            {unanswered(item.specs).length > 0 && (
+                                <p className="text-xs text-muted-foreground mt-2">
+                                    Falta confirmar {unanswered(item.specs).length}{" "}
+                                    {unanswered(item.specs).length === 1 ? "dato" : "datos"} con el cliente.
+                                </p>
                             )}
                         </div>
 

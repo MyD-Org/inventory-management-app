@@ -20,6 +20,17 @@ export {
     type OrderStatus,
 } from "@/lib/order-statuses"
 
+// Mapa estado interno -> texto al cliente, configurable desde /pedidos/opciones.
+// Si la clave no está configurada cae al default de lib/order-statuses.ts.
+export async function getCustomerStatusMap(): Promise<Record<string, string>> {
+    try {
+        const [row] = await sql`SELECT value FROM app_settings WHERE key = 'order_customer_status'`
+        return (row?.value as Record<string, string>) ?? {}
+    } catch {
+        return {}
+    }
+}
+
 export interface SpecField {
     label: string
     options: string[]
@@ -139,6 +150,7 @@ export interface Order {
 }
 
 export async function readOrder(orderId: number): Promise<Order | null> {
+    const overrides = await getCustomerStatusMap()
     const [order] = await sql`
         SELECT id, order_number, external_id, origin, customer_external_id, customer_name,
                customer_phone, status, priority,
@@ -165,7 +177,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
 
     return {
         ...(order as any),
-        customer_status: toCustomerStatus(order.status),
+        customer_status: toCustomerStatus(order.status, overrides),
         items: (items as any[]).map((i) => ({
             ...i,
             quantity: Number(i.quantity),
@@ -259,17 +271,23 @@ export async function validateOrderPayload(payload: OrderPayload): Promise<strin
 export async function createOrder(payload: OrderPayload) {
     const externalId = payload.external_id.trim()
 
+    // Los pedidos del bot pasan por revisión humana antes de entrar al flujo (lo
+    // sugiere el doc del CRM). Los cargados a mano ya los revisó quien los tipeó.
+    const origin = payload.origin?.trim() || "manual"
+    const initialStatus = origin === "manual" ? "recibido" : "por_revisar"
+
     const inserted = await sql`
         INSERT INTO orders (
             external_id, origin, customer_external_id, customer_name, customer_phone,
-            priority, delivery_date_estimate, source_conversation, notes
+            status, priority, delivery_date_estimate, source_conversation, notes
         )
         VALUES (
             ${externalId},
-            ${payload.origin?.trim() || "manual"},
+            ${origin},
             ${payload.customer.external_id.trim()},
             ${payload.customer.name ?? null},
             ${payload.customer.phone ?? null},
+            ${initialStatus},
             ${payload.priority || "normal"},
             ${payload.delivery_date_estimate || null},
             ${payload.source_conversation ?? null},

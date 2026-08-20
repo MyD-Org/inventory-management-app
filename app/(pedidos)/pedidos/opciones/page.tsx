@@ -2,6 +2,8 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { SpecsManager, type SpecFieldRow } from "@/components/specs-manager"
+import { CustomerStatusMap } from "@/components/customer-status-map"
+import { getCustomerStatusMap } from "@/lib/orders"
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +12,8 @@ export const dynamic = 'force-dynamic';
 export default async function SpecsPage() {
     const session = await auth()
     if (session?.user?.role !== 'admin') redirect('/pedidos')
+
+    const statusMap = await getCustomerStatusMap()
 
     const rows = await sql`
         SELECT f.key, f.label, f.free_text, f.active AS field_active,
@@ -49,6 +53,10 @@ export default async function SpecsPage() {
                 lado del CRM.
             </p>
             <SpecsManager fields={Array.from(byKey.values())} />
+
+            <div className="mt-8">
+                <CustomerStatusMap current={statusMap} />
+            </div>
         </div>
     )
 }

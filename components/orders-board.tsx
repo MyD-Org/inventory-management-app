@@ -8,7 +8,9 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, CalendarClock } from "lucide-react"
+import { AlertTriangle, CalendarClock, Search } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import { BOARD_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
@@ -29,18 +31,44 @@ export interface BoardCard {
 
 function formatDate(d: string | null): string | null {
     if (!d) return null
-    return new Date(d).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })
+    // El valor viene como "2026-09-05": lo parseamos a mano para que no lo
+    // corra la zona horaria (new Date("2026-09-05") es UTC medianoche).
+    const [y, m, day] = d.split("-").map(Number)
+    return new Date(y, m - 1, day).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })
+}
+
+// Entrega vencida: la fecha ya pasó y el pedido todavía no salió.
+function isOverdue(d: string | null, status: string): boolean {
+    if (!d || status === "retirado") return false
+    const [y, m, day] = d.split("-").map(Number)
+    const eta = new Date(y, m - 1, day)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return eta < today
 }
 
 export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
     const router = useRouter()
     const { toast } = useToast()
+    const [query, setQuery] = useState("")
+    const [onlyIssues, setOnlyIssues] = useState(false)
     const [dragging, setDragging] = useState<number | null>(null)
     const [over, setOver] = useState<string | null>(null)
     // Estado optimista: la tarjeta salta de columna al soltar, sin esperar al server.
     const [moved, setMoved] = useState<Record<number, OrderStatus>>({})
 
     const statusOf = (c: BoardCard) => moved[c.id] ?? c.status
+
+    const q = query.trim().toLowerCase()
+    const visible = cards.filter((c) => {
+        if (onlyIssues && !c.needs_review && !isOverdue(c.delivery_date_estimate, statusOf(c))) return false
+        if (!q) return true
+        return (
+            String(c.order_number).includes(q) ||
+            (c.customer_name ?? "").toLowerCase().includes(q) ||
+            c.customer_external_id.toLowerCase().includes(q)
+        )
+    })
 
     async function move(id: number, status: OrderStatus) {
         const previous = cards.find((c) => c.id === id)?.status
@@ -63,9 +91,28 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
     return (
         // min-h-0 deja que el flex hijo se encoja en vez de estirar la página;
         // scrollbar-hide oculta la barra horizontal sin desactivar el scroll.
+        <>
+        <div className="flex gap-2 mb-4 shrink-0 flex-wrap">
+            <div className="relative max-w-xs flex-1 min-w-[180px]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                    className="pl-8"
+                    placeholder="Buscar por número o cliente"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                />
+            </div>
+            <Button
+                variant={onlyIssues ? "default" : "outline"}
+                onClick={() => setOnlyIssues((v) => !v)}
+            >
+                <AlertTriangle className="mr-2 h-4 w-4" />
+                Solo con problemas
+            </Button>
+        </div>
         <div className="flex-1 min-h-0 flex gap-4 overflow-x-auto scrollbar-hide pb-2">
             {BOARD_STATUSES.map((status) => {
-                const column = cards.filter((c) => statusOf(c) === status)
+                const column = visible.filter((c) => statusOf(c) === status)
                 return (
                     <div
                         key={status}
@@ -121,7 +168,18 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                             {card.units} u. · {card.line_count} {card.line_count === 1 ? "línea" : "líneas"}
                                         </span>
                                         {card.delivery_date_estimate && (
-                                            <span className="flex items-center gap-1">
+                                            <span
+                                                className={`flex items-center gap-1 ${
+                                                    isOverdue(card.delivery_date_estimate, statusOf(card))
+                                                        ? "text-destructive font-medium"
+                                                        : ""
+                                                }`}
+                                                title={
+                                                    isOverdue(card.delivery_date_estimate, statusOf(card))
+                                                        ? "La fecha de entrega ya pasó"
+                                                        : "Entrega estimada"
+                                                }
+                                            >
                                                 <CalendarClock className="h-3 w-3" />
                                                 {formatDate(card.delivery_date_estimate)}
                                             </span>
@@ -146,5 +204,6 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                 )
             })}
         </div>
+        </>
     )
 }

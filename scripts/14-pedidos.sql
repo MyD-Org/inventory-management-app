@@ -61,8 +61,13 @@ CREATE SEQUENCE IF NOT EXISTS order_number_seq START 100;
 -- recibe el mismo pedido, nunca un duplicado ni un error.
 --
 -- Estados = columnas del tablero del taller. Se guarda SIEMPRE el interno; la
--- API traduce a lenguaje de cliente (customer_status en lib/orders.ts) para no
--- filtrar la jerga interna.
+-- API traduce a lenguaje de cliente para no filtrar la jerga interna, con el
+-- mapa configurable de app_settings.order_customer_status (ver más abajo).
+--
+-- 'por_revisar' es la primera columna: el doc del CRM plantea "¿hay status
+-- previo 'por revisar' o entran directo?" y sugiere revisión humana al
+-- principio. Los pedidos del bot entran ahí; los cargados a mano van directo a
+-- 'recibido', porque ya los revisó una persona al tipearlos.
 CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
     order_number INTEGER NOT NULL UNIQUE DEFAULT nextval('order_number_seq'),
@@ -71,8 +76,8 @@ CREATE TABLE IF NOT EXISTS orders (
     customer_external_id VARCHAR(120) NOT NULL,
     customer_name VARCHAR(200),
     customer_phone VARCHAR(50),
-    status VARCHAR(30) NOT NULL DEFAULT 'recibido'
-        CHECK (status IN ('recibido', 'en_proceso', 'embalado', 'facturado',
+    status VARCHAR(30) NOT NULL DEFAULT 'por_revisar'
+        CHECK (status IN ('por_revisar', 'recibido', 'en_proceso', 'embalado', 'facturado',
                           'listo_para_retirar', 'retirado', 'cancelado')),
     priority VARCHAR(20) NOT NULL DEFAULT 'normal'
         CHECK (priority IN ('baja', 'normal', 'alta')),
@@ -161,3 +166,21 @@ INSERT INTO spec_options (field_key, value, label, position) VALUES
     ('body_color', 'bronce', 'Bronce', 4),
     ('body_color', 'tornasolado', 'Tornasolado', 5)
 ON CONFLICT (field_key, value) DO NOTHING;
+
+-- ---------- Mapa estado interno -> texto al cliente ----------
+-- El doc pide que sea configurable: "los internos del Kanban ('esperando MP')
+-- pueden no ser los que conviene" mostrarle al cliente. Vive en app_settings
+-- (la tabla clave/valor que ya usa el módulo de costos) y se edita desde
+-- /pedidos/opciones. Si falta una clave, lib/order-statuses.ts tiene el default.
+
+INSERT INTO app_settings (key, value) VALUES ('order_customer_status', '{
+    "por_revisar": "Recibido",
+    "recibido": "Recibido",
+    "en_proceso": "En fabricación",
+    "embalado": "En preparación",
+    "facturado": "En preparación",
+    "listo_para_retirar": "Listo para retirar",
+    "retirado": "Entregado",
+    "cancelado": "Cancelado"
+}'::jsonb)
+ON CONFLICT (key) DO NOTHING;

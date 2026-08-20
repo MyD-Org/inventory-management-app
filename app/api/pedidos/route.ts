@@ -4,6 +4,7 @@ import { requireInternalSecret } from "@/lib/ai-tools-auth"
 import {
     createOrder,
     customerStatus,
+    getCustomerStatusMap,
     missingMaterials,
     readOrder,
     validateOrderPayload,
@@ -94,6 +95,7 @@ export async function GET(request: NextRequest) {
     const externalId = (searchParams.get("external_id") ?? "").trim()
 
     try {
+        const overrides = await getCustomerStatusMap()
         const rows = externalId
             ? await sql`
                 SELECT id, order_number, external_id, status, delivery_date_estimate::text AS delivery_date_estimate, updated_at
@@ -113,7 +115,7 @@ export async function GET(request: NextRequest) {
             order_number: r.order_number,
             external_id: r.external_id,
             status: r.status,
-            customer_status: customerStatus(r.status),
+            customer_status: customerStatus(r.status, overrides),
             eta: r.delivery_date_estimate,
             updated_at: r.updated_at,
         }))

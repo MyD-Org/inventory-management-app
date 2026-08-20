@@ -6,6 +6,7 @@
 
 // Columnas del tablero del taller, en orden.
 export const ORDER_STATUSES = [
+    "por_revisar",
     "recibido",
     "en_proceso",
     "embalado",
@@ -20,6 +21,7 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number]
 export const BOARD_STATUSES = ORDER_STATUSES.filter((s) => s !== "cancelado")
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
+    por_revisar: "Por revisar",
     recibido: "Recibido",
     en_proceso: "En proceso",
     embalado: "Embalado",
@@ -30,7 +32,10 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
 }
 
 // Lo que ve el cliente a través del bot: sin la jerga interna del taller.
-const CUSTOMER_STATUS: Record<OrderStatus, string> = {
+// Estos son los DEFAULTS. El mapa real es configurable desde /pedidos/opciones y
+// vive en app_settings.order_customer_status; esto cubre las claves que falten.
+export const DEFAULT_CUSTOMER_STATUS: Record<OrderStatus, string> = {
+    por_revisar: "Recibido",
     recibido: "Recibido",
     en_proceso: "En fabricación",
     embalado: "En preparación",
@@ -40,8 +45,8 @@ const CUSTOMER_STATUS: Record<OrderStatus, string> = {
     cancelado: "Cancelado",
 }
 
-export function customerStatus(status: string): string {
-    return CUSTOMER_STATUS[status as OrderStatus] ?? status
+export function customerStatus(status: string, overrides?: Record<string, string>): string {
+    return overrides?.[status] || DEFAULT_CUSTOMER_STATUS[status as OrderStatus] || status
 }
 
 export const ORDER_PRIORITIES = ["baja", "normal", "alta"] as const
