@@ -15,7 +15,7 @@ import { Trash2, ExternalLink, AlertTriangle, Search } from "lucide-react"
 import { deleteOrder, updateOrderStatus } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { ORDER_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/orders"
+import { ORDER_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
 
 export interface OrderRow {
     id: number

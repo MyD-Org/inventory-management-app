@@ -1,4 +1,5 @@
 import { sql } from "@/lib/database"
+import { customerStatus as toCustomerStatus, ORDER_PRIORITIES as PRIORITIES, type OrderStatus as Status } from "@/lib/order-statuses"
 
 // Módulo de pedidos. El contrato de los endpoints sigue docs/pedidos-avantec.md
 // del CRM: nombres de campo, forma del payload y estados salen de ahí.
@@ -7,49 +8,17 @@ import { sql } from "@/lib/database"
 // payload del bot ni el pedido guardado tienen precios. La facturación va por
 // Alegra; acá 'facturado' es solo una columna del tablero.
 
-// Columnas del tablero del taller, en orden. El pedido guarda SIEMPRE el estado
-// interno; la API expone customer_status traducido para no filtrar la jerga
-// interna al cliente.
-export const ORDER_STATUSES = [
-    "recibido",
-    "en_proceso",
-    "embalado",
-    "facturado",
-    "listo_para_retirar",
-    "retirado",
-    "cancelado",
-] as const
-export type OrderStatus = (typeof ORDER_STATUSES)[number]
-
-// Columnas visibles del kanban: 'cancelado' queda fuera del flujo.
-export const BOARD_STATUSES = ORDER_STATUSES.filter((s) => s !== "cancelado")
-
-export const STATUS_LABELS: Record<OrderStatus, string> = {
-    recibido: "Recibido",
-    en_proceso: "En proceso",
-    embalado: "Embalado",
-    facturado: "Facturado",
-    listo_para_retirar: "Listo para retirar",
-    retirado: "Retirado",
-    cancelado: "Cancelado",
-}
-
-// Lo que ve el cliente a través del bot.
-const CUSTOMER_STATUS: Record<OrderStatus, string> = {
-    recibido: "Recibido",
-    en_proceso: "En fabricación",
-    embalado: "En preparación",
-    facturado: "En preparación",
-    listo_para_retirar: "Listo para retirar",
-    retirado: "Entregado",
-    cancelado: "Cancelado",
-}
-
-export function customerStatus(status: string): string {
-    return CUSTOMER_STATUS[status as OrderStatus] ?? status
-}
-
-export const ORDER_PRIORITIES = ["baja", "normal", "alta"] as const
+// Los estados viven en lib/order-statuses.ts (sin importaciones de servidor)
+// para que los client components puedan usarlos sin arrastrar lib/database.ts
+// al bundle del navegador. Se reexportan acá por comodidad del lado servidor.
+export {
+    ORDER_STATUSES,
+    BOARD_STATUSES,
+    STATUS_LABELS,
+    ORDER_PRIORITIES,
+    customerStatus,
+    type OrderStatus,
+} from "@/lib/order-statuses"
 
 export interface SpecField {
     label: string
@@ -158,7 +127,7 @@ export interface Order {
     customer_external_id: string
     customer_name: string | null
     customer_phone: string | null
-    status: OrderStatus
+    status: Status
     customer_status: string
     priority: string
     delivery_date_estimate: string | null
@@ -196,7 +165,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
 
     return {
         ...(order as any),
-        customer_status: customerStatus(order.status),
+        customer_status: toCustomerStatus(order.status),
         items: (items as any[]).map((i) => ({
             ...i,
             quantity: Number(i.quantity),
@@ -268,8 +237,8 @@ export async function validateOrderPayload(payload: OrderPayload): Promise<strin
     if (!payload.external_id?.trim()) errors.push("Falta external_id")
     if (!payload.customer?.external_id?.trim()) errors.push("Falta customer.external_id")
     if (!payload.items || payload.items.length === 0) errors.push("El pedido no tiene items")
-    if (payload.priority && !ORDER_PRIORITIES.includes(payload.priority as any)) {
-        errors.push(`priority inválida: "${payload.priority}". Válidas: ${ORDER_PRIORITIES.join(", ")}`)
+    if (payload.priority && !PRIORITIES.includes(payload.priority as any)) {
+        errors.push(`priority inválida: "${payload.priority}". Válidas: ${PRIORITIES.join(", ")}`)
     }
     if (errors.length > 0) return errors
 
