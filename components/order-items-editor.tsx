@@ -121,7 +121,10 @@ export function OrderItemsEditor({
                                     onBlur={(e) => {
                                         const q = Number(e.target.value)
                                         if (q !== item.quantity) {
-                                            run(() => updateOrderItem(item.id, { quantity: q }), "Cantidad actualizada")
+                                            run(
+                                                () => updateOrderItem(item.id, { quantity: q }),
+                                                `${item.product}: ${q} unidades`,
+                                            )
                                         }
                                     }}
                                 />
@@ -139,14 +142,17 @@ export function OrderItemsEditor({
                                 </Button>
                                 <Button
                                     variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7"
+                                    size="sm"
                                     onClick={() => setEditing(null)}
-                                    title="Listo"
+                                    title="Cerrar (los cambios ya están guardados)"
                                 >
-                                    <X className="h-3.5 w-3.5" />
+                                    Listo
                                 </Button>
                             </div>
+
+                            <p className="text-[11px] text-muted-foreground">
+                                Los cambios se guardan solos.
+                            </p>
 
                             <div className="grid gap-2 sm:grid-cols-2">
                                 {Object.entries(vocab).map(([key, field]) =>
@@ -161,7 +167,10 @@ export function OrderItemsEditor({
                                                 if (e.target.value) next[key] = e.target.value
                                                 else delete next[key]
                                                 if ((item.specs[key] ?? "") !== e.target.value) {
-                                                    run(() => updateOrderItem(item.id, { specs: next }), "Actualizado")
+                                                    run(
+                                                        () => updateOrderItem(item.id, { specs: next }),
+                                                        `${field.label} guardado`,
+                                                    )
                                                 }
                                             }}
                                         />
@@ -173,7 +182,12 @@ export function OrderItemsEditor({
                                                 const next = { ...item.specs }
                                                 if (v === SIN) delete next[key]
                                                 else next[key] = v
-                                                run(() => updateOrderItem(item.id, { specs: next }), "Actualizado")
+                                                run(
+                                                    () => updateOrderItem(item.id, { specs: next }),
+                                                    v === SIN
+                                                        ? `${field.label} sin especificar`
+                                                        : `${field.label}: ${field.labels[v] ?? v}`,
+                                                )
                                             }}
                                         >
                                             {/* La etiqueta del campo va acá una vez; las opciones

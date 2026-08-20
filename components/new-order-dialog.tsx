@@ -36,7 +36,6 @@ export function NewOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     const [lines, setLines] = useState<Line[]>([])
     const [adding, setAdding] = useState(true)
     const [priority, setPriority] = useState("normal")
-    const [eta, setEta] = useState("")
     const [notes, setNotes] = useState("")
     const [saving, setSaving] = useState(false)
 
@@ -52,7 +51,6 @@ export function NewOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         setLines([])
         setAdding(true)
         setPriority("normal")
-        setEta("")
         setNotes("")
     }, [open])
 
@@ -70,7 +68,7 @@ export function NewOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                 phone: customer!.phone,
             },
             items: lines,
-            delivery_date_estimate: eta || null,
+            delivery_date_estimate: null,
             priority,
             notes: notes || null,
         })
@@ -220,14 +218,6 @@ export function NewOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                             ))}
                         </SelectContent>
                     </Select>
-
-                    <Input
-                        type="date"
-                        value={eta}
-                        onChange={(e) => setEta(e.target.value)}
-                        title="Entrega estimada"
-                        className="h-7 w-auto rounded-full border px-2.5 text-[12px] focus-visible:ring-0"
-                    />
 
                     <div className="ml-auto flex items-center gap-2">
                         <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
