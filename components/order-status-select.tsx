@@ -1,14 +1,16 @@
 "use client"
 
-// Único lugar donde el estado se cambia con un desplegable. En el tablero se
-// cambia arrastrando la tarjeta; la lista lo muestra de solo lectura.
+// Único lugar donde el estado se cambia con un desplegable: en el tablero se
+// cambia arrastrando. Muestra el mismo glifo que el tablero, para que el estado
+// se lea igual en las dos pantallas.
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import { ORDER_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
+import { StatusIcon } from "@/components/order-glyphs"
 
 export function OrderStatusSelect({ id, status }: { id: number; status: OrderStatus }) {
     const router = useRouter()
@@ -33,13 +35,17 @@ export function OrderStatusSelect({ id, status }: { id: number; status: OrderSta
 
     return (
         <Select value={value} onValueChange={change} disabled={saving}>
-            <SelectTrigger className="w-[190px]">
-                <SelectValue />
+            <SelectTrigger className="h-7 w-full border-0 bg-transparent px-1.5 text-[13px] hover:bg-muted focus:ring-0 justify-start gap-2">
+                <StatusIcon status={value} />
+                <span>{STATUS_LABELS[value]}</span>
             </SelectTrigger>
             <SelectContent>
                 {ORDER_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                        {STATUS_LABELS[s]}
+                    <SelectItem key={s} value={s} className="text-[13px]">
+                        <span className="flex items-center gap-2">
+                            <StatusIcon status={s} />
+                            {STATUS_LABELS[s]}
+                        </span>
                     </SelectItem>
                 ))}
             </SelectContent>
