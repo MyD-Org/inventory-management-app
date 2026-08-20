@@ -13,7 +13,17 @@ export async function GET(request: NextRequest) {
     if (denied) return denied
 
     try {
-        return NextResponse.json(await getSpecs())
+        // Devolvemos solo lo del contrato. 'labels' es cosmética de la UI y no
+        // tiene por qué viajar al bot.
+        const specs = await getSpecs()
+        return NextResponse.json(
+            Object.fromEntries(
+                Object.entries(specs).map(([key, f]) => [
+                    key,
+                    { label: f.label, options: f.options, free_text: f.free_text },
+                ]),
+            ),
+        )
     } catch (error) {
         console.error("Error in /api/specs:", error)
         return NextResponse.json({ error: "Error interno" }, { status: 500 })

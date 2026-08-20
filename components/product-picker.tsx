@@ -1,9 +1,8 @@
 "use client"
 
-// Elegir un producto escribiendo. Sugiere los que YA tienen hoja de costo, pero
-// deja cargar uno nuevo: a veces el pedido entra antes de que exista la receta.
-// Esa línea queda marcada "sin receta" y sin lista de materiales hasta que se
-// cargue el costo.
+// Elegir un producto escribiendo. Sugiere los que ya tienen el costo cargado,
+// pero deja escribir uno nuevo: a veces el pedido entra antes. Esa línea queda
+// sin lista de materiales hasta que se cargue el costo del producto.
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
@@ -13,7 +12,7 @@ export function ProductPicker({
     onPick,
     onCancel,
     autoFocus = true,
-    placeholder = "Escribí el nombre del producto",
+    placeholder = "Producto",
 }: {
     products: string[]
     onPick: (product: string) => void
@@ -96,12 +95,12 @@ export function ProductPicker({
                         }`}
                     >
                         Usar <strong>{nuevo}</strong>
-                        <span className="text-muted-foreground"> · producto nuevo, queda sin receta</span>
+                        <span className="text-muted-foreground"> · producto nuevo</span>
                     </button>
                 )}
                 {matches.length === 0 && !ofrecerNuevo && (
                     <p className="px-3 py-2 text-[12px] text-muted-foreground">
-                        Escribí para buscar o cargar un producto.
+                        Escribí el nombre del producto.
                     </p>
                 )}
             </div>

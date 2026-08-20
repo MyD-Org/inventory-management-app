@@ -8,7 +8,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Plus, Trash2, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { addOrderItem, deleteOrderItem, updateOrderItem } from "@/lib/order-actions"
@@ -59,7 +59,7 @@ export function OrderItemsEditor({
     const specsLine = (specs: Record<string, string>) =>
         Object.keys(vocab)
             .filter((k) => specs[k])
-            .map((k) => specs[k])
+            .map((k) => vocab[k].labels[specs[k]] ?? specs[k])
             .join(" · ")
 
     const faltantes = (specs: Record<string, string>) =>
@@ -92,9 +92,15 @@ export function OrderItemsEditor({
                                     </span>
                                 )}
                                 {faltan.length > 0 && (
-                                    <span className="text-[12px] text-muted-foreground ml-auto shrink-0 border border-dashed rounded px-1.5 py-0.5">
-                                        falta{faltan.length > 1 ? "n" : ""}{" "}
-                                        {faltan.map(([, f]) => f.label.toLowerCase()).join(", ")}
+                                    <span
+                                        className="text-[12px] text-muted-foreground ml-auto shrink-0 border border-dashed rounded px-1.5 py-0.5"
+                                        title={`Sin especificar: ${faltan.map(([, f]) => f.label).join(", ")}`}
+                                    >
+                                        {faltan.length > 2
+                                            ? `faltan ${faltan.length} datos`
+                                            : `falta${faltan.length > 1 ? "n" : ""} ${faltan
+                                                  .map(([, f]) => f.label.toLowerCase())
+                                                  .join(" y ")}`}
                                     </span>
                                 )}
                                 <span className="text-[11px] text-muted-foreground opacity-0 group-hover:opacity-100 ml-auto shrink-0 no-print">
@@ -170,14 +176,23 @@ export function OrderItemsEditor({
                                                 run(() => updateOrderItem(item.id, { specs: next }), "Actualizado")
                                             }}
                                         >
+                                            {/* La etiqueta del campo va acá una vez; las opciones
+                                                muestran solo el valor, sin repetirla. */}
                                             <SelectTrigger className="h-8 text-[13px]">
-                                                <SelectValue placeholder={field.label} />
+                                                <span className="truncate">
+                                                    <span className="text-muted-foreground">{field.label}</span>
+                                                    {item.specs[key] && (
+                                                        <>: {field.labels[item.specs[key]] ?? item.specs[key]}</>
+                                                    )}
+                                                </span>
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value={SIN}>{field.label}: sin especificar</SelectItem>
+                                                <SelectItem value={SIN} className="text-muted-foreground">
+                                                    Sin especificar
+                                                </SelectItem>
                                                 {field.options.map((o) => (
                                                     <SelectItem key={o} value={o}>
-                                                        {field.label}: {o}
+                                                        {field.labels[o] ?? o}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>

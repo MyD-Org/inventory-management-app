@@ -204,7 +204,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                     {card.needs_review && (
                                                         <PackageX
                                                             className="h-3.5 w-3.5 text-destructive"
-                                                            aria-label="Sin receta"
+                                                            aria-label="Sin lista de materiales"
                                                         />
                                                     )}
                                                     <PriorityIcon priority={card.priority} />

@@ -68,7 +68,7 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                             </span>
 
                             {o.needs_review && (
-                                <PackageX className="h-3.5 w-3.5 text-destructive shrink-0" aria-label="Sin receta" />
+                                <PackageX className="h-3.5 w-3.5 text-destructive shrink-0" aria-label="Sin lista de materiales" />
                             )}
 
                             <span className="text-[11px] text-muted-foreground tabular-nums hidden sm:block shrink-0">

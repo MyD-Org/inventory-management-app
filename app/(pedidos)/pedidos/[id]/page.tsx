@@ -72,7 +72,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         }
     }
     const materiales = Array.from(totales.values()).sort((a, b) => a.label.localeCompare(b.label))
-    const sinReceta = order.items.filter((i) => i.needs_review)
+    const sinMateriales = order.items.filter((i) => i.needs_review)
 
     return (
         <div className="container mx-auto px-4 py-5 max-w-6xl">
@@ -130,15 +130,15 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     )}
 
                     {/* 3. Avisos, al final */}
-                    {sinReceta.length > 0 && (
+                    {sinMateriales.length > 0 && (
                         <section className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
                             <h2 className="flex items-center gap-2 text-[13px] font-medium text-destructive mb-1">
                                 <AlertTriangle className="h-4 w-4" />
-                                {sinReceta.length === 1 ? "Un producto sin receta" : `${sinReceta.length} productos sin receta`}
+                                Sin lista de materiales
                             </h2>
                             <p className="text-[13px] text-muted-foreground">
-                                {sinReceta.map((i) => i.product).join(", ")} no tiene hoja de costo, así que sus
-                                materiales no están en la lista de arriba. Cargala en{" "}
+                                {sinMateriales.map((i) => i.product).join(", ")} todavía no tiene el costo
+                                cargado, así que sus materiales no aparecen arriba. Cargalo en{" "}
                                 <strong className="text-foreground">Calcular Costos</strong> o resolvelo a mano.
                             </p>
                         </section>

@@ -143,14 +143,22 @@ export function NewOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                                                         )
                                                     }
                                                 >
-                                                    <SelectTrigger className="h-6 w-auto gap-1.5 rounded-full border px-2 text-[11px] focus:ring-0">
-                                                        {line.specs[key] ?? field.label}
+                                                    <SelectTrigger
+                                                        className={`h-6 w-auto gap-1.5 rounded-full border px-2 text-[11px] focus:ring-0 ${
+                                                            line.specs[key] ? "" : "text-muted-foreground"
+                                                        }`}
+                                                    >
+                                                        {line.specs[key]
+                                                            ? field.labels[line.specs[key]] ?? line.specs[key]
+                                                            : field.label}
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value={SIN}>{field.label}: sin especificar</SelectItem>
+                                                        <SelectItem value={SIN} className="text-muted-foreground">
+                                                            Sin especificar
+                                                        </SelectItem>
                                                         {field.options.map((o) => (
                                                             <SelectItem key={o} value={o}>
-                                                                {field.label}: {o}
+                                                                {field.labels[o] ?? o}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>

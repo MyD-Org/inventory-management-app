@@ -35,6 +35,10 @@ export interface SpecField {
     label: string
     options: string[]
     free_text: boolean
+    // Cómo se muestra cada opción ("calido" -> "Cálido", "8" -> "8°"). Es solo
+    // para la UI: GET /api/specs sigue devolviendo options tal cual manda el doc
+    // del CRM, porque esos son los valores del contrato con el bot.
+    labels: Record<string, string>
 }
 
 // Vocabulario vigente: { clamp: { label: "Grampa", options: ["larga","corta"] } }.
@@ -42,7 +46,7 @@ export interface SpecField {
 // sin romper los pedidos históricos que la usaron.
 export async function getSpecs(): Promise<Record<string, SpecField>> {
     const rows = await sql`
-        SELECT f.key, f.label, f.free_text, o.value
+        SELECT f.key, f.label, f.free_text, o.value, o.label AS option_label
         FROM spec_fields f
         LEFT JOIN spec_options o ON o.field_key = f.key AND o.active = TRUE
         WHERE f.active = TRUE
@@ -50,8 +54,13 @@ export async function getSpecs(): Promise<Record<string, SpecField>> {
     `
     const specs: Record<string, SpecField> = {}
     for (const r of rows as any[]) {
-        if (!specs[r.key]) specs[r.key] = { label: r.label, options: [], free_text: r.free_text }
-        if (r.value) specs[r.key].options.push(r.value)
+        if (!specs[r.key]) {
+            specs[r.key] = { label: r.label, options: [], free_text: r.free_text, labels: {} }
+        }
+        if (r.value) {
+            specs[r.key].options.push(r.value)
+            specs[r.key].labels[r.value] = r.option_label ?? r.value
+        }
     }
     return specs
 }
