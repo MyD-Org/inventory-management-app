@@ -1,0 +1,358 @@
+"use client"
+
+// Alta de pedido con la MISMA pantalla que el detalle: la tabla "Qué armar" a
+// la izquierda con una columna por spec, y las propiedades al costado. Se
+// completa igual que se edita un pedido ya creado, en vez de en un modal
+// apretado donde las specs entraban como pastillas amontonadas.
+//
+// A diferencia del detalle, acá nada se guarda hasta apretar "Crear pedido":
+// no queremos pedidos a medio hacer ensuciando el tablero si alguien abandona.
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
+import { ChevronRight, Loader2, Plus, Trash2 } from "lucide-react"
+import { createOrderManual } from "@/lib/order-actions"
+import { useToast } from "@/hooks/use-toast"
+import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker"
+import { ProductPicker } from "@/components/product-picker"
+import { PriorityIcon } from "@/components/order-glyphs"
+import type { SpecField } from "@/lib/orders"
+
+interface Line {
+    product: string
+    quantity: number
+    specs: Record<string, string>
+}
+
+const SIN = "__ninguna__"
+const PRIORITY_LABELS: Record<string, string> = { baja: "Baja", normal: "Normal", alta: "Alta" }
+
+function Prop({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="grid grid-cols-[86px_1fr] items-center gap-2 py-1">
+            <span className="text-xs text-muted-foreground">{label}</span>
+            <div className="text-sm min-w-0">{children}</div>
+        </div>
+    )
+}
+
+export function NewOrderPage({
+    specs,
+    products,
+}: {
+    specs: Record<string, SpecField>
+    products: string[]
+}) {
+    const router = useRouter()
+    const { toast } = useToast()
+    const [customer, setCustomer] = useState<PickedCustomer | null>(null)
+    const [priority, setPriority] = useState("normal")
+    const [eta, setEta] = useState("")
+    const [notes, setNotes] = useState("")
+    const [lines, setLines] = useState<Line[]>([])
+    const [agregando, setAgregando] = useState(true)
+    const [saving, setSaving] = useState(false)
+
+    const columnas = Object.entries(specs)
+    const anchoCol = (kind: string) =>
+        kind === "boolean" ? "w-[72px]" : kind === "text" ? "w-[18%]" : "w-[12%]"
+
+    const listo = customer !== null && lines.length > 0
+
+    function setSpec(idx: number, key: string, value: string | null) {
+        setLines((ls) =>
+            ls.map((l, i) => {
+                if (i !== idx) return l
+                const next = { ...l.specs }
+                if (value === null || value === SIN || value === "") delete next[key]
+                else next[key] = value
+                return { ...l, specs: next }
+            }),
+        )
+    }
+
+    async function crear() {
+        if (!listo) return
+        setSaving(true)
+        const result = await createOrderManual({
+            external_id: "",
+            origin: "manual",
+            customer: {
+                external_id: customer!.external_id,
+                name: customer!.name,
+                phone: customer!.phone,
+            },
+            items: lines,
+            delivery_date_estimate: eta || null,
+            priority,
+            notes: notes || null,
+        })
+        setSaving(false)
+        if (result.error) {
+            toast.error("No se pudo crear", { description: result.error })
+            return
+        }
+        toast.success(result.created === false ? "Ese pedido ya existía" : "Pedido creado")
+        router.push(`/pedidos/${result.id}`)
+    }
+
+    return (
+        <div className="w-full px-8 py-6">
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-5">
+                <Link href="/pedidos" className="hover:text-foreground">
+                    Pedidos
+                </Link>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                <span className="text-foreground">Nuevo</span>
+            </div>
+
+            <div className="grid gap-8 lg:grid-cols-[1fr_250px] items-start">
+                {/* ---------- Qué armar ---------- */}
+                <div className="min-w-0 space-y-7">
+                    <section>
+                        <h1 className="text-sm font-medium text-muted-foreground mb-2">Qué armar</h1>
+
+                        <div className="border rounded-lg overflow-x-auto scrollbar-hide">
+                            <table className="w-full table-fixed">
+                                <thead>
+                                    <tr className="text-left">
+                                        <th className="px-3 py-2 text-xs font-medium text-muted-foreground text-right w-[64px]">
+                                            Cant.
+                                        </th>
+                                        <th className="px-3 py-2 text-xs font-medium text-muted-foreground w-[16%]">
+                                            Producto
+                                        </th>
+                                        {columnas.map(([key, field]) => (
+                                            <th
+                                                key={key}
+                                                className={`px-3 py-2 text-xs font-medium text-muted-foreground ${anchoCol(
+                                                    field.kind,
+                                                )}`}
+                                            >
+                                                <span className="block truncate">{field.label}</span>
+                                            </th>
+                                        ))}
+                                        <th className="w-[44px]" />
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {lines.map((line, idx) => (
+                                        <tr key={idx} className="border-t">
+                                            <td className="px-3 py-2">
+                                                <Input
+                                                    type="number"
+                                                    min={1}
+                                                    value={line.quantity}
+                                                    className="h-8 w-full text-sm px-2"
+                                                    onChange={(e) =>
+                                                        setLines((ls) =>
+                                                            ls.map((l, i) =>
+                                                                i === idx
+                                                                    ? { ...l, quantity: Number(e.target.value) }
+                                                                    : l,
+                                                            ),
+                                                        )
+                                                    }
+                                                />
+                                            </td>
+                                            <td className="px-3 py-2 text-sm font-medium">
+                                                <span className="block truncate" title={line.product}>
+                                                    {line.product}
+                                                </span>
+                                            </td>
+
+                                            {columnas.map(([key, field]) => (
+                                                <td key={key} className="px-3 py-2">
+                                                    {field.kind === "boolean" ? (
+                                                        <label className="flex items-center h-8 cursor-pointer select-none">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="h-4 w-4 accent-primary"
+                                                                checked={line.specs[key] === "con"}
+                                                                onChange={(e) =>
+                                                                    setSpec(idx, key, e.target.checked ? "con" : null)
+                                                                }
+                                                            />
+                                                        </label>
+                                                    ) : field.kind === "text" ? (
+                                                        <Input
+                                                            value={line.specs[key] ?? ""}
+                                                            placeholder="—"
+                                                            className="h-8 text-sm w-full px-2"
+                                                            onChange={(e) => setSpec(idx, key, e.target.value)}
+                                                        />
+                                                    ) : (
+                                                        <Select
+                                                            value={line.specs[key] ?? SIN}
+                                                            onValueChange={(v) => setSpec(idx, key, v)}
+                                                        >
+                                                            <SelectTrigger className="h-8 text-sm w-full px-2">
+                                                                <span className="truncate">
+                                                                    {line.specs[key] ? (
+                                                                        field.labels[line.specs[key]] ??
+                                                                        line.specs[key]
+                                                                    ) : (
+                                                                        <span className="text-muted-foreground/60">
+                                                                            —
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem
+                                                                    value={SIN}
+                                                                    className="text-muted-foreground"
+                                                                >
+                                                                    Sin especificar
+                                                                </SelectItem>
+                                                                {field.options.map((o) => (
+                                                                    <SelectItem key={o} value={o}>
+                                                                        {field.labels[o] ?? o}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    )}
+                                                </td>
+                                            ))}
+
+                                            <td className="px-2 py-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                    title="Quitar"
+                                                    onClick={() =>
+                                                        setLines((ls) => ls.filter((_, i) => i !== idx))
+                                                    }
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                    ))}
+
+                                    {agregando && (
+                                        <tr className="border-t bg-muted/30">
+                                            <td colSpan={3 + columnas.length} className="px-3 py-3">
+                                                <div className="flex items-center gap-3 max-w-md">
+                                                    <span className="text-sm text-muted-foreground shrink-0">
+                                                        Agregar
+                                                    </span>
+                                                    <ProductPicker
+                                                        products={products}
+                                                        autoFocus
+                                                        onCancel={() =>
+                                                            lines.length > 0 && setAgregando(false)
+                                                        }
+                                                        onPick={(product) => {
+                                                            setLines((ls) => [
+                                                                ...ls,
+                                                                { product, quantity: 1, specs: {} },
+                                                            ])
+                                                            setAgregando(false)
+                                                        }}
+                                                    />
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+
+                                    {lines.length === 0 && !agregando && (
+                                        <tr className="border-t">
+                                            <td
+                                                colSpan={3 + columnas.length}
+                                                className="px-3 py-6 text-center text-sm text-muted-foreground"
+                                            >
+                                                Todavía no agregaste ningún producto.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {!agregando && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="mt-2 text-muted-foreground"
+                                onClick={() => setAgregando(true)}
+                            >
+                                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                Agregar producto
+                            </Button>
+                        )}
+                    </section>
+
+                    <div className="flex items-center gap-2">
+                        <Link href="/pedidos">
+                            <Button variant="ghost" size="sm" disabled={saving}>
+                                Cancelar
+                            </Button>
+                        </Link>
+                        <Button size="sm" onClick={crear} disabled={!listo || saving}>
+                            {saving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                            Crear pedido
+                        </Button>
+                        {!listo && (
+                            <span className="text-xs text-muted-foreground">
+                                {customer === null
+                                    ? "Elegí un cliente para poder crearlo"
+                                    : "Agregá al menos un producto"}
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                {/* ---------- Propiedades ---------- */}
+                <aside className="lg:border-l lg:pl-5 lg:sticky lg:top-4 space-y-3">
+                    <CustomerPicker value={customer} onChange={setCustomer} />
+
+                    <Textarea
+                        rows={2}
+                        placeholder="Notas para el taller"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        className="text-sm resize-none bg-muted/50 border-0 focus-visible:ring-1"
+                    />
+
+                    <div>
+                        <Prop label="Prioridad">
+                            <Select value={priority} onValueChange={setPriority}>
+                                <SelectTrigger className="h-7 w-full border-0 bg-transparent px-1.5 text-sm hover:bg-muted focus:ring-0 justify-start gap-2 -ml-1.5">
+                                    <PriorityIcon priority={priority} />
+                                    <span>{PRIORITY_LABELS[priority]}</span>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {["baja", "normal", "alta"].map((p) => (
+                                        <SelectItem key={p} value={p}>
+                                            <span className="flex items-center gap-2">
+                                                <PriorityIcon priority={p} />
+                                                {PRIORITY_LABELS[p]}
+                                            </span>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </Prop>
+
+                        <Prop label="Entrega">
+                            <Input
+                                type="date"
+                                value={eta}
+                                onChange={(e) => setEta(e.target.value)}
+                                className="h-7 border-0 bg-transparent px-1.5 -ml-1.5 text-sm hover:bg-muted focus-visible:ring-0 w-full"
+                            />
+                        </Prop>
+                    </div>
+                </aside>
+            </div>
+        </div>
+    )
+}

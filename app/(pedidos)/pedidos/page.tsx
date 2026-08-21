@@ -52,7 +52,7 @@ export default async function OrdersPage({
     }))
 
     return (
-        <div className="h-full flex flex-col w-full px-5 py-6">
+        <div className="h-full flex flex-col w-full px-8 py-6">
             <div className="mb-6 shrink-0 flex items-start justify-between gap-4 flex-wrap">
                 <div>
                     <h1 className="text-2xl font-bold">Pedidos</h1>

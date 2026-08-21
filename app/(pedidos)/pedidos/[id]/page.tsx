@@ -65,7 +65,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     const sinMateriales = order.items.filter((i) => i.needs_review)
 
     return (
-        <div className="w-full px-5 py-5">
+        <div className="w-full px-8 py-6">
             <div className="flex items-center justify-between gap-4 mb-5 no-print">
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-0">
                     <Link href="/pedidos" className="hover:text-foreground">
