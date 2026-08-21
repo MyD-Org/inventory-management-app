@@ -56,7 +56,13 @@ export function OrderItemsEditor({
     }
     const [pendingDelete, setPendingDelete] = useState<number | null>(null)
     const [deleting, setDeleting] = useState(false)
-    const [adding, setAdding] = useState(false)
+    // Fila nueva en blanco, se completa dentro de la tabla y se guarda entera.
+    const [nuevo, setNuevo] = useState<{
+        product: string
+        quantity: number
+        specs: Record<string, string>
+    } | null>(null)
+    const [addingSave, setAddingSave] = useState(false)
 
     async function run(fn: () => Promise<{ error?: string }>, ok: string) {
         const result = await fn()
@@ -92,7 +98,7 @@ export function OrderItemsEditor({
 
     return (
         <>
-            <div className="border rounded-lg overflow-x-auto scrollbar-hide">
+            <div className="border rounded-lg">
                 <table className="w-full table-fixed">
                     <thead>
                         <tr className="text-left">
@@ -341,6 +347,150 @@ export function OrderItemsEditor({
                     )
                 })}
 
+                        {nuevo && (
+                            <>
+                                <tr className="border-t bg-muted/30">
+                                    <td className="px-3 py-2">
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            value={nuevo.quantity}
+                                            className="h-8 w-full text-sm px-2"
+                                            onChange={(e) =>
+                                                setNuevo((n) =>
+                                                    n ? { ...n, quantity: Number(e.target.value) } : n,
+                                                )
+                                            }
+                                        />
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        {nuevo.product ? (
+                                            <button
+                                                type="button"
+                                                className="block w-full truncate text-left text-sm font-medium hover:underline"
+                                                title="Cambiar producto"
+                                                onClick={() => setNuevo((n) => (n ? { ...n, product: "" } : n))}
+                                            >
+                                                {nuevo.product}
+                                            </button>
+                                        ) : (
+                                            <ProductPicker
+                                                products={products}
+                                                autoFocus
+                                                onCancel={() => setNuevo(null)}
+                                                onPick={(product) =>
+                                                    setNuevo((n) => (n ? { ...n, product } : n))
+                                                }
+                                            />
+                                        )}
+                                    </td>
+
+                                    {columnas.map(([key, field]) => (
+                                        <td key={key} className="px-3 py-2">
+                                            {field.kind === "boolean" ? (
+                                                <label className="flex items-center h-8 cursor-pointer select-none">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="h-4 w-4 accent-primary"
+                                                        checked={nuevo.specs[key] === "con"}
+                                                        onChange={(e) =>
+                                                            setNuevo((n) => {
+                                                                if (!n) return n
+                                                                const specs = { ...n.specs }
+                                                                if (e.target.checked) specs[key] = "con"
+                                                                else delete specs[key]
+                                                                return { ...n, specs }
+                                                            })
+                                                        }
+                                                    />
+                                                </label>
+                                            ) : field.kind === "text" ? (
+                                                <Input
+                                                    value={nuevo.specs[key] ?? ""}
+                                                    placeholder="—"
+                                                    className="h-8 text-sm w-full px-2"
+                                                    onChange={(e) =>
+                                                        setNuevo((n) => {
+                                                            if (!n) return n
+                                                            const specs = { ...n.specs }
+                                                            if (e.target.value) specs[key] = e.target.value
+                                                            else delete specs[key]
+                                                            return { ...n, specs }
+                                                        })
+                                                    }
+                                                />
+                                            ) : (
+                                                <Select
+                                                    value={nuevo.specs[key] ?? SIN}
+                                                    onValueChange={(v) =>
+                                                        setNuevo((n) => {
+                                                            if (!n) return n
+                                                            const specs = { ...n.specs }
+                                                            if (v === SIN) delete specs[key]
+                                                            else specs[key] = v
+                                                            return { ...n, specs }
+                                                        })
+                                                    }
+                                                >
+                                                    <SelectTrigger className="h-8 text-sm w-full px-2">
+                                                        <span className="truncate">
+                                                            {nuevo.specs[key] ? (
+                                                                field.labels[nuevo.specs[key]] ?? nuevo.specs[key]
+                                                            ) : (
+                                                                <span className="text-muted-foreground/60">—</span>
+                                                            )}
+                                                        </span>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value={SIN} className="text-muted-foreground">
+                                                            Sin especificar
+                                                        </SelectItem>
+                                                        {field.options.map((o) => (
+                                                            <SelectItem key={o} value={o}>
+                                                                {field.labels[o] ?? o}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        </td>
+                                    ))}
+                                </tr>
+
+                                <tr className="bg-muted/30">
+                                    <td colSpan={2 + columnas.length} className="px-3 pb-3">
+                                        <div className="flex items-center justify-end gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setNuevo(null)}
+                                                disabled={addingSave}
+                                            >
+                                                Cancelar
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                disabled={!nuevo.product || nuevo.quantity <= 0 || addingSave}
+                                                onClick={async () => {
+                                                    setAddingSave(true)
+                                                    const ok = await run(
+                                                        () => addOrderItem(orderId, nuevo),
+                                                        `${nuevo.product} agregado`,
+                                                    )
+                                                    setAddingSave(false)
+                                                    if (ok) setNuevo(null)
+                                                }}
+                                            >
+                                                {addingSave && (
+                                                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                                )}
+                                                Agregar
+                                            </Button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </>
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -357,28 +507,12 @@ export function OrderItemsEditor({
                 </p>
             )}
 
-            {adding ? (
-                <div className="mt-2 max-w-sm no-print">
-                    <ProductPicker
-                        products={products}
-                        autoFocus
-                        onCancel={() => setAdding(false)}
-                        onPick={async (product) => {
-                            setAdding(false)
-                            // Entra con cantidad 1; se ajusta tocando la línea.
-                            await run(
-                                () => addOrderItem(orderId, { product, quantity: 1 }),
-                                `${product} agregado`,
-                            )
-                        }}
-                    />
-                </div>
-            ) : (
+            {!nuevo && (
                 <Button
                     variant="ghost"
                     size="sm"
                     className="mt-2 text-muted-foreground no-print"
-                    onClick={() => setAdding(true)}
+                    onClick={() => setNuevo({ product: "", quantity: 1, specs: {} })}
                 >
                     <Plus className="mr-1.5 h-3.5 w-3.5" />
                     Agregar producto

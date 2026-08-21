@@ -56,6 +56,8 @@ export function NewOrderPage({
     const [notes, setNotes] = useState("")
     const [lines, setLines] = useState<Line[]>([])
     const [agregando, setAgregando] = useState(true)
+    // Fila en blanco que se completa dentro de la tabla y se suma al confirmar.
+    const [borrador, setBorrador] = useState<Line>({ product: "", quantity: 1, specs: {} })
     const [saving, setSaving] = useState(false)
 
     const columnas = Object.entries(specs)
@@ -116,7 +118,7 @@ export function NewOrderPage({
                 <div className="min-w-0 space-y-7">
                     <section>
 
-                        <div className="border rounded-lg overflow-x-auto scrollbar-hide">
+                        <div className="border rounded-lg">
                             <table className="w-full table-fixed">
                                 <thead>
                                     <tr className="text-left">
@@ -236,7 +238,141 @@ export function NewOrderPage({
                                         </tr>
                                     ))}
 
-                                    {lines.length === 0 && (
+                                    {agregando && (
+                                        <tr className="border-t bg-muted/30">
+                                            <td className="px-3 py-2">
+                                                <Input
+                                                    type="number"
+                                                    min={1}
+                                                    value={borrador.quantity}
+                                                    className="h-8 w-full text-sm px-2"
+                                                    onChange={(e) =>
+                                                        setBorrador((b) => ({
+                                                            ...b,
+                                                            quantity: Number(e.target.value),
+                                                        }))
+                                                    }
+                                                />
+                                            </td>
+                                            <td className="px-3 py-2">
+                                                {borrador.product ? (
+                                                    <button
+                                                        type="button"
+                                                        className="block w-full truncate text-left text-sm font-medium hover:underline"
+                                                        title="Cambiar producto"
+                                                        onClick={() =>
+                                                            setBorrador((b) => ({ ...b, product: "" }))
+                                                        }
+                                                    >
+                                                        {borrador.product}
+                                                    </button>
+                                                ) : (
+                                                    <ProductPicker
+                                                        products={products}
+                                                        autoFocus
+                                                        onCancel={() =>
+                                                            lines.length > 0 && setAgregando(false)
+                                                        }
+                                                        onPick={(product) =>
+                                                            setBorrador((b) => ({ ...b, product }))
+                                                        }
+                                                    />
+                                                )}
+                                            </td>
+
+                                            {columnas.map(([key, field]) => (
+                                                <td key={key} className="px-3 py-2">
+                                                    {field.kind === "boolean" ? (
+                                                        <label className="flex items-center h-8 cursor-pointer select-none">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="h-4 w-4 accent-primary"
+                                                                checked={borrador.specs[key] === "con"}
+                                                                onChange={(e) =>
+                                                                    setBorrador((b) => {
+                                                                        const specs = { ...b.specs }
+                                                                        if (e.target.checked) specs[key] = "con"
+                                                                        else delete specs[key]
+                                                                        return { ...b, specs }
+                                                                    })
+                                                                }
+                                                            />
+                                                        </label>
+                                                    ) : field.kind === "text" ? (
+                                                        <Input
+                                                            value={borrador.specs[key] ?? ""}
+                                                            placeholder="—"
+                                                            className="h-8 text-sm w-full px-2"
+                                                            onChange={(e) =>
+                                                                setBorrador((b) => {
+                                                                    const specs = { ...b.specs }
+                                                                    if (e.target.value)
+                                                                        specs[key] = e.target.value
+                                                                    else delete specs[key]
+                                                                    return { ...b, specs }
+                                                                })
+                                                            }
+                                                        />
+                                                    ) : (
+                                                        <Select
+                                                            value={borrador.specs[key] ?? SIN}
+                                                            onValueChange={(v) =>
+                                                                setBorrador((b) => {
+                                                                    const specs = { ...b.specs }
+                                                                    if (v === SIN) delete specs[key]
+                                                                    else specs[key] = v
+                                                                    return { ...b, specs }
+                                                                })
+                                                            }
+                                                        >
+                                                            <SelectTrigger className="h-8 text-sm w-full px-2">
+                                                                <span className="truncate">
+                                                                    {borrador.specs[key] ? (
+                                                                        field.labels[borrador.specs[key]] ??
+                                                                        borrador.specs[key]
+                                                                    ) : (
+                                                                        <span className="text-muted-foreground/60">
+                                                                            —
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem
+                                                                    value={SIN}
+                                                                    className="text-muted-foreground"
+                                                                >
+                                                                    Sin especificar
+                                                                </SelectItem>
+                                                                {field.options.map((o) => (
+                                                                    <SelectItem key={o} value={o}>
+                                                                        {field.labels[o] ?? o}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    )}
+                                                </td>
+                                            ))}
+
+                                            <td className="px-2 py-2 text-right">
+                                                <Button
+                                                    size="sm"
+                                                    className="h-8"
+                                                    disabled={!borrador.product || borrador.quantity <= 0}
+                                                    onClick={() => {
+                                                        setLines((ls) => [...ls, borrador])
+                                                        setBorrador({ product: "", quantity: 1, specs: {} })
+                                                        setAgregando(false)
+                                                    }}
+                                                >
+                                                    Listo
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                    )}
+
+                                    {lines.length === 0 && !agregando && (
                                         <tr className="border-t">
                                             <td
                                                 colSpan={3 + columnas.length}
@@ -250,19 +386,7 @@ export function NewOrderPage({
                             </table>
                         </div>
 
-                        {agregando ? (
-                            <div className="mt-2 max-w-sm">
-                                <ProductPicker
-                                    products={products}
-                                    autoFocus
-                                    onCancel={() => lines.length > 0 && setAgregando(false)}
-                                    onPick={(product) => {
-                                        setLines((ls) => [...ls, { product, quantity: 1, specs: {} }])
-                                        setAgregando(false)
-                                    }}
-                                />
-                            </div>
-                        ) : (
+                        {!agregando && (
                             <Button
                                 variant="ghost"
                                 size="sm"
