@@ -373,3 +373,57 @@ export async function createOrder(payload: OrderPayload) {
 
     return { created: true, order: await readOrder(orderId) }
 }
+
+// ---------- Consumo de materiales ----------
+
+export interface MaterialNeed {
+    material_id: number | null
+    label: string
+    /** Lo que pide el pedido, sumando todas sus líneas. */
+    required: number
+    /** Lo que ya se descontó del inventario para este pedido. */
+    consumed: number
+    /** Lo que todavía falta descontar. */
+    pending: number
+    /** Stock disponible hoy. null si el material no está en el inventario. */
+    available: number | null
+}
+
+// Estado de cada material del pedido: cuánto necesita, cuánto ya se descontó y
+// cuánto hay. Es la base tanto del listado como del diálogo de descuento, para
+// que los dos muestren exactamente los mismos números.
+export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
+    const rows = await sql`
+        SELECT
+            oim.material_id,
+            MIN(oim.label) AS label,
+            SUM(oim.qty_total) AS required,
+            COALESCE(MIN(i.available_stock), 0) AS available,
+            (oim.material_id IS NOT NULL AND MIN(i.id) IS NOT NULL) AS en_inventario,
+            COALESCE((
+                SELECT SUM(sm.quantity)
+                FROM stock_movements sm
+                WHERE sm.order_id = ${orderId}
+                  AND sm.material_id = oim.material_id
+                  AND sm.movement_type = 'salida'
+            ), 0) AS consumed
+        FROM order_item_materials oim
+        JOIN order_items oi ON oi.id = oim.order_item_id
+        LEFT JOIN inventory i ON i.material_id = oim.material_id
+        WHERE oi.order_id = ${orderId}
+        GROUP BY oim.material_id
+        ORDER BY MIN(oim.label) ASC
+    `
+    return (rows as any[]).map((r) => {
+        const required = Number(r.required)
+        const consumed = Number(r.consumed)
+        return {
+            material_id: r.material_id,
+            label: r.label,
+            required,
+            consumed,
+            pending: Math.max(required - consumed, 0),
+            available: r.en_inventario ? Number(r.available) : null,
+        }
+    })
+}

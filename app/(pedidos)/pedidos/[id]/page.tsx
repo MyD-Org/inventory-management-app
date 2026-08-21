@@ -1,11 +1,12 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { getSpecs, missingMaterials, readOrder } from "@/lib/orders"
+import { getSpecs, materialNeeds, readOrder } from "@/lib/orders"
 import { STATUS_LABELS } from "@/lib/order-statuses"
-import { AlertTriangle, ChevronRight, ExternalLink, MessageSquare, PackageX } from "lucide-react"
+import { AlertTriangle, ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
 import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
 import { OrderItemsEditor } from "@/components/order-items-editor"
+import { OrderMaterials } from "@/components/order-materials"
 import { DateField, NotesField, PriorityField, TextField } from "@/components/order-props-editor"
 import { getCostedProducts } from "@/lib/costed-products"
 
@@ -43,8 +44,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     const order = await readOrder(id)
     if (!order) notFound()
 
-    const [missing, vocab, costed] = await Promise.all([
-        missingMaterials(id),
+    const [needs, vocab, costed] = await Promise.all([
+        materialNeeds(id),
         getSpecs(),
         getCostedProducts(),
     ])
@@ -61,18 +62,6 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     const unanswered = (specs: Record<string, string>) =>
         Object.entries(vocab).filter(([k, f]) => f.kind === "list" && !specs[k])
 
-    // Materiales del pedido ENTERO, sumados. Al taller le sirve una sola lista
-    // para ir a buscar al depósito, no una por línea: si dos productos llevan la
-    // misma óptica, quiere el total.
-    const totales = new Map<string, { label: string; qty: number }>()
-    for (const item of order.items) {
-        for (const m of item.materials) {
-            const key = String(m.material_id ?? m.label)
-            const prev = totales.get(key)
-            totales.set(key, { label: m.label, qty: (prev?.qty ?? 0) + m.qty_total })
-        }
-    }
-    const materiales = Array.from(totales.values()).sort((a, b) => a.label.localeCompare(b.label))
     const sinMateriales = order.items.filter((i) => i.needs_review)
 
     return (
@@ -108,27 +97,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                         />
                     </section>
 
-                    {/* 2. Qué buscar al depósito */}
-                    {materiales.length > 0 && (
-                        <section>
-                            <h2 className="text-[13px] font-medium text-muted-foreground mb-2">
-                                Materiales que necesitás
-                            </h2>
-                            <div className="border rounded-lg divide-y">
-                                {materiales.map((m) => (
-                                    <div key={m.label} className="flex items-center gap-4 px-4 py-2">
-                                        <span className="text-[15px] font-semibold tabular-nums w-14 shrink-0">
-                                            {m.qty}
-                                        </span>
-                                        <span className="text-[14px] min-w-0 flex-1 truncate">{m.label}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            <p className="text-[12px] text-muted-foreground mt-2">
-                                Total del pedido, sumando todas las líneas. Congelado al crearlo.
-                            </p>
-                        </section>
-                    )}
+                    {/* 2. Qué buscar al depósito, con su estado de stock */}
+                    <OrderMaterials orderId={order.id} needs={needs} />
 
                     {/* 3. Avisos, al final */}
                     {sinMateriales.length > 0 && (
@@ -145,30 +115,6 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                         </section>
                     )}
 
-                    {missing.length > 0 && (
-                        <section className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
-                            <h2 className="flex items-center gap-2 text-[13px] font-medium text-destructive mb-2">
-                                <PackageX className="h-4 w-4" />
-                                Falta stock para armarlo
-                            </h2>
-                            <div className="divide-y divide-destructive/15">
-                                {missing.map((m) => (
-                                    <div
-                                        key={m.material_id ?? m.label}
-                                        className="flex items-center gap-3 py-1.5 text-[13px]"
-                                    >
-                                        <span className="flex-1 min-w-0 truncate">{m.label}</span>
-                                        <span className="text-muted-foreground tabular-nums text-[12px]">
-                                            necesita {m.required} · hay {m.available}
-                                        </span>
-                                        <span className="text-destructive font-medium tabular-nums w-14 text-right">
-                                            −{m.missing}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
-                    )}
                 </div>
 
                 {/* ---------- Propiedades ---------- */}

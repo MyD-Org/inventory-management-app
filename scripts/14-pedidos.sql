@@ -218,3 +218,21 @@ UPDATE spec_fields SET position = 3 WHERE key = 'body_color';
 UPDATE spec_fields SET position = 4 WHERE key = 'clamp';
 UPDATE spec_fields SET position = 5 WHERE key = 'stake';
 UPDATE spec_fields SET position = 6 WHERE key = 'other';
+
+-- ---------- Consumo de materiales de un pedido ----------
+-- Descontar los materiales de un pedido del inventario se registra como una
+-- SALIDA normal en stock_movements: así aparece en el historial del inventario
+-- igual que cualquier otro movimiento, con su stock previo y posterior.
+--
+-- order_id vincula el movimiento con el pedido que lo originó. Con eso sabemos
+-- cuánto de cada material ya se descontó y cuánto queda pendiente, y se puede
+-- descontar en varias veces (por ejemplo si el depósito entrega a medida que
+-- llega la mercadería).
+--
+-- OJO: esta es la única sentencia de la migración que toca una tabla existente.
+-- Es aditiva (columna nueva, nullable, sin default): no reescribe filas ni
+-- cambia el comportamiento de lo que ya funciona.
+ALTER TABLE stock_movements
+    ADD COLUMN IF NOT EXISTS order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_stock_movements_order ON stock_movements(order_id);

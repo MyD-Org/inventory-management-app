@@ -12,6 +12,7 @@ import { getCostedProducts } from '@/lib/costed-products';
 import {
     createOrder,
     getSpecs,
+    materialNeeds,
     ORDER_PRIORITIES,
     ORDER_STATUSES,
     resolveProduct,
@@ -446,4 +447,123 @@ export async function deleteSpecField(key: string) {
         console.error('Error en deleteSpecField:', error);
         return { error: 'No se pudo borrar el campo' };
     }
+}
+
+// Descontar materiales del inventario por un pedido. Cada línea se registra
+// como una SALIDA normal en stock_movements (con su stock previo y posterior),
+// así aparece en el historial del inventario como cualquier otro movimiento, y
+// queda vinculada al pedido por order_id.
+//
+// Se puede descontar en varias veces: lo ya descontado se descuenta de lo
+// pendiente, así el depósito puede entregar a medida que llega la mercadería.
+export async function consumeOrderMaterials(
+    orderId: number,
+    items: { material_id: number; quantity: number }[],
+) {
+    const session = await auth();
+    if (!session?.user) return { error: 'No autenticado' };
+
+    const aDescontar = items.filter((i) => Number.isFinite(i.quantity) && i.quantity > 0);
+    if (aDescontar.length === 0) return { error: 'No hay nada para descontar' };
+
+    const userName = session.user.name || session.user.email || 'Desconocido';
+
+    try {
+        const [order] = await sql`SELECT order_number FROM orders WHERE id = ${orderId}`;
+        if (!order) return { error: 'El pedido no existe' };
+
+        // Validamos TODO antes de tocar nada: si un material no alcanza, no
+        // queremos dejar la mitad descontada.
+        const faltantes: string[] = [];
+        for (const item of aDescontar) {
+            const [inv] = await sql`
+                SELECT i.current_stock, i.available_stock, m.name
+                FROM inventory i JOIN materials m ON m.id = i.material_id
+                WHERE i.material_id = ${item.material_id}
+            `;
+            if (!inv) {
+                faltantes.push(`Material ${item.material_id} no está en el inventario`);
+            } else if (item.quantity > Number(inv.available_stock)) {
+                faltantes.push(`${inv.name}: pedís ${item.quantity} y hay ${inv.available_stock}`);
+            }
+        }
+        if (faltantes.length > 0) return { error: faltantes.join('. ') };
+
+        for (const item of aDescontar) {
+            const [inv] = await sql`
+                SELECT current_stock FROM inventory WHERE material_id = ${item.material_id}
+            `;
+            const previo = Number(inv.current_stock);
+            const nuevo = previo - item.quantity;
+
+            await sql`
+                INSERT INTO stock_movements (
+                    material_id, movement_type, quantity, previous_stock, new_stock,
+                    reference_number, notes, user_name, order_id
+                )
+                VALUES (
+                    ${item.material_id}, 'salida', ${item.quantity}, ${previo}, ${nuevo},
+                    ${`Pedido #${order.order_number}`},
+                    ${'Consumo de materiales del pedido'},
+                    ${userName}, ${orderId}
+                )
+            `;
+            await sql`
+                UPDATE inventory SET current_stock = ${nuevo}, last_updated = NOW()
+                WHERE material_id = ${item.material_id}
+            `;
+        }
+
+        revalidatePath(`/pedidos/${orderId}`);
+        revalidatePath('/inventory');
+        revalidatePath('/movimientos');
+        return { ok: true, count: aDescontar.length };
+    } catch (error) {
+        console.error('Error en consumeOrderMaterials:', error);
+        return { error: 'No se pudo descontar del inventario' };
+    }
+}
+
+// Pedidos que todavía tienen materiales sin descontar. Lo usa el inventario
+// para ofrecer "descontar los materiales de un pedido" desde Salida de Stock,
+// sin tener que ir a buscar el pedido al otro módulo.
+export async function listOrdersWithPendingMaterials() {
+    const session = await auth();
+    if (!session?.user) return [];
+
+    try {
+        const rows = await sql`
+            SELECT o.id, o.order_number, o.customer_name, o.customer_external_id, o.status
+            FROM orders o
+            WHERE o.status NOT IN ('retirado', 'cancelado')
+              AND EXISTS (
+                SELECT 1
+                FROM order_item_materials oim
+                JOIN order_items oi ON oi.id = oim.order_item_id
+                WHERE oi.order_id = o.id AND oim.material_id IS NOT NULL
+                GROUP BY oim.material_id
+                HAVING SUM(oim.qty_total) > COALESCE((
+                    SELECT SUM(sm.quantity) FROM stock_movements sm
+                    WHERE sm.order_id = o.id AND sm.material_id = oim.material_id
+                      AND sm.movement_type = 'salida'
+                ), 0)
+              )
+            ORDER BY o.created_at DESC
+            LIMIT 30
+        `;
+        return (rows as any[]).map((r) => ({
+            id: r.id as number,
+            order_number: r.order_number as number,
+            customer: (r.customer_name as string) ?? (r.customer_external_id as string),
+        }));
+    } catch (error) {
+        console.error('Error en listOrdersWithPendingMaterials:', error);
+        return [];
+    }
+}
+
+export async function getOrderNeeds(orderId: number) {
+    const session = await auth();
+    if (!session?.user) return [];
+    return materialNeeds(orderId);
 }

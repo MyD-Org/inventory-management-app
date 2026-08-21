@@ -2,6 +2,7 @@ import { Suspense } from "react"
 import { sql } from "@/lib/database"
 import { MovementHistory } from "@/components/movement-history"
 import { MovementPageHeaderAction } from "@/components/movement-page-header-action"
+import { ConsumeFromOrder } from "@/components/consume-from-order"
 
 export const dynamic = "force-dynamic"
 
@@ -34,6 +35,8 @@ export default async function SalidaPage({
           <h1 className="text-2xl font-bold text-foreground mb-2">Salida de Stock</h1>
           <p className="text-muted-foreground">Registre y consulte las salidas de materiales del inventario</p>
         </div>
+
+        <ConsumeFromOrder />
 
         <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-lg" />}>
           <MovementHistory
