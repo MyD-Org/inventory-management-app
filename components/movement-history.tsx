@@ -2,7 +2,7 @@ import Link from "next/link"
 import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, TrendingDown, RotateCcw, Calendar } from "lucide-react"
+import { TrendingUp, TrendingDown, RotateCcw, Calendar, ExternalLink } from "lucide-react"
 import { MovementFilters } from "./movement-filters"
 import { DownloadMovementsButton } from "./download-movements-button"
 import { MovementHistoryLoadingOverlay, MovementHistoryProvider } from "./movement-history-context"
@@ -57,6 +57,7 @@ async function getMovementHistory(params: { search?: string; type?: string; from
         sm.previous_stock,
         sm.new_stock,
         sm.reference_number,
+        sm.order_id,
         sm.notes,
         sm.user_name,
         sm.created_at,
@@ -85,6 +86,7 @@ async function getMovementHistory(params: { search?: string; type?: string; from
       previous_stock: Number(movement.previous_stock),
       new_stock: Number(movement.new_stock),
       reference_number: movement.reference_number,
+      order_id: movement.order_id,
       notes: movement.notes,
       user_name: movement.user_name,
       created_at: movement.created_at,
@@ -234,7 +236,23 @@ export async function MovementHistory({
                         {movement.reference_number && (
                           <>
                             <span className="hidden md:inline">•</span>
-                            <span>Ref: {movement.reference_number}</span>
+                            {movement.order_id ? (
+                              // Los pedidos viven en otro módulo, que se abre en
+                              // su propia pestaña: así no se pierde el historial
+                              // que estabas mirando.
+                              <a
+                                href={`/pedidos/${movement.order_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-primary hover:underline"
+                                title="Abrir el pedido"
+                              >
+                                Ref: {movement.reference_number}
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ) : (
+                              <span>Ref: {movement.reference_number}</span>
+                            )}
                           </>
                         )}
                       </div>
