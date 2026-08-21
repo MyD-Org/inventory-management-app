@@ -469,8 +469,25 @@ export async function consumeOrderMaterials(
     const userName = session.user.name || session.user.email || 'Desconocido';
 
     try {
-        const [order] = await sql`SELECT order_number FROM orders WHERE id = ${orderId}`;
+        const [order] = await sql`
+            SELECT order_number, customer_name, customer_external_id
+            FROM orders WHERE id = ${orderId}
+        `;
         if (!order) return { error: 'El pedido no existe' };
+
+        // La nota del movimiento es la única columna libre que se ve en el
+        // historial del inventario. Decir "consumo de materiales del pedido" no
+        // agrega nada (la referencia ya dice "Pedido #105"): lo útil es QUÉ se
+        // estaba fabricando y para quién.
+        const lineas = await sql`
+            SELECT quantity, product FROM order_items
+            WHERE order_id = ${orderId} ORDER BY line_no ASC
+        `;
+        const queSeArma = (lineas as any[])
+            .map((l) => `${Number(l.quantity)} × ${l.product}`)
+            .join(', ');
+        const cliente = order.customer_name || order.customer_external_id;
+        const nota = [queSeArma, cliente].filter(Boolean).join(' · ').slice(0, 240);
 
         // Validamos TODO antes de tocar nada: si un material no alcanza, no
         // queremos dejar la mitad descontada.
@@ -504,7 +521,7 @@ export async function consumeOrderMaterials(
                 VALUES (
                     ${item.material_id}, 'salida', ${item.quantity}, ${previo}, ${nuevo},
                     ${`Pedido #${order.order_number}`},
-                    ${'Consumo de materiales del pedido'},
+                    ${nota},
                     ${userName}, ${orderId}
                 )
             `;
