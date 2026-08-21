@@ -208,13 +208,12 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                 {card.customer_name ?? card.customer_external_id}
                                             </div>
 
-                                            {/* Con pocos productos los listamos: saber que
-                                                son "20 × Optic 1" sirve, saber que es "1
-                                                línea" no. Con muchos no entran, y alcanza
-                                                el total. */}
-                                            {card.items.length > 0 && card.items.length <= 4 && (
+                                            {/* Siempre los primeros tres, así la tarjeta
+                                                dice algo del trabajo aunque el pedido sea
+                                                largo. El resto se cuenta y se ve al abrir. */}
+                                            {card.items.length > 0 && (
                                                 <div className="text-xs text-muted-foreground/90 mb-1 space-y-0.5">
-                                                    {card.items.map((i, n) => (
+                                                    {card.items.slice(0, 3).map((i, n) => (
                                                         <div key={n} className="truncate">
                                                             <span className="tabular-nums font-medium text-foreground/80">
                                                                 {i.quantity}
@@ -223,6 +222,11 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                             {i.product}
                                                         </div>
                                                     ))}
+                                                    {card.items.length > 3 && (
+                                                        <div className="text-muted-foreground/70">
+                                                            +{card.items.length - 3} más
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
 
@@ -230,11 +234,10 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                 <span className="tabular-nums">
                                                     {card.units} {card.units === 1 ? "unidad" : "unidades"}
                                                 </span>
-                                                {card.items.length > 4 && (
-                                                    <span className="tabular-nums">
-                                                        {card.line_count} productos
-                                                    </span>
-                                                )}
+                                                <span className="tabular-nums">
+                                                    {card.line_count}{" "}
+                                                    {card.line_count === 1 ? "producto" : "productos"}
+                                                </span>
                                                 {card.delivery_date_estimate && (
                                                     <span
                                                         className={`flex items-center gap-1 ml-auto ${
