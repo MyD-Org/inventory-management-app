@@ -40,13 +40,13 @@ export function PriorityField({ id, value }: { id: number; value: string }) {
                 save({ priority: next }, "Prioridad actualizada")
             }}
         >
-            <SelectTrigger className="h-7 w-full border-0 bg-transparent px-1.5 text-[13px] hover:bg-muted focus:ring-0 justify-start gap-2 -ml-1.5">
+            <SelectTrigger className="h-7 w-full border-0 bg-transparent px-1.5 text-sm hover:bg-muted focus:ring-0 justify-start gap-2 -ml-1.5">
                 <PriorityIcon priority={v} />
                 <span>{PRIORITY_LABELS[v] ?? v}</span>
             </SelectTrigger>
             <SelectContent>
                 {["baja", "normal", "alta"].map((p) => (
-                    <SelectItem key={p} value={p} className="text-[13px]">
+                    <SelectItem key={p} value={p} className="text-sm">
                         <span className="flex items-center gap-2">
                             <PriorityIcon priority={p} />
                             {PRIORITY_LABELS[p]}
@@ -71,7 +71,7 @@ export function DateField({ id, value }: { id: number; value: string | null }) {
                 if ((value ?? "") === v) return
                 save({ delivery_date_estimate: v }, "Fecha de entrega actualizada")
             }}
-            className="h-7 border-0 bg-transparent px-1.5 -ml-1.5 text-[13px] hover:bg-muted focus-visible:ring-0 w-full"
+            className="h-7 border-0 bg-transparent px-1.5 -ml-1.5 text-sm hover:bg-muted focus-visible:ring-0 w-full"
         />
     )
 }
@@ -101,7 +101,7 @@ export function TextField({
                 if ((value ?? "") === v) return
                 save({ [field]: v } as any, `${label} actualizado`)
             }}
-            className="h-7 border-0 bg-transparent px-1.5 -ml-1.5 text-[13px] hover:bg-muted focus-visible:ring-0 w-full"
+            className="h-7 border-0 bg-transparent px-1.5 -ml-1.5 text-sm hover:bg-muted focus-visible:ring-0 w-full"
         />
     )
 }
@@ -120,7 +120,7 @@ export function NotesField({ id, value }: { id: number; value: string | null }) 
                 if ((value ?? "") === v) return
                 save({ notes: v }, "Notas actualizadas")
             }}
-            className="text-[13px] resize-none bg-muted/50 border-0 focus-visible:ring-1"
+            className="text-sm resize-none bg-muted/50 border-0 focus-visible:ring-1"
         />
     )
 }

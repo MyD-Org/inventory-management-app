@@ -59,11 +59,11 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                             <PriorityIcon priority={o.priority} />
                             <StatusIcon status={o.status} />
 
-                            <span className="text-[11px] text-muted-foreground tabular-nums w-10 shrink-0">
+                            <span className="text-xs text-muted-foreground tabular-nums w-10 shrink-0">
                                 #{o.order_number}
                             </span>
 
-                            <span className="text-[13px] font-medium truncate min-w-0 flex-1">
+                            <span className="text-sm font-medium truncate min-w-0 flex-1">
                                 {o.customer_name ?? o.customer_external_id}
                             </span>
 
@@ -71,16 +71,16 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                                 <PackageX className="h-3.5 w-3.5 text-destructive shrink-0" aria-label="Sin lista de materiales" />
                             )}
 
-                            <span className="text-[11px] text-muted-foreground tabular-nums hidden sm:block shrink-0">
+                            <span className="text-xs text-muted-foreground tabular-nums hidden sm:block shrink-0">
                                 {o.units} u.
                             </span>
 
-                            <span className="text-[11px] text-muted-foreground hidden md:block shrink-0 w-24 truncate">
+                            <span className="text-xs text-muted-foreground hidden md:block shrink-0 w-24 truncate">
                                 {STATUS_LABELS[o.status]}
                             </span>
 
                             <span
-                                className={`text-[11px] flex items-center gap-1 shrink-0 w-20 justify-end ${
+                                className={`text-xs flex items-center gap-1 shrink-0 w-20 justify-end ${
                                     overdue ? "text-destructive font-medium" : "text-muted-foreground"
                                 }`}
                             >

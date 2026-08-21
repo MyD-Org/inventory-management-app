@@ -16,19 +16,19 @@ import type { MaterialNeed } from "@/lib/orders"
 
 function Estado({ n }: { n: MaterialNeed }) {
     if (n.available === null) {
-        return <span className="text-[12px] text-muted-foreground">fuera del inventario</span>
+        return <span className="text-xs text-muted-foreground">fuera del inventario</span>
     }
     if (n.pending === 0) {
-        return <span className="text-[12px] text-emerald-600">descontado</span>
+        return <span className="text-xs text-emerald-600">descontado</span>
     }
     if (n.available < n.pending) {
         return (
-            <span className="text-[12px] text-destructive">
+            <span className="text-xs text-destructive">
                 faltan {n.pending - n.available} · hay {n.available}
             </span>
         )
     }
-    return <span className="text-[12px] text-muted-foreground">hay {n.available}</span>
+    return <span className="text-xs text-muted-foreground">hay {n.available}</span>
 }
 
 export function OrderMaterials({ orderId, needs }: { orderId: number; needs: MaterialNeed[] }) {
@@ -49,7 +49,7 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                 <button
                     type="button"
                     onClick={() => setAbierto((v) => !v)}
-                    className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+                    className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
                     <ChevronRight
                         className={`h-3.5 w-3.5 transition-transform ${abierto ? "rotate-90" : ""}`}
@@ -59,14 +59,14 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                 </button>
 
                 {conFaltante.length > 0 && (
-                    <span className="text-[12px] text-destructive">
+                    <span className="text-xs text-destructive">
                         {conFaltante.length} sin stock suficiente
                     </span>
                 )}
 
                 <div className="ml-auto no-print">
                     {todoDescontado ? (
-                        <span className="text-[12px] text-emerald-600">Ya descontado del inventario</span>
+                        <span className="text-xs text-emerald-600">Ya descontado del inventario</span>
                     ) : (
                         <Button variant="outline" size="sm" onClick={() => setDialogo(true)} disabled={descontables.length === 0}>
                             <PackageMinus className="mr-1.5 h-3.5 w-3.5" />
@@ -80,12 +80,12 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                 <div className="border rounded-lg divide-y">
                     {needs.map((n) => (
                         <div key={n.material_id ?? n.label} className="flex items-center gap-4 px-4 py-2">
-                            <span className="text-[15px] font-semibold tabular-nums w-14 shrink-0">
+                            <span className="text-base font-semibold tabular-nums w-14 shrink-0">
                                 {n.required}
                             </span>
-                            <span className="text-[14px] min-w-0 flex-1 truncate">{n.label}</span>
+                            <span className="text-sm min-w-0 flex-1 truncate">{n.label}</span>
                             {n.consumed > 0 && n.pending > 0 && (
-                                <span className="text-[12px] text-muted-foreground shrink-0">
+                                <span className="text-xs text-muted-foreground shrink-0">
                                     {n.consumed} ya descontados
                                 </span>
                             )}
@@ -103,7 +103,7 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                         <DialogTitle>Descontar del inventario</DialogTitle>
                     </DialogHeader>
 
-                    <p className="text-[13px] text-muted-foreground -mt-2">
+                    <p className="text-sm text-muted-foreground -mt-2">
                         Se registra como una salida de stock por este pedido. Podés ajustar las
                         cantidades, quitar filas o agregar otro material.
                     </p>

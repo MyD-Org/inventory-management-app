@@ -59,8 +59,12 @@
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
+  /* En oscuro el rojo estaba en luminosidad 0.396 sobre un fondo de 0.145: como
+     texto no se leía. Subido al rojo claro estándar, que contrasta contra el
+     fondo oscuro. El botón destructivo no se ve afectado: usa text-white con
+     bg-destructive/60, así que sigue teniendo contraste de sobra. */
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
   --ring: oklch(0.439 0 0);

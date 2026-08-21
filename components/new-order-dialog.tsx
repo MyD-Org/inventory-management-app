@@ -107,9 +107,9 @@ export function NewOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                                                     ),
                                                 )
                                             }
-                                            className="h-7 w-16 text-[13px]"
+                                            className="h-7 w-16 text-sm"
                                         />
-                                        <span className="text-[14px] font-medium flex-1 min-w-0 truncate">
+                                        <span className="text-sm font-medium flex-1 min-w-0 truncate">
                                             {line.product}
                                         </span>
                                         <Button
@@ -128,7 +128,7 @@ export function NewOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                                             .map(([key, field]) => (
                                                 <label
                                                     key={key}
-                                                    className={`flex items-center gap-1.5 h-6 rounded-full border px-2 text-[11px] cursor-pointer select-none ${
+                                                    className={`flex items-center gap-1.5 h-6 rounded-full border px-2 text-xs cursor-pointer select-none ${
                                                         line.specs[key] === "con" ? "" : "text-muted-foreground"
                                                     }`}
                                                 >
@@ -170,7 +170,7 @@ export function NewOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                                                     }
                                                 >
                                                     <SelectTrigger
-                                                        className={`h-6 w-auto gap-1.5 rounded-full border px-2 text-[11px] focus:ring-0 ${
+                                                        className={`h-6 w-auto gap-1.5 rounded-full border px-2 text-xs focus:ring-0 ${
                                                             line.specs[key] ? "" : "text-muted-foreground"
                                                         }`}
                                                     >
@@ -225,14 +225,14 @@ export function NewOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                         placeholder="Notas para el taller (opcional)"
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
-                        className="text-[13px] resize-none border-0 bg-muted/40 focus-visible:ring-1 px-2"
+                        className="text-sm resize-none border-0 bg-muted/40 focus-visible:ring-1 px-2"
                     />
                 </div>
 
                 {/* Propiedades opcionales como pastillas, no como formulario */}
                 <div className="flex items-center gap-2 border-t px-4 py-3 flex-wrap">
                     <Select value={priority} onValueChange={setPriority}>
-                        <SelectTrigger className="h-7 w-auto gap-2 rounded-full border px-2.5 text-[12px] focus:ring-0">
+                        <SelectTrigger className="h-7 w-auto gap-2 rounded-full border px-2.5 text-xs focus:ring-0">
                             <PriorityIcon priority={priority} />
                             {PRIORITY_LABELS[priority]}
                         </SelectTrigger>

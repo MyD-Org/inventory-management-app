@@ -49,7 +49,7 @@ export default async function SpecsPage() {
 
     return (
         <div className="container mx-auto px-4 py-6 max-w-3xl">
-            <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground mb-4">
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
                 <Link href="/pedidos" className="hover:text-foreground">
                     Pedidos
                 </Link>

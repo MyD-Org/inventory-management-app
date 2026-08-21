@@ -31,8 +31,8 @@ function formatDate(d: string | null): string {
 function Prop({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div className="grid grid-cols-[86px_1fr] items-center gap-2 py-1">
-            <span className="text-[12px] text-muted-foreground">{label}</span>
-            <div className="text-[13px] min-w-0">{children}</div>
+            <span className="text-xs text-muted-foreground">{label}</span>
+            <div className="text-sm min-w-0">{children}</div>
         </div>
     )
 }
@@ -67,7 +67,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     return (
         <div className="container mx-auto px-4 py-5 max-w-6xl">
             <div className="flex items-center justify-between gap-4 mb-5 no-print">
-                <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground min-w-0">
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-0">
                     <Link href="/pedidos" className="hover:text-foreground">
                         Pedidos
                     </Link>
@@ -82,7 +82,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 <div className="min-w-0 space-y-7">
                     {/* 1. Qué armar */}
                     <section>
-                        <h1 className="text-[13px] font-medium text-muted-foreground mb-2">Qué armar</h1>
+                        <h1 className="text-sm font-medium text-muted-foreground mb-2">Qué armar</h1>
                         <OrderItemsEditor
                             orderId={order.id}
                             items={order.items.map((i) => ({
@@ -103,11 +103,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     {/* 3. Avisos, al final */}
                     {sinMateriales.length > 0 && (
                         <section className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
-                            <h2 className="flex items-center gap-2 text-[13px] font-medium text-destructive mb-1">
+                            <h2 className="flex items-center gap-2 text-sm font-medium text-destructive mb-1">
                                 <AlertTriangle className="h-4 w-4" />
                                 Sin lista de materiales
                             </h2>
-                            <p className="text-[13px] text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                                 {sinMateriales.map((i) => i.product).join(", ")} todavía no tiene el costo
                                 cargado, así que sus materiales no aparecen arriba. Cargalo en{" "}
                                 <strong className="text-foreground">Calcular Costos</strong> o resolvelo a mano.
@@ -124,7 +124,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                             href={order.source_conversation}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-2 rounded-md border px-2.5 py-2 mb-3 text-[13px] hover:bg-muted/50 transition-colors no-print"
+                            className="flex items-center gap-2 rounded-md border px-2.5 py-2 mb-3 text-sm hover:bg-muted/50 transition-colors no-print"
                         >
                             <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                             <span className="flex-1 min-w-0 truncate">Ver la conversación</span>
@@ -136,7 +136,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                         <NotesField id={order.id} value={order.notes} />
                     </div>
                     {order.notes && (
-                        <div className="hidden print:block rounded-md bg-muted/50 p-2.5 text-[13px] mb-3">
+                        <div className="hidden print:block rounded-md bg-muted/50 p-2.5 text-sm mb-3">
                             {order.notes}
                         </div>
                     )}
@@ -179,7 +179,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                             />
                         </span>
                         <span className="hidden print:inline">{order.customer_name ?? "—"}</span>
-                        <span className="block text-[12px] text-muted-foreground truncate px-1.5 -ml-1.5">
+                        <span className="block text-xs text-muted-foreground truncate px-1.5 -ml-1.5">
                             {order.customer_external_id}
                         </span>
                     </Prop>
@@ -201,7 +201,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
                     <Prop label="Origen">{order.origin}</Prop>
                     <Prop label="Referencia">
-                        <code className="text-[11px] text-muted-foreground break-all">{order.external_id}</code>
+                        <code className="text-xs text-muted-foreground break-all">{order.external_id}</code>
                     </Prop>
                     <Prop label="Creado">
                         {new Date(order.created_at).toLocaleDateString("es-AR", {

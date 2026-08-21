@@ -96,16 +96,16 @@ export function OrderItemsEditor({
                 <table className="w-full table-fixed">
                     <thead>
                         <tr className="text-left">
-                            <th className="px-3 py-2 text-[11px] font-medium text-muted-foreground text-right w-[64px]">
+                            <th className="px-3 py-2 text-xs font-medium text-muted-foreground text-right w-[64px]">
                                 Cant.
                             </th>
-                            <th className="px-3 py-2 text-[11px] font-medium text-muted-foreground w-[16%]">
+                            <th className="px-3 py-2 text-xs font-medium text-muted-foreground w-[16%]">
                                 Producto
                             </th>
                             {columnas.map(([key, field]) => (
                                 <th
                                     key={key}
-                                    className={`px-3 py-2 text-[11px] font-medium text-muted-foreground ${anchoCol(
+                                    className={`px-3 py-2 text-xs font-medium text-muted-foreground ${anchoCol(
                                         field.kind,
                                     )}`}
                                 >
@@ -131,11 +131,11 @@ export function OrderItemsEditor({
                                 className="border-t hover:bg-muted/40 cursor-pointer outline-none focus-visible:bg-muted/40"
                             >
                                 <td className="px-3 py-2 text-right align-middle">
-                                    <span className="text-[17px] font-semibold tabular-nums">
+                                    <span className="text-lg font-semibold tabular-nums">
                                         {item.quantity}
                                     </span>
                                 </td>
-                                <td className="px-3 py-2 text-[14px] font-medium">
+                                <td className="px-3 py-2 text-sm font-medium">
                                     <span className="block truncate" title={item.product}>
                                         {item.product}
                                     </span>
@@ -163,7 +163,7 @@ export function OrderItemsEditor({
                                     return (
                                         <td
                                             key={key}
-                                            className={`px-3 py-2 text-[13px] ${
+                                            className={`px-3 py-2 text-sm ${
                                                 v ? "" : "text-muted-foreground/40"
                                             }`}
                                             title={v ? v : `${field.label} sin especificar`}
@@ -198,13 +198,13 @@ export function OrderItemsEditor({
                                         type="number"
                                         min={1}
                                         value={draft?.quantity ?? item.quantity}
-                                        className="h-8 w-full text-[14px] px-2"
+                                        className="h-8 w-full text-sm px-2"
                                         onChange={(e) =>
                                             setDraft((d) => (d ? { ...d, quantity: Number(e.target.value) } : d))
                                         }
                                     />
                                 </td>
-                                <td className="px-3 py-2 text-[14px] font-medium">
+                                <td className="px-3 py-2 text-sm font-medium">
                                     <span className="block truncate" title={item.product}>
                                         {item.product}
                                     </span>
@@ -238,7 +238,7 @@ export function OrderItemsEditor({
                                             <Input
                                                 value={draft?.specs[key] ?? ""}
                                                 placeholder="—"
-                                                className="h-8 text-[13px] w-full px-2"
+                                                className="h-8 text-sm w-full px-2"
                                                 onChange={(e) =>
                                                     setDraft((d) => {
                                                         if (!d) return d
@@ -262,7 +262,7 @@ export function OrderItemsEditor({
                                                     })
                                                 }
                                             >
-                                                <SelectTrigger className="h-8 text-[13px] w-full px-2">
+                                                <SelectTrigger className="h-8 text-sm w-full px-2">
                                                     <span className="truncate">
                                                         {draft?.specs[key]
                                                             ? field.labels[draft.specs[key]] ?? draft.specs[key]
@@ -334,7 +334,7 @@ export function OrderItemsEditor({
                     <tr className="border-t bg-muted/30">
                       <td colSpan={2 + columnas.length} className="px-4 py-3">
                        <div className="flex items-center gap-3">
-                        <span className="text-[13px] text-muted-foreground shrink-0">Agregar</span>
+                        <span className="text-sm text-muted-foreground shrink-0">Agregar</span>
                         <ProductPicker
                             products={products}
                             autoFocus

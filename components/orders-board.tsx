@@ -118,7 +118,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                     />
-                    <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground border rounded px-1 hidden sm:block">
+                    <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground border rounded px-1 hidden sm:block">
                         /
                     </kbd>
                 </div>
@@ -150,7 +150,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                         >
                             <div className="flex items-center gap-2 px-1 pb-2.5 shrink-0 select-none">
                                 <StatusIcon status={status} />
-                                <h2 className="text-[13px] font-medium">{STATUS_LABELS[status]}</h2>
+                                <h2 className="text-sm font-medium">{STATUS_LABELS[status]}</h2>
                                 <span className="text-xs text-muted-foreground tabular-nums">
                                     {column.length}
                                 </span>
@@ -197,7 +197,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                             }`}
                                         >
                                             <div className="flex items-center justify-between gap-2 mb-1">
-                                                <span className="text-[11px] text-muted-foreground tabular-nums">
+                                                <span className="text-xs text-muted-foreground tabular-nums">
                                                     #{card.order_number}
                                                 </span>
                                                 <div className="flex items-center gap-1.5">
@@ -211,11 +211,11 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                 </div>
                                             </div>
 
-                                            <div className="text-[13px] font-medium leading-snug truncate mb-1.5">
+                                            <div className="text-sm font-medium leading-snug truncate mb-1.5">
                                                 {card.customer_name ?? card.customer_external_id}
                                             </div>
 
-                                            <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground">
+                                            <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
                                                 <span className="tabular-nums">{card.units} u.</span>
                                                 <span className="tabular-nums">
                                                     {card.line_count} {card.line_count === 1 ? "línea" : "líneas"}
@@ -237,7 +237,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                 })}
 
                                 {column.length === 0 && (
-                                    <div className="rounded-md border border-dashed py-6 text-center text-[11px] text-muted-foreground">
+                                    <div className="rounded-md border border-dashed py-6 text-center text-xs text-muted-foreground">
                                         Vacío
                                     </div>
                                 )}

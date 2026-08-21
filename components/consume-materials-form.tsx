@@ -58,7 +58,7 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
                 value={query}
                 autoComplete="off"
                 placeholder="Agregar otro material del inventario"
-                className="h-8 text-[13px]"
+                className="h-8 text-sm"
                 onFocus={() => setAbierto(true)}
                 onChange={(e) => {
                     setQuery(e.target.value)
@@ -84,8 +84,8 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
                                     setAbierto(false)
                                 }}
                             >
-                                <span className="text-[13px] flex-1 min-w-0 truncate">{r.label}</span>
-                                <span className="text-[11px] text-muted-foreground shrink-0">
+                                <span className="text-sm flex-1 min-w-0 truncate">{r.label}</span>
+                                <span className="text-xs text-muted-foreground shrink-0">
                                     hay {r.available}
                                 </span>
                             </button>
@@ -186,17 +186,17 @@ export function ConsumeMaterialsForm({
                                             rs.map((x, i) => (i === idx ? { ...x, qty: e.target.value } : x)),
                                         )
                                     }
-                                    className={`h-8 text-[13px] ${error ? "border-destructive" : ""}`}
+                                    className={`h-8 text-sm ${error ? "border-destructive" : ""}`}
                                 />
                             </div>
 
                             <div className="min-w-0 flex-1">
-                                <div className="text-[13px] truncate">{r.label}</div>
+                                <div className="text-sm truncate">{r.label}</div>
                                 {error ? (
-                                    <div className="text-[11px] text-destructive">{error}</div>
+                                    <div className="text-xs text-destructive">{error}</div>
                                 ) : (
                                     faltaStock(r) && (
-                                        <div className="text-[11px] text-destructive">
+                                        <div className="text-xs text-destructive">
                                             {r.available === 0
                                                 ? "No hay stock de este material"
                                                 : `Faltan ${r.pending! - r.available!} para completar el pedido`}
@@ -206,7 +206,7 @@ export function ConsumeMaterialsForm({
                             </div>
 
                             <span
-                                className={`text-[12px] shrink-0 pt-1.5 ${
+                                className={`text-xs shrink-0 pt-1.5 ${
                                     faltaStock(r) ? "text-destructive" : "text-muted-foreground"
                                 }`}
                             >
@@ -228,7 +228,7 @@ export function ConsumeMaterialsForm({
                 })}
 
                 {rows.length === 0 && (
-                    <p className="text-[13px] text-muted-foreground py-2">
+                    <p className="text-sm text-muted-foreground py-2">
                         No queda nada por descontar. Podés agregar un material igual.
                     </p>
                 )}
@@ -243,7 +243,7 @@ export function ConsumeMaterialsForm({
 
             <div className="flex items-center justify-end gap-2 pt-1">
                 {hayError && (
-                    <span className="text-[12px] text-destructive mr-auto">
+                    <span className="text-xs text-destructive mr-auto">
                         Corregí las cantidades marcadas
                     </span>
                 )}
