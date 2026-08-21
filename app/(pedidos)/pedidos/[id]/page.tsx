@@ -2,7 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getSpecs, materialNeeds, readOrder } from "@/lib/orders"
 import { STATUS_LABELS } from "@/lib/order-statuses"
-import { AlertTriangle, ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
+import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
 import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
 import { OrderItemsEditor } from "@/components/order-items-editor"
@@ -62,7 +62,6 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     const unanswered = (specs: Record<string, string>) =>
         Object.entries(vocab).filter(([k, f]) => f.kind === "list" && !specs[k])
 
-    const sinMateriales = order.items.filter((i) => i.needs_review)
 
     return (
         <div className="w-full px-8 py-6">
@@ -101,22 +100,6 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     <OrderMaterials orderId={order.id} needs={needs} />
 
                     {/* 3. Avisos, al final */}
-                    {sinMateriales.length > 0 && (
-                        <section className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
-                            <h2 className="flex items-center gap-2 text-sm font-medium text-destructive mb-1">
-                                <AlertTriangle className="h-4 w-4" />
-                                Sin lista de materiales
-                            </h2>
-                            <p className="text-sm text-muted-foreground">
-                                <strong className="text-foreground">
-                                    {sinMateriales.map((i) => i.product).join(", ")}
-                                </strong>{" "}
-                                no tiene cargada su lista de materiales, así que no aparece en la lista de
-                                arriba. Hay que descontarlo de forma manual.
-                            </p>
-                        </section>
-                    )}
-
                 </div>
 
                 {/* ---------- Propiedades ---------- */}
