@@ -131,7 +131,15 @@ export function ConsumeMaterialsForm({
         return Number.isFinite(n) ? n : NaN
     }
 
-    // Error por fila, para mostrarlo donde está el problema.
+    // Dos cosas distintas, que se muestran distinto:
+    //
+    // faltaStock  el pedido necesita más de lo que hay. No es culpa de quien
+    //             carga: se avisa en rojo pero NO bloquea, para poder descontar
+    //             lo que sí hay y el resto cuando llegue la mercadería.
+    // errorDe     lo tipeado no se puede descontar. Bloquea el botón.
+    const faltaStock = (r: Row) =>
+        r.available !== null && r.pending !== null && r.available < r.pending
+
     const errorDe = (r: Row): string | null => {
         if (r.qty.trim() === "") return null
         const n = parsear(r.qty)
@@ -184,10 +192,24 @@ export function ConsumeMaterialsForm({
 
                             <div className="min-w-0 flex-1">
                                 <div className="text-[13px] truncate">{r.label}</div>
-                                {error && <div className="text-[11px] text-destructive">{error}</div>}
+                                {error ? (
+                                    <div className="text-[11px] text-destructive">{error}</div>
+                                ) : (
+                                    faltaStock(r) && (
+                                        <div className="text-[11px] text-destructive">
+                                            {r.available === 0
+                                                ? "No hay stock de este material"
+                                                : `Faltan ${r.pending! - r.available!} para completar el pedido`}
+                                        </div>
+                                    )
+                                )}
                             </div>
 
-                            <span className="text-[12px] text-muted-foreground shrink-0 pt-1.5">
+                            <span
+                                className={`text-[12px] shrink-0 pt-1.5 ${
+                                    faltaStock(r) ? "text-destructive" : "text-muted-foreground"
+                                }`}
+                            >
                                 {r.pending !== null ? `necesita ${r.pending} · ` : "extra · "}
                                 hay {r.available ?? "—"}
                             </span>
