@@ -22,6 +22,7 @@ import {
   LayoutDashboard,
   BellRing,
   ClipboardList,
+  ExternalLink,
   type LucideIcon,
 } from "lucide-react"
 import type { FlagKey } from "@/lib/feature-flags"
@@ -74,7 +75,6 @@ const sections: NavSection[] = [
   {
     title: "Operaciones",
     items: [
-      { label: "Pedidos", href: "/pedidos", icon: ClipboardList, activePrefixes: ["/pedidos/"] },
       { label: "Entrada de Stock", href: "/stock/entrada", icon: ArrowDownToLine, quickAction: "entrada" },
       { label: "Salida de Stock", href: "/stock/salida", icon: ArrowUpFromLine, quickAction: "salida" },
     ],
@@ -259,6 +259,16 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
       </Button>
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{date}</p>
       <div className="flex-1" />
+      {/* El módulo de pedidos es de otro público (el taller) y tiene su propio
+          layout: se abre en una pestaña aparte para no perder lo que estabas
+          haciendo en inventario. */}
+      <a href="/pedidos" target="_blank" rel="noopener noreferrer">
+        <Button variant="outline" size="sm">
+          <ClipboardList className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Pedidos</span>
+          <ExternalLink className="ml-1.5 h-3 w-3 text-muted-foreground" />
+        </Button>
+      </a>
       <ThemeToggle />
     </header>
   )
