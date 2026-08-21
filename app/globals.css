@@ -189,7 +189,16 @@
 }
 
 /* Impresión: solo se ve el contenido del documento (presupuesto en PDF). */
+/* Sin margen de página el navegador no tiene dónde poner su encabezado y su
+   pie (fecha, título de la pestaña, URL), así que los omite. El aire de la
+   hoja lo damos nosotros con padding. */
+@page {
+  margin: 0;
+}
+
 @media print {
+  body { padding: 14mm !important; }
+
   .no-print { display: none !important; }
   .aichat-root { display: none !important; }
   body { background: #fff !important; }

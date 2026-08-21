@@ -65,6 +65,18 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
     return (
         <div className="w-full px-8 py-6">
+            {/* Encabezado de la hoja impresa: arriba el cliente, que es lo que
+                identifica el trabajo en el taller. En pantalla no hace falta,
+                están las migas y la barra de propiedades. */}
+            <div className="hidden print:flex items-baseline justify-between gap-4 border-b pb-3 mb-5">
+                <h1 className="text-lg font-semibold">
+                    {order.customer_name ?? order.customer_external_id}
+                </h1>
+                <span className="text-sm text-muted-foreground tabular-nums">
+                    Pedido #{order.order_number}
+                </span>
+            </div>
+
             <div className="flex items-center justify-between gap-4 mb-5 no-print">
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-0">
                     <Link href="/pedidos" className="hover:text-foreground">
