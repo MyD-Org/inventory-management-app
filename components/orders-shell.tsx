@@ -13,7 +13,14 @@ import Link from "next/link"
 import { signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { NewOrderDialog } from "@/components/new-order-dialog"
-import { ArrowLeftRight, LogOut, Plus, Settings } from "lucide-react"
+import { ArrowLeftRight, LogOut, MoreVertical, Plus, Settings } from "lucide-react"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 export function OrdersShell({
     user,
@@ -53,33 +60,41 @@ export function OrdersShell({
                     </Link>
 
                     <div className="flex items-center gap-1 shrink-0">
-                        <Button size="sm" className="mr-1" onClick={() => setCreating(true)}>
+                        <Button size="sm" onClick={() => setCreating(true)}>
                             <Plus className="h-4 w-4 sm:mr-2" />
                             <span className="hidden sm:inline">Nuevo pedido</span>
                         </Button>
 
-                        {isAdmin && (
-                            <Link href="/pedidos/opciones" title="Opciones de pedido">
-                                <Button variant="ghost" size="icon">
-                                    <Settings className="h-4 w-4" />
+                        {/* Lo de todos los días es crear un pedido; el resto son
+                            cosas puntuales y no merecen un icono cada una. */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" title="Más opciones">
+                                    <MoreVertical className="h-4 w-4" />
                                 </Button>
-                            </Link>
-                        )}
-
-                        <Link href="/" title="Ir al sistema de inventario">
-                            <Button variant="ghost" size="icon">
-                                <ArrowLeftRight className="h-4 w-4" />
-                            </Button>
-                        </Link>
-
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Cerrar sesión"
-                            onClick={() => signOut({ callbackUrl: "/login" })}
-                        >
-                            <LogOut className="h-4 w-4" />
-                        </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                                {isAdmin && (
+                                    <DropdownMenuItem asChild>
+                                        <Link href="/pedidos/opciones">
+                                            <Settings className="mr-2 h-4 w-4" />
+                                            Opciones de pedido
+                                        </Link>
+                                    </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem asChild>
+                                    <Link href="/">
+                                        <ArrowLeftRight className="mr-2 h-4 w-4" />
+                                        Ir al inventario
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
+                                    <LogOut className="mr-2 h-4 w-4" />
+                                    Cerrar sesión
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
             </header>
