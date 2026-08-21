@@ -115,7 +115,6 @@ export function NewOrderPage({
                 {/* ---------- Qué armar ---------- */}
                 <div className="min-w-0 space-y-7">
                     <section>
-                        <h1 className="text-sm font-medium text-muted-foreground mb-2">Qué armar</h1>
 
                         <div className="border rounded-lg overflow-x-auto scrollbar-hide">
                             <table className="w-full table-fixed">

@@ -93,7 +93,6 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 <div className="min-w-0 space-y-7">
                     {/* 1. Qué armar */}
                     <section>
-                        <h1 className="text-sm font-medium text-muted-foreground mb-2">Qué armar</h1>
                         <OrderItemsEditor
                             orderId={order.id}
                             items={order.items.map((i) => ({
