@@ -73,6 +73,13 @@ export function OrderItemsEditor({
     // muestran solo qué falta especificar, sin necesidad de un cartel aparte.
     const columnas = Object.entries(vocab)
 
+    // table-fixed + un ancho por columna: sin esto, al abrir una fila los
+    // controles son más anchos que el texto y la tabla se estira, apareciendo
+    // scroll horizontal y corriéndose todo. Con el ancho fijado, ver y editar
+    // ocupan exactamente lo mismo.
+    const anchoCol = (kind: string) =>
+        kind === "boolean" ? "w-[72px]" : kind === "text" ? "w-[18%]" : "w-[12%]"
+
     // Specs de corrido, solo los valores, en el orden del vocabulario.
     const specsLine = (specs: Record<string, string>) =>
         Object.keys(vocab)
@@ -86,21 +93,25 @@ export function OrderItemsEditor({
     return (
         <>
             <div className="border rounded-lg overflow-x-auto scrollbar-hide">
-                <table className="w-full">
+                <table className="w-full table-fixed">
                     <thead>
                         <tr className="text-left">
-                            <th className="px-3 py-2 text-[11px] font-medium text-muted-foreground text-right w-16">
+                            <th className="px-3 py-2 text-[11px] font-medium text-muted-foreground text-right w-[64px]">
                                 Cant.
                             </th>
-                            <th className="px-3 py-2 text-[11px] font-medium text-muted-foreground">
+                            <th className="px-3 py-2 text-[11px] font-medium text-muted-foreground w-[16%]">
                                 Producto
                             </th>
                             {columnas.map(([key, field]) => (
                                 <th
                                     key={key}
-                                    className="px-3 py-2 text-[11px] font-medium text-muted-foreground whitespace-nowrap"
+                                    className={`px-3 py-2 text-[11px] font-medium text-muted-foreground ${anchoCol(
+                                        field.kind,
+                                    )}`}
                                 >
-                                    {field.label}
+                                    <span className="block truncate" title={field.label}>
+                                        {field.label}
+                                    </span>
                                 </th>
                             ))}
                         </tr>
@@ -125,7 +136,7 @@ export function OrderItemsEditor({
                                     </span>
                                 </td>
                                 <td className="px-3 py-2 text-[14px] font-medium">
-                                    <span className="block max-w-[180px] truncate" title={item.product}>
+                                    <span className="block truncate" title={item.product}>
                                         {item.product}
                                     </span>
                                 </td>
@@ -161,11 +172,7 @@ export function OrderItemsEditor({
                                                 puntos suspensivos para que la tabla no crezca
                                                 a lo ancho. El texto completo va en el title y
                                                 se ve entero al abrir la fila. */}
-                                            <span
-                                                className={`block truncate ${
-                                                    field.free_text ? "max-w-[180px]" : "max-w-[120px]"
-                                                }`}
-                                            >
+                                            <span className="block truncate">
                                                 {v ? field.labels[v] ?? v : "—"}
                                             </span>
                                         </td>
@@ -191,14 +198,14 @@ export function OrderItemsEditor({
                                         type="number"
                                         min={1}
                                         value={draft?.quantity ?? item.quantity}
-                                        className="h-8 w-14 text-[14px] px-2"
+                                        className="h-8 w-full text-[14px] px-2"
                                         onChange={(e) =>
                                             setDraft((d) => (d ? { ...d, quantity: Number(e.target.value) } : d))
                                         }
                                     />
                                 </td>
                                 <td className="px-3 py-2 text-[14px] font-medium">
-                                    <span className="block max-w-[180px] truncate" title={item.product}>
+                                    <span className="block truncate" title={item.product}>
                                         {item.product}
                                     </span>
                                 </td>
@@ -231,7 +238,7 @@ export function OrderItemsEditor({
                                             <Input
                                                 value={draft?.specs[key] ?? ""}
                                                 placeholder="—"
-                                                className="h-8 text-[13px] min-w-[160px]"
+                                                className="h-8 text-[13px] w-full px-2"
                                                 onChange={(e) =>
                                                     setDraft((d) => {
                                                         if (!d) return d
@@ -255,7 +262,7 @@ export function OrderItemsEditor({
                                                     })
                                                 }
                                             >
-                                                <SelectTrigger className="h-8 text-[13px] min-w-[92px]">
+                                                <SelectTrigger className="h-8 text-[13px] w-full px-2">
                                                     <span className="truncate">
                                                         {draft?.specs[key]
                                                             ? field.labels[draft.specs[key]] ?? draft.specs[key]

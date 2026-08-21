@@ -146,11 +146,13 @@ CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders
 --
 -- 'other' es texto libre (así viene en el doc), no valida contra una lista.
 
+-- Orden de las columnas del pedido: primero lo óptico/estético, y al final los
+-- dos datos de montaje juntos (grampa y estaca), que es como los mira el taller.
 INSERT INTO spec_fields (key, label, free_text, kind, position) VALUES
-    ('clamp', 'Grampa', FALSE, 'list', 1),
-    ('led_color', 'Color de LED', FALSE, 'list', 2),
-    ('optic', 'Óptica (grados)', FALSE, 'list', 3),
-    ('body_color', 'Color del equipo', FALSE, 'list', 4),
+    ('led_color', 'Color de LED', FALSE, 'list', 1),
+    ('optic', 'Óptica (grados)', FALSE, 'list', 2),
+    ('body_color', 'Color del equipo', FALSE, 'list', 3),
+    ('clamp', 'Grampa', FALSE, 'list', 4),
     ('stake', 'Estaca', FALSE, 'boolean', 5),
     ('other', 'Otras indicaciones', TRUE, 'text', 6)
 ON CONFLICT (key) DO NOTHING;
@@ -206,4 +208,13 @@ WHERE key = 'body_color' AND label = 'Color del cuerpo';
 
 -- 'other' va siempre al final: se agregó 'stake' antes y en bases ya creadas el
 -- ON CONFLICT DO NOTHING no reordena.
+UPDATE spec_fields SET position = 6 WHERE key = 'other';
+
+-- Reordenar en bases donde los campos ya existían (ON CONFLICT DO NOTHING no
+-- reordena). Grampa queda pegada a Estaca: son los dos datos de montaje.
+UPDATE spec_fields SET position = 1 WHERE key = 'led_color';
+UPDATE spec_fields SET position = 2 WHERE key = 'optic';
+UPDATE spec_fields SET position = 3 WHERE key = 'body_color';
+UPDATE spec_fields SET position = 4 WHERE key = 'clamp';
+UPDATE spec_fields SET position = 5 WHERE key = 'stake';
 UPDATE spec_fields SET position = 6 WHERE key = 'other';
