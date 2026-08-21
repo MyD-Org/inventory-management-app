@@ -71,6 +71,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             <div className="hidden print:flex items-baseline justify-between gap-4 border-b pb-3 mb-5">
                 <h1 className="text-lg font-semibold">
                     {order.customer_name ?? order.customer_external_id}
+                    {order.customer_phone && (
+                        <span className="ml-3 text-sm font-normal text-muted-foreground">
+                            {order.customer_phone}
+                        </span>
+                    )}
                 </h1>
                 <span className="text-sm text-muted-foreground tabular-nums">
                     Pedido #{order.order_number}
@@ -111,10 +116,29 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     <OrderMaterials orderId={order.id} needs={needs} />
 
                     {/* 3. Avisos, al final */}
+                    {/* En papel las propiedades van en una línea al pie, no en
+                        una columna larga: el cliente ya está en el encabezado y
+                        el resto son datos de referencia. */}
+                    <div className="hidden print:block border-t pt-2 text-xs text-muted-foreground">
+                        <span className="text-foreground">{STATUS_LABELS[order.status]}</span>
+                        {" · "}Prioridad {PRIORITY_LABELS[order.priority] ?? order.priority}
+                        {order.delivery_date_estimate && (
+                            <>{" · "}Entrega {formatDate(order.delivery_date_estimate)}</>
+                        )}
+                        {" · "}Origen {order.origin}
+                        {" · "}
+                        {order.external_id}
+                        {" · "}Creado{" "}
+                        {new Date(order.created_at).toLocaleDateString("es-AR", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                        })}
+                    </div>
                 </div>
 
                 {/* ---------- Propiedades ---------- */}
-                <aside className="lg:border-l lg:pl-5 lg:sticky lg:top-4">
+                <aside className="no-print lg:border-l lg:pl-5 lg:sticky lg:top-4">
                     {order.source_conversation && (
                         <a
                             href={order.source_conversation}

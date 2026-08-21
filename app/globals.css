@@ -231,14 +231,6 @@
   .orden-trabajo {
     display: block !important;
   }
-  .orden-trabajo aside {
-    position: static !important;
-    border-left: 0 !important;
-    padding-left: 0 !important;
-    margin-top: 1.5rem;
-    border-top: 1px solid var(--border);
-    padding-top: 0.75rem;
-  }
   .orden-trabajo table { border-collapse: collapse; }
   .orden-trabajo thead { display: table-header-group; }
   .orden-trabajo tr { break-inside: avoid; }
