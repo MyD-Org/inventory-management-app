@@ -84,7 +84,7 @@ export function OrderItemsEditor({
     // scroll horizontal y corriéndose todo. Con el ancho fijado, ver y editar
     // ocupan exactamente lo mismo.
     const anchoCol = (kind: string) =>
-        kind === "boolean" ? "w-[72px]" : kind === "text" ? "w-[18%]" : "w-[12%]"
+        kind === "boolean" ? "w-[80px]" : kind === "text" ? "w-[18%]" : "w-[13%]"
 
     // Specs de corrido, solo los valores, en el orden del vocabulario.
     const specsLine = (specs: Record<string, string>) =>
@@ -102,16 +102,16 @@ export function OrderItemsEditor({
                 <table className="w-full table-fixed">
                     <thead>
                         <tr className="text-left">
-                            <th className="px-3 py-2 text-xs font-medium text-muted-foreground text-right w-[64px]">
+                            <th className="px-3 py-2 text-sm font-medium text-muted-foreground text-right w-[72px]">
                                 Cant.
                             </th>
-                            <th className="px-3 py-2 text-xs font-medium text-muted-foreground w-[16%]">
+                            <th className="px-3 py-2 text-sm font-medium text-muted-foreground w-[18%]">
                                 Producto
                             </th>
                             {columnas.map(([key, field]) => (
                                 <th
                                     key={key}
-                                    className={`px-3 py-2 text-xs font-medium text-muted-foreground ${anchoCol(
+                                    className={`px-3 py-2 text-sm font-medium text-muted-foreground ${anchoCol(
                                         field.kind,
                                     )}`}
                                 >
@@ -141,7 +141,7 @@ export function OrderItemsEditor({
                                         {item.quantity}
                                     </span>
                                 </td>
-                                <td className="px-3 py-2 text-sm font-medium">
+                                <td className="px-3 py-2 text-base font-medium">
                                     <span className="flex items-center gap-1.5 min-w-0">
                                         <span className="truncate" title={item.product}>
                                             {item.product}
@@ -180,7 +180,7 @@ export function OrderItemsEditor({
                                     return (
                                         <td
                                             key={key}
-                                            className={`px-3 py-2 text-sm ${
+                                            className={`px-3 py-2 text-base ${
                                                 v ? "" : "text-muted-foreground/40"
                                             }`}
                                             title={v ? v : `${field.label} sin especificar`}
@@ -215,13 +215,13 @@ export function OrderItemsEditor({
                                         type="number"
                                         min={1}
                                         value={draft?.quantity ?? item.quantity}
-                                        className="h-8 w-full text-sm px-2"
+                                        className="h-9 w-full text-base px-2"
                                         onChange={(e) =>
                                             setDraft((d) => (d ? { ...d, quantity: Number(e.target.value) } : d))
                                         }
                                     />
                                 </td>
-                                <td className="px-3 py-2 text-sm font-medium">
+                                <td className="px-3 py-2 text-base font-medium">
                                     <span className="block truncate" title={item.product}>
                                         {item.product}
                                     </span>
@@ -231,7 +231,7 @@ export function OrderItemsEditor({
                                     <td key={key} className="px-3 py-2">
                                         {field.kind === "boolean" ? (
                                             <label
-                                                className="flex items-center h-8 cursor-pointer select-none"
+                                                className="flex items-center h-9 cursor-pointer select-none"
                                                 title={
                                                     field.labels["con"] ?? `Con ${field.label.toLowerCase()}`
                                                 }
@@ -255,7 +255,7 @@ export function OrderItemsEditor({
                                             <Input
                                                 value={draft?.specs[key] ?? ""}
                                                 placeholder="—"
-                                                className="h-8 text-sm w-full px-2"
+                                                className="h-9 text-base w-full px-2"
                                                 onChange={(e) =>
                                                     setDraft((d) => {
                                                         if (!d) return d
@@ -279,7 +279,7 @@ export function OrderItemsEditor({
                                                     })
                                                 }
                                             >
-                                                <SelectTrigger className="h-8 text-sm w-full px-2">
+                                                <SelectTrigger className="h-9 text-base w-full px-2">
                                                     <span className="truncate">
                                                         {draft?.specs[key]
                                                             ? field.labels[draft.specs[key]] ?? draft.specs[key]
@@ -355,7 +355,7 @@ export function OrderItemsEditor({
                                             type="number"
                                             min={1}
                                             value={nuevo.quantity}
-                                            className="h-8 w-full text-sm px-2"
+                                            className="h-9 w-full text-base px-2"
                                             onChange={(e) =>
                                                 setNuevo((n) =>
                                                     n ? { ...n, quantity: Number(e.target.value) } : n,
@@ -367,7 +367,7 @@ export function OrderItemsEditor({
                                         {nuevo.product ? (
                                             <button
                                                 type="button"
-                                                className="block w-full truncate text-left text-sm font-medium hover:underline"
+                                                className="block w-full truncate text-left text-base font-medium hover:underline"
                                                 title="Cambiar producto"
                                                 onClick={() => setNuevo((n) => (n ? { ...n, product: "" } : n))}
                                             >
@@ -388,7 +388,7 @@ export function OrderItemsEditor({
                                     {columnas.map(([key, field]) => (
                                         <td key={key} className="px-3 py-2">
                                             {field.kind === "boolean" ? (
-                                                <label className="flex items-center h-8 cursor-pointer select-none">
+                                                <label className="flex items-center h-9 cursor-pointer select-none">
                                                     <input
                                                         type="checkbox"
                                                         className="h-4 w-4 accent-primary"
@@ -408,7 +408,7 @@ export function OrderItemsEditor({
                                                 <Input
                                                     value={nuevo.specs[key] ?? ""}
                                                     placeholder="—"
-                                                    className="h-8 text-sm w-full px-2"
+                                                    className="h-9 text-base w-full px-2"
                                                     onChange={(e) =>
                                                         setNuevo((n) => {
                                                             if (!n) return n
@@ -432,7 +432,7 @@ export function OrderItemsEditor({
                                                         })
                                                     }
                                                 >
-                                                    <SelectTrigger className="h-8 text-sm w-full px-2">
+                                                    <SelectTrigger className="h-9 text-base w-full px-2">
                                                         <span className="truncate">
                                                             {nuevo.specs[key] ? (
                                                                 field.labels[nuevo.specs[key]] ?? nuevo.specs[key]
@@ -498,7 +498,7 @@ export function OrderItemsEditor({
             {/* El icono en la fila dice CUÁL; esta línea dice QUÉ significa, sin
                 volver al cartel grande que ocupaba media pantalla. */}
             {items.some((i) => i.needs_review) && (
-                <p className="no-print mt-2 flex items-start gap-1.5 text-xs text-destructive">
+                <p className="no-print mt-2 flex items-start gap-1.5 text-sm text-destructive">
                     <PackageX className="h-3.5 w-3.5 shrink-0 mt-px" />
                     <span>
                         Los productos marcados no tienen cargada su lista de materiales, así que no

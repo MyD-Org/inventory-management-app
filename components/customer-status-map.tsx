@@ -32,7 +32,7 @@ export function CustomerStatusMap({ current }: { current: Record<string, string>
     return (
         <div className="rounded-md border p-4">
             <h2 className="font-semibold">Qué ve el cliente</h2>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-base text-muted-foreground mb-4">
                 Cuando el cliente pregunta por su pedido, el asistente le contesta con este texto en
                 vez del estado interno del tablero.
             </p>
@@ -40,7 +40,7 @@ export function CustomerStatusMap({ current }: { current: Record<string, string>
             <div className="space-y-2">
                 {ORDER_STATUSES.map((s) => (
                     <div key={s} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                        <span className="text-sm text-muted-foreground text-right">{STATUS_LABELS[s]}</span>
+                        <span className="text-base text-muted-foreground text-right">{STATUS_LABELS[s]}</span>
                         <span className="text-muted-foreground">→</span>
                         <Input
                             value={map[s] ?? ""}

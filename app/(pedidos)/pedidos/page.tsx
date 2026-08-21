@@ -66,7 +66,7 @@ export default async function OrdersPage({
             <div className="mb-6 shrink-0 flex items-start justify-between gap-4 flex-wrap">
                 <div>
                     <h1 className="text-2xl font-bold">Pedidos</h1>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-base text-muted-foreground">
                         {lista
                             ? "Todos los pedidos, incluidos los cancelados"
                             : "Arrastrá una tarjeta para cambiarle el estado"}

@@ -94,7 +94,7 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                             <div>
                                 <Label htmlFor="key">Clave</Label>
                                 <Input id="key" name="key" placeholder="ej: acabado" required />
-                                <p className="text-xs text-muted-foreground mt-1">
+                                <p className="text-sm text-muted-foreground mt-1">
                                     Es el nombre que manda el CRM. Si cambiás una clave existente hay que
                                     avisar del otro lado o deja de coincidir.
                                 </p>
@@ -113,7 +113,7 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
             </div>
 
             {fields.length === 0 && (
-                <p className="text-sm text-muted-foreground py-8 text-center">
+                <p className="text-base text-muted-foreground py-8 text-center">
                     No hay campos cargados. El asistente no va a poder tomar especificaciones.
                 </p>
             )}
@@ -123,7 +123,7 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                     <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="min-w-0">
                             <h2 className="font-semibold">{field.label}</h2>
-                            <code className="text-xs text-muted-foreground">{field.key}</code>
+                            <code className="text-sm text-muted-foreground">{field.key}</code>
                             {field.kind === "text" && (
                                 <Badge variant="outline" className="ml-2">Texto libre</Badge>
                             )}
@@ -171,11 +171,11 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                     </div>
 
                     {field.kind === "text" ? (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-base text-muted-foreground">
                             El asistente escribe acá lo que le pida el cliente. No tiene lista de opciones.
                         </p>
                     ) : field.kind === "boolean" ? (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-base text-muted-foreground">
                             Se marca o no se marca. Sin marcar vale como
                             {" "}&quot;{field.options.find((o) => o.value === "sin")?.label ?? "No"}&quot;,
                             no como un dato que falta confirmar.
@@ -184,12 +184,12 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                     <>
                     <div className="flex flex-wrap gap-2 mb-3">
                         {field.options.length === 0 && (
-                            <p className="text-sm text-muted-foreground">Sin opciones todavía.</p>
+                            <p className="text-base text-muted-foreground">Sin opciones todavía.</p>
                         )}
                         {field.options.map((o) => (
                             <span
                                 key={o.id}
-                                className={`group inline-flex items-center gap-1 rounded-full border pl-2.5 pr-1 py-0.5 text-xs ${
+                                className={`group inline-flex items-center gap-1 rounded-full border pl-2.5 pr-1 py-0.5 text-sm ${
                                     o.active ? "bg-secondary" : "line-through opacity-60"
                                 }`}
                             >

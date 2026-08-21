@@ -61,7 +61,7 @@ export function ProductPicker({
                 id="producto"
                 autoFocus={autoFocus}
                 autoComplete="off"
-                className={label ? "mt-1.5" : "h-8 text-sm"}
+                className={label ? "mt-1.5" : "h-8 text-base"}
                 placeholder={placeholder}
                 value={query}
                 onFocus={() => setOpen(true)}
@@ -99,7 +99,7 @@ export function ProductPicker({
                             setOpen(false)
                             onPick(p)
                         }}
-                        className={`block w-full px-3 py-1.5 text-left text-sm ${
+                        className={`block w-full px-3 py-1.5 text-left text-base ${
                             i === cursor ? "bg-muted" : ""
                         }`}
                     >
@@ -113,7 +113,7 @@ export function ProductPicker({
                             setOpen(false)
                             onPick(nuevo)
                         }}
-                        className={`block w-full px-3 py-1.5 text-left text-sm ${
+                        className={`block w-full px-3 py-1.5 text-left text-base ${
                             matches.length > 0 ? "border-t" : ""
                         }`}
                     >
@@ -122,7 +122,7 @@ export function ProductPicker({
                     </button>
                 )}
                 {matches.length === 0 && !ofrecerNuevo && (
-                    <p className="px-3 py-2 text-xs text-muted-foreground">
+                    <p className="px-3 py-2 text-sm text-muted-foreground">
                         Escribí el nombre del producto.
                     </p>
                 )}

@@ -31,8 +31,8 @@ function formatDate(d: string | null): string {
 function Prop({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div className="grid grid-cols-[86px_1fr] items-center gap-2 py-1">
-            <span className="text-xs text-muted-foreground">{label}</span>
-            <div className="text-sm min-w-0">{children}</div>
+            <span className="text-sm text-muted-foreground">{label}</span>
+            <div className="text-base min-w-0">{children}</div>
         </div>
     )
 }
@@ -72,13 +72,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 <h1 className="text-lg font-semibold">
                     {order.customer_name ?? order.customer_external_id}
                 </h1>
-                <span className="text-sm text-muted-foreground tabular-nums">
+                <span className="text-base text-muted-foreground tabular-nums">
                     Pedido #{order.order_number}
                 </span>
             </div>
 
             <div className="flex items-center justify-between gap-4 mb-5 no-print">
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-0">
+                <div className="flex items-center gap-1.5 text-base text-muted-foreground min-w-0">
                     <Link href="/pedidos" className="hover:text-foreground">
                         Pedidos
                     </Link>
@@ -114,7 +114,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     {/* En papel las propiedades van en una línea al pie, no en
                         una columna larga: el cliente ya está en el encabezado y
                         el resto son datos de referencia. */}
-                    <div className="hidden print:block border-t pt-2 text-xs text-muted-foreground">
+                    <div className="hidden print:block border-t pt-2 text-sm text-muted-foreground">
                         Prioridad {PRIORITY_LABELS[order.priority] ?? order.priority}
                         {" · "}Creado{" "}
                         {new Date(order.created_at).toLocaleDateString("es-AR", {
@@ -135,7 +135,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                             href={order.source_conversation}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-2 rounded-md border px-2.5 py-2 mb-3 text-sm hover:bg-muted/50 transition-colors no-print"
+                            className="flex items-center gap-2 rounded-md border px-2.5 py-2 mb-3 text-base hover:bg-muted/50 transition-colors no-print"
                         >
                             <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                             <span className="flex-1 min-w-0 truncate">Ver la conversación</span>
@@ -147,7 +147,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                         <NotesField id={order.id} value={order.notes} />
                     </div>
                     {order.notes && (
-                        <div className="hidden print:block rounded-md bg-muted/50 p-2.5 text-sm mb-3">
+                        <div className="hidden print:block rounded-md bg-muted/50 p-2.5 text-base mb-3">
                             {order.notes}
                         </div>
                     )}
@@ -190,7 +190,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                             />
                         </span>
                         <span className="hidden print:inline">{order.customer_name ?? "—"}</span>
-                        <span className="block text-xs text-muted-foreground truncate px-1.5 -ml-1.5">
+                        <span className="block text-sm text-muted-foreground truncate px-1.5 -ml-1.5">
                             {order.customer_external_id}
                         </span>
                     </Prop>
@@ -212,7 +212,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
                     <Prop label="Origen">{order.origin}</Prop>
                     <Prop label="Referencia">
-                        <code className="text-xs text-muted-foreground break-all">{order.external_id}</code>
+                        <code className="text-sm text-muted-foreground break-all">{order.external_id}</code>
                     </Prop>
                     <Prop label="Creado">
                         {new Date(order.created_at).toLocaleDateString("es-AR", {

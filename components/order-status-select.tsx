@@ -35,13 +35,13 @@ export function OrderStatusSelect({ id, status }: { id: number; status: OrderSta
 
     return (
         <Select value={value} onValueChange={change} disabled={saving}>
-            <SelectTrigger className="h-7 w-full border-0 bg-transparent px-1.5 text-sm hover:bg-muted focus:ring-0 justify-start gap-2">
+            <SelectTrigger className="h-7 w-full border-0 bg-transparent px-1.5 text-base hover:bg-muted focus:ring-0 justify-start gap-2">
                 <StatusIcon status={value} />
                 <span>{STATUS_LABELS[value]}</span>
             </SelectTrigger>
             <SelectContent>
                 {ORDER_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s} className="text-sm">
+                    <SelectItem key={s} value={s} className="text-base">
                         <span className="flex items-center gap-2">
                             <StatusIcon status={s} />
                             {STATUS_LABELS[s]}

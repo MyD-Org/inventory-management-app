@@ -37,7 +37,7 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
     }
 
     if (orders.length === 0) {
-        return <p className="text-sm text-muted-foreground py-12 text-center">Todavía no hay pedidos.</p>
+        return <p className="text-base text-muted-foreground py-12 text-center">Todavía no hay pedidos.</p>
     }
 
     return (
@@ -59,31 +59,31 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                             <PriorityIcon priority={o.priority} />
                             <StatusIcon status={o.status} />
 
-                            <span className="text-xs text-muted-foreground tabular-nums w-10 shrink-0">
+                            <span className="text-sm text-muted-foreground tabular-nums w-10 shrink-0">
                                 #{o.order_number}
                             </span>
 
-                            <span className="text-sm font-medium truncate min-w-0 flex-1">
+                            <span className="text-base font-medium truncate min-w-0 flex-1">
                                 {o.customer_name ?? o.customer_external_id}
                             </span>
 
                             {o.needs_review && (
-                                <span className="flex items-center gap-1 text-xs text-destructive shrink-0 whitespace-nowrap">
+                                <span className="flex items-center gap-1 text-sm text-destructive shrink-0 whitespace-nowrap">
                                     <PackageX className="h-3 w-3" />
                                     Sin materiales
                                 </span>
                             )}
 
-                            <span className="text-xs text-muted-foreground tabular-nums hidden sm:block shrink-0">
+                            <span className="text-sm text-muted-foreground tabular-nums hidden sm:block shrink-0">
                                 {o.units} u.
                             </span>
 
-                            <span className="text-xs text-muted-foreground hidden md:block shrink-0 w-24 truncate">
+                            <span className="text-sm text-muted-foreground hidden md:block shrink-0 w-24 truncate">
                                 {STATUS_LABELS[o.status]}
                             </span>
 
                             <span
-                                className={`text-xs flex items-center gap-1 shrink-0 w-20 justify-end ${
+                                className={`text-sm flex items-center gap-1 shrink-0 w-20 justify-end ${
                                     overdue ? "text-destructive font-medium" : "text-muted-foreground"
                                 }`}
                             >

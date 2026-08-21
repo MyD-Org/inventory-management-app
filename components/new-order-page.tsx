@@ -35,8 +35,8 @@ const PRIORITY_LABELS: Record<string, string> = { baja: "Baja", normal: "Normal"
 function Prop({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div className="grid grid-cols-[86px_1fr] items-center gap-2 py-1">
-            <span className="text-xs text-muted-foreground">{label}</span>
-            <div className="text-sm min-w-0">{children}</div>
+            <span className="text-sm text-muted-foreground">{label}</span>
+            <div className="text-base min-w-0">{children}</div>
         </div>
     )
 }
@@ -62,7 +62,7 @@ export function NewOrderPage({
 
     const columnas = Object.entries(specs)
     const anchoCol = (kind: string) =>
-        kind === "boolean" ? "w-[72px]" : kind === "text" ? "w-[18%]" : "w-[12%]"
+        kind === "boolean" ? "w-[80px]" : kind === "text" ? "w-[18%]" : "w-[13%]"
 
     const listo = customer !== null && lines.length > 0
 
@@ -105,7 +105,7 @@ export function NewOrderPage({
 
     return (
         <div className="w-full px-8 py-6">
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-5">
+            <div className="flex items-center gap-1.5 text-base text-muted-foreground mb-5">
                 <Link href="/pedidos" className="hover:text-foreground">
                     Pedidos
                 </Link>
@@ -122,16 +122,16 @@ export function NewOrderPage({
                             <table className="w-full table-fixed">
                                 <thead>
                                     <tr className="text-left">
-                                        <th className="px-3 py-2 text-xs font-medium text-muted-foreground text-right w-[64px]">
+                                        <th className="px-3 py-2 text-sm font-medium text-muted-foreground text-right w-[72px]">
                                             Cant.
                                         </th>
-                                        <th className="px-3 py-2 text-xs font-medium text-muted-foreground w-[16%]">
+                                        <th className="px-3 py-2 text-sm font-medium text-muted-foreground w-[18%]">
                                             Producto
                                         </th>
                                         {columnas.map(([key, field]) => (
                                             <th
                                                 key={key}
-                                                className={`px-3 py-2 text-xs font-medium text-muted-foreground ${anchoCol(
+                                                className={`px-3 py-2 text-sm font-medium text-muted-foreground ${anchoCol(
                                                     field.kind,
                                                 )}`}
                                             >
@@ -149,7 +149,7 @@ export function NewOrderPage({
                                                     type="number"
                                                     min={1}
                                                     value={line.quantity}
-                                                    className="h-8 w-full text-sm px-2"
+                                                    className="h-9 w-full text-base px-2"
                                                     onChange={(e) =>
                                                         setLines((ls) =>
                                                             ls.map((l, i) =>
@@ -161,7 +161,7 @@ export function NewOrderPage({
                                                     }
                                                 />
                                             </td>
-                                            <td className="px-3 py-2 text-sm font-medium">
+                                            <td className="px-3 py-2 text-base font-medium">
                                                 <span className="block truncate" title={line.product}>
                                                     {line.product}
                                                 </span>
@@ -170,7 +170,7 @@ export function NewOrderPage({
                                             {columnas.map(([key, field]) => (
                                                 <td key={key} className="px-3 py-2">
                                                     {field.kind === "boolean" ? (
-                                                        <label className="flex items-center h-8 cursor-pointer select-none">
+                                                        <label className="flex items-center h-9 cursor-pointer select-none">
                                                             <input
                                                                 type="checkbox"
                                                                 className="h-4 w-4 accent-primary"
@@ -184,7 +184,7 @@ export function NewOrderPage({
                                                         <Input
                                                             value={line.specs[key] ?? ""}
                                                             placeholder="—"
-                                                            className="h-8 text-sm w-full px-2"
+                                                            className="h-9 text-base w-full px-2"
                                                             onChange={(e) => setSpec(idx, key, e.target.value)}
                                                         />
                                                     ) : (
@@ -192,7 +192,7 @@ export function NewOrderPage({
                                                             value={line.specs[key] ?? SIN}
                                                             onValueChange={(v) => setSpec(idx, key, v)}
                                                         >
-                                                            <SelectTrigger className="h-8 text-sm w-full px-2">
+                                                            <SelectTrigger className="h-9 text-base w-full px-2">
                                                                 <span className="truncate">
                                                                     {line.specs[key] ? (
                                                                         field.labels[line.specs[key]] ??
@@ -226,7 +226,7 @@ export function NewOrderPage({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                    className="h-9 w-8 text-muted-foreground hover:text-destructive"
                                                     title="Quitar"
                                                     onClick={() =>
                                                         setLines((ls) => ls.filter((_, i) => i !== idx))
@@ -245,7 +245,7 @@ export function NewOrderPage({
                                                     type="number"
                                                     min={1}
                                                     value={borrador.quantity}
-                                                    className="h-8 w-full text-sm px-2"
+                                                    className="h-9 w-full text-base px-2"
                                                     onChange={(e) =>
                                                         setBorrador((b) => ({
                                                             ...b,
@@ -258,7 +258,7 @@ export function NewOrderPage({
                                                 {borrador.product ? (
                                                     <button
                                                         type="button"
-                                                        className="block w-full truncate text-left text-sm font-medium hover:underline"
+                                                        className="block w-full truncate text-left text-base font-medium hover:underline"
                                                         title="Cambiar producto"
                                                         onClick={() =>
                                                             setBorrador((b) => ({ ...b, product: "" }))
@@ -283,7 +283,7 @@ export function NewOrderPage({
                                             {columnas.map(([key, field]) => (
                                                 <td key={key} className="px-3 py-2">
                                                     {field.kind === "boolean" ? (
-                                                        <label className="flex items-center h-8 cursor-pointer select-none">
+                                                        <label className="flex items-center h-9 cursor-pointer select-none">
                                                             <input
                                                                 type="checkbox"
                                                                 className="h-4 w-4 accent-primary"
@@ -302,7 +302,7 @@ export function NewOrderPage({
                                                         <Input
                                                             value={borrador.specs[key] ?? ""}
                                                             placeholder="—"
-                                                            className="h-8 text-sm w-full px-2"
+                                                            className="h-9 text-base w-full px-2"
                                                             onChange={(e) =>
                                                                 setBorrador((b) => {
                                                                     const specs = { ...b.specs }
@@ -325,7 +325,7 @@ export function NewOrderPage({
                                                                 })
                                                             }
                                                         >
-                                                            <SelectTrigger className="h-8 text-sm w-full px-2">
+                                                            <SelectTrigger className="h-9 text-base w-full px-2">
                                                                 <span className="truncate">
                                                                     {borrador.specs[key] ? (
                                                                         field.labels[borrador.specs[key]] ??
@@ -376,7 +376,7 @@ export function NewOrderPage({
                                         <tr className="border-t">
                                             <td
                                                 colSpan={3 + columnas.length}
-                                                className="px-3 py-6 text-center text-sm text-muted-foreground"
+                                                className="px-3 py-6 text-center text-base text-muted-foreground"
                                             >
                                                 Todavía no agregaste ningún producto.
                                             </td>
@@ -410,7 +410,7 @@ export function NewOrderPage({
                             Crear pedido
                         </Button>
                         {!listo && (
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-sm text-muted-foreground">
                                 {customer === null
                                     ? "Elegí un cliente para poder crearlo"
                                     : "Agregá al menos un producto"}
@@ -428,13 +428,13 @@ export function NewOrderPage({
                         placeholder="Notas para el taller"
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
-                        className="text-sm resize-none bg-muted/50 border-0 focus-visible:ring-1"
+                        className="text-base resize-none bg-muted/50 border-0 focus-visible:ring-1"
                     />
 
                     <div>
                         <Prop label="Prioridad">
                             <Select value={priority} onValueChange={setPriority}>
-                                <SelectTrigger className="h-7 w-full border-0 bg-transparent px-1.5 text-sm hover:bg-muted focus:ring-0 justify-start gap-2 -ml-1.5">
+                                <SelectTrigger className="h-7 w-full border-0 bg-transparent px-1.5 text-base hover:bg-muted focus:ring-0 justify-start gap-2 -ml-1.5">
                                     <PriorityIcon priority={priority} />
                                     <span>{PRIORITY_LABELS[priority]}</span>
                                 </SelectTrigger>
@@ -456,7 +456,7 @@ export function NewOrderPage({
                                 type="date"
                                 value={eta}
                                 onChange={(e) => setEta(e.target.value)}
-                                className="h-7 border-0 bg-transparent px-1.5 -ml-1.5 text-sm hover:bg-muted focus-visible:ring-0 w-full"
+                                className="h-7 border-0 bg-transparent px-1.5 -ml-1.5 text-base hover:bg-muted focus-visible:ring-0 w-full"
                             />
                         </Prop>
                     </div>

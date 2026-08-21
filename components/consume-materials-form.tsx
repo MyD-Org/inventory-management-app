@@ -58,7 +58,7 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
                 value={query}
                 autoComplete="off"
                 placeholder="Agregar otro material del inventario"
-                className="h-8 text-sm"
+                className="h-9 text-base"
                 onFocus={() => setAbierto(true)}
                 onChange={(e) => {
                     setQuery(e.target.value)
@@ -84,8 +84,8 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
                                     setAbierto(false)
                                 }}
                             >
-                                <span className="text-sm flex-1 min-w-0 truncate">{r.label}</span>
-                                <span className="text-xs text-muted-foreground shrink-0">
+                                <span className="text-base flex-1 min-w-0 truncate">{r.label}</span>
+                                <span className="text-sm text-muted-foreground shrink-0">
                                     hay {r.available}
                                 </span>
                             </button>
@@ -186,17 +186,17 @@ export function ConsumeMaterialsForm({
                                             rs.map((x, i) => (i === idx ? { ...x, qty: e.target.value } : x)),
                                         )
                                     }
-                                    className={`h-8 text-sm ${error ? "border-destructive" : ""}`}
+                                    className={`h-9 text-base ${error ? "border-destructive" : ""}`}
                                 />
                             </div>
 
                             <div className="min-w-0 flex-1">
-                                <div className="text-sm truncate">{r.label}</div>
+                                <div className="text-base truncate">{r.label}</div>
                                 {error ? (
-                                    <div className="text-xs text-destructive">{error}</div>
+                                    <div className="text-sm text-destructive">{error}</div>
                                 ) : (
                                     faltaStock(r) && (
-                                        <div className="text-xs text-destructive">
+                                        <div className="text-sm text-destructive">
                                             {r.available === 0
                                                 ? "No hay stock de este material"
                                                 : `Faltan ${r.pending! - r.available!} para completar el pedido`}
@@ -206,7 +206,7 @@ export function ConsumeMaterialsForm({
                             </div>
 
                             <span
-                                className={`text-xs shrink-0 pt-1.5 ${
+                                className={`text-sm shrink-0 pt-1.5 ${
                                     faltaStock(r) ? "text-destructive" : "text-muted-foreground"
                                 }`}
                             >
@@ -217,7 +217,7 @@ export function ConsumeMaterialsForm({
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                                className="h-9 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                                 title="Quitar del descuento"
                                 onClick={() => setRows((rs) => rs.filter((_, i) => i !== idx))}
                             >
@@ -228,7 +228,7 @@ export function ConsumeMaterialsForm({
                 })}
 
                 {rows.length === 0 && (
-                    <p className="text-sm text-muted-foreground py-2">
+                    <p className="text-base text-muted-foreground py-2">
                         No queda nada por descontar. Podés agregar un material igual.
                     </p>
                 )}
@@ -243,7 +243,7 @@ export function ConsumeMaterialsForm({
 
             <div className="flex items-center justify-end gap-2 pt-1">
                 {hayError && (
-                    <span className="text-xs text-destructive mr-auto">
+                    <span className="text-sm text-destructive mr-auto">
                         Corregí las cantidades marcadas
                     </span>
                 )}

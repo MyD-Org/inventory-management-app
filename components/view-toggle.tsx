@@ -6,7 +6,7 @@ import Link from "next/link"
 import { KanbanSquare, List } from "lucide-react"
 
 export function ViewToggle({ lista }: { lista: boolean }) {
-    const base = "flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors"
+    const base = "flex items-center gap-2 px-3 py-1.5 text-base rounded-md transition-colors"
     const on = "bg-background shadow-sm font-medium"
     const off = "text-muted-foreground hover:text-foreground"
 

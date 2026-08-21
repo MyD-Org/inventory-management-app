@@ -53,7 +53,7 @@ export function OrdersShell({
                     <Link href="/pedidos" className="flex items-center gap-2 min-w-0">
                         <span className="font-semibold shrink-0">Pedidos</span>
                         <span className="text-muted-foreground hidden sm:inline">·</span>
-                        <span className="text-sm text-muted-foreground truncate hidden sm:inline">
+                        <span className="text-base text-muted-foreground truncate hidden sm:inline">
                             Taller Avantec
                         </span>
                     </Link>

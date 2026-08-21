@@ -54,7 +54,7 @@ export function ConsumeFromOrder() {
                         <PackageMinus className="h-4 w-4" />
                         Descontar los materiales de un pedido
                     </h2>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-base text-muted-foreground">
                         Trae la lista de materiales del pedido y sugiere cuánto descontar. Podés ajustarlo.
                     </p>
                 </div>
@@ -82,11 +82,11 @@ export function ConsumeFromOrder() {
                 </div>
             </div>
 
-            {loading && <p className="text-sm text-muted-foreground">Buscando los materiales…</p>}
+            {loading && <p className="text-base text-muted-foreground">Buscando los materiales…</p>}
 
             {needs && !loading && (
                 pendientes.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-base text-muted-foreground">
                         Este pedido ya tiene todos sus materiales descontados.
                     </p>
                 ) : (

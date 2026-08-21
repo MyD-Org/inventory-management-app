@@ -114,12 +114,12 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
                         ref={searchRef}
-                        className="pl-8 h-9 text-sm"
+                        className="pl-8 h-9 text-base"
                         placeholder="Buscar por número o cliente"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                     />
-                    <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground border rounded px-1 hidden sm:block">
+                    <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-muted-foreground border rounded px-1 hidden sm:block">
                         /
                     </kbd>
                 </div>
@@ -151,8 +151,8 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                         >
                             <div className="flex items-center gap-2 px-1 pb-2.5 shrink-0 select-none">
                                 <StatusIcon status={status} />
-                                <h2 className="text-sm font-medium">{STATUS_LABELS[status]}</h2>
-                                <span className="text-xs text-muted-foreground tabular-nums">
+                                <h2 className="text-base font-medium">{STATUS_LABELS[status]}</h2>
+                                <span className="text-sm text-muted-foreground tabular-nums">
                                     {column.length}
                                 </span>
                             </div>
@@ -198,13 +198,13 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                             }`}
                                         >
                                             <div className="flex items-center justify-between gap-2 mb-1">
-                                                <span className="text-xs text-muted-foreground tabular-nums">
+                                                <span className="text-sm text-muted-foreground tabular-nums">
                                                     #{card.order_number}
                                                 </span>
                                                 <PriorityIcon priority={card.priority} />
                                             </div>
 
-                                            <div className="text-sm font-medium leading-snug truncate mb-1.5">
+                                            <div className="text-base font-medium leading-snug truncate mb-1.5">
                                                 {card.customer_name ?? card.customer_external_id}
                                             </div>
 
@@ -212,7 +212,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                 dice algo del trabajo aunque el pedido sea
                                                 largo. El resto se cuenta y se ve al abrir. */}
                                             {card.items.length > 0 && (
-                                                <div className="text-xs text-muted-foreground/90 mb-1 space-y-0.5">
+                                                <div className="text-sm text-muted-foreground/90 mb-1 space-y-0.5">
                                                     {card.items.slice(0, 3).map((i, n) => (
                                                         <div key={n} className="truncate">
                                                             <span className="tabular-nums font-medium text-foreground/80">
@@ -230,7 +230,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                 </div>
                                             )}
 
-                                            <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
+                                            <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
                                                 <span className="tabular-nums">
                                                     {card.units} {card.units === 1 ? "unidad" : "unidades"}
                                                 </span>
@@ -255,7 +255,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                 })}
 
                                 {column.length === 0 && (
-                                    <div className="rounded-md border border-dashed py-6 text-center text-xs text-muted-foreground">
+                                    <div className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
                                         Vacío
                                     </div>
                                 )}

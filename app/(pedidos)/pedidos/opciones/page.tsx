@@ -49,7 +49,7 @@ export default async function SpecsPage() {
 
     return (
         <div className="mx-auto w-full max-w-3xl px-8 py-6">
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
+            <div className="flex items-center gap-1.5 text-base text-muted-foreground mb-4">
                 <Link href="/pedidos" className="hover:text-foreground">
                     Pedidos
                 </Link>
@@ -57,7 +57,7 @@ export default async function SpecsPage() {
                 <span className="text-foreground">Opciones</span>
             </div>
             <h1 className="text-2xl font-bold mb-1">Opciones de pedido</h1>
-            <p className="text-sm text-muted-foreground mb-6">
+            <p className="text-base text-muted-foreground mb-6">
                 El vocabulario que usa el asistente del CRM para tomar pedidos. Si una opción no está
                 acá, el asistente no la puede ofrecer. Los cambios los toma solo, sin tocar nada del
                 lado del CRM.
