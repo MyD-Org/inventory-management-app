@@ -120,20 +120,16 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                         una columna larga: el cliente ya está en el encabezado y
                         el resto son datos de referencia. */}
                     <div className="hidden print:block border-t pt-2 text-xs text-muted-foreground">
-                        <span className="text-foreground">{STATUS_LABELS[order.status]}</span>
-                        {" · "}Prioridad {PRIORITY_LABELS[order.priority] ?? order.priority}
-                        {order.delivery_date_estimate && (
-                            <>{" · "}Entrega {formatDate(order.delivery_date_estimate)}</>
-                        )}
-                        {" · "}Origen {order.origin}
-                        {" · "}
-                        {order.external_id}
+                        Prioridad {PRIORITY_LABELS[order.priority] ?? order.priority}
                         {" · "}Creado{" "}
                         {new Date(order.created_at).toLocaleDateString("es-AR", {
                             day: "2-digit",
                             month: "short",
                             year: "numeric",
                         })}
+                        {order.delivery_date_estimate && (
+                            <>{" · "}Entrega {formatDate(order.delivery_date_estimate)}</>
+                        )}
                     </div>
                 </div>
 
