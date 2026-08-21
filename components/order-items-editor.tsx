@@ -145,7 +145,7 @@ export function OrderItemsEditor({
                                             en la fila, que es donde se ve de cuál se trata. */}
                                         {item.needs_review && (
                                             <PackageX
-                                                className="h-3.5 w-3.5 shrink-0 text-destructive"
+                                                className="no-print h-3.5 w-3.5 shrink-0 text-destructive"
                                                 aria-label="Sin lista de materiales"
                                             />
                                         )}
@@ -348,7 +348,7 @@ export function OrderItemsEditor({
             {/* El icono en la fila dice CUÁL; esta línea dice QUÉ significa, sin
                 volver al cartel grande que ocupaba media pantalla. */}
             {items.some((i) => i.needs_review) && (
-                <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
+                <p className="no-print mt-2 flex items-start gap-1.5 text-xs text-destructive">
                     <PackageX className="h-3.5 w-3.5 shrink-0 mt-px" />
                     <span>
                         Los productos marcados no tienen cargada su lista de materiales, así que no

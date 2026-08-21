@@ -44,7 +44,9 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
     if (needs.length === 0) return null
 
     return (
-        <section>
+        // no-print: al imprimir sale la orden de trabajo (qué armar), no la
+        // lista de materiales. Esa es para buscar al depósito, en pantalla.
+        <section className="no-print">
             <div className="flex items-center gap-2 mb-2">
                 <button
                     type="button"
