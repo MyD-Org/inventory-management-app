@@ -4,12 +4,12 @@
 // y se guarda solo. Cambiar la cantidad REESCALA el BOM ya congelado (mantiene
 // el por-unidad del pedido), no vuelve a leer la receta, que pudo cambiar.
 
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
-import { Loader2, Plus, Trash2 } from "lucide-react"
+import { Check, Loader2, Plus, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { addOrderItem, deleteOrderItem, updateOrderItem } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -81,7 +81,7 @@ export function OrderItemsEditor({
             .join(" · ")
 
     const faltantes = (specs: Record<string, string>) =>
-        Object.entries(vocab).filter(([k, f]) => !f.free_text && !specs[k])
+        Object.entries(vocab).filter(([k, f]) => f.kind === "list" && !specs[k])
 
     return (
         <>
@@ -131,6 +131,24 @@ export function OrderItemsEditor({
                                 </td>
                                 {columnas.map(([key, field]) => {
                                     const v = item.specs[key]
+                                    // Un boolean sin marcar no es un dato faltante:
+                                    // es "sin". Siempre muestra una respuesta.
+                                    if (field.kind === "boolean") {
+                                        const con = v === "con"
+                                        return (
+                                            <td
+                                                key={key}
+                                                className="px-3 py-2"
+                                                title={
+                                                    con
+                                                        ? field.labels["con"] ?? `Con ${field.label.toLowerCase()}`
+                                                        : field.labels["sin"] ?? `Sin ${field.label.toLowerCase()}`
+                                                }
+                                            >
+                                                {con && <Check className="h-4 w-4" />}
+                                            </td>
+                                        )
+                                    }
                                     return (
                                         <td
                                             key={key}
@@ -163,117 +181,145 @@ export function OrderItemsEditor({
                             JSON.stringify(draft.specs) !== JSON.stringify(item.specs))
 
                     return (
-                        <tr key={item.id} className="border-t bg-muted/30">
-                          <td colSpan={2 + columnas.length} className="px-4 py-3 space-y-3">
-                            <div className="flex items-center gap-3">
-                                <Input
-                                    type="number"
-                                    min={1}
-                                    value={draft?.quantity ?? item.quantity}
-                                    className="h-8 w-20 text-[14px]"
-                                    onChange={(e) =>
-                                        setDraft((d) => (d ? { ...d, quantity: Number(e.target.value) } : d))
-                                    }
-                                />
-                                <span className="text-[15px] font-medium flex-1 min-w-0 truncate">
-                                    {item.product}
-                                </span>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7"
-                                    onClick={() => setPendingDelete(item.id)}
-                                    title="Quitar del pedido"
-                                >
-                                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                </Button>
-                            </div>
+                        <Fragment key={item.id}>
+                            {/* Se edita EN SU LUGAR: cada control en su columna, alineado
+                                con el encabezado. Los selects muestran solo el valor,
+                                porque el nombre del campo ya está en la cabecera. */}
+                            <tr className="border-t bg-muted/30">
+                                <td className="px-3 py-2 align-middle">
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        value={draft?.quantity ?? item.quantity}
+                                        className="h-8 w-14 text-[14px] px-2"
+                                        onChange={(e) =>
+                                            setDraft((d) => (d ? { ...d, quantity: Number(e.target.value) } : d))
+                                        }
+                                    />
+                                </td>
+                                <td className="px-3 py-2 text-[14px] font-medium">
+                                    <span className="block max-w-[180px] truncate" title={item.product}>
+                                        {item.product}
+                                    </span>
+                                </td>
 
-                            <div className="grid gap-2 sm:grid-cols-2">
-                                {Object.entries(vocab).map(([key, field]) =>
-                                    field.free_text ? (
-                                        <Input
-                                            key={key}
-                                            value={draft?.specs[key] ?? ""}
-                                            placeholder={field.label}
-                                            className="h-8 text-[13px]"
-                                            onChange={(e) =>
-                                                setDraft((d) => {
-                                                    if (!d) return d
-                                                    const specs = { ...d.specs }
-                                                    if (e.target.value) specs[key] = e.target.value
-                                                    else delete specs[key]
-                                                    return { ...d, specs }
-                                                })
-                                            }
-                                        />
-                                    ) : (
-                                        <Select
-                                            key={key}
-                                            value={draft?.specs[key] ?? SIN}
-                                            onValueChange={(v) =>
-                                                setDraft((d) => {
-                                                    if (!d) return d
-                                                    const specs = { ...d.specs }
-                                                    if (v === SIN) delete specs[key]
-                                                    else specs[key] = v
-                                                    return { ...d, specs }
-                                                })
-                                            }
-                                        >
-                                            {/* La etiqueta del campo va acá una vez; las opciones
-                                                muestran solo el valor, sin repetirla. */}
-                                            <SelectTrigger className="h-8 text-[13px]">
-                                                <span className="truncate">
-                                                    <span className="text-muted-foreground">{field.label}</span>
-                                                    {draft?.specs[key] && (
-                                                        <>: {field.labels[draft.specs[key]] ?? draft.specs[key]}</>
-                                                    )}
-                                                </span>
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value={SIN} className="text-muted-foreground">
-                                                    Sin especificar
-                                                </SelectItem>
-                                                {field.options.map((o) => (
-                                                    <SelectItem key={o} value={o}>
-                                                        {field.labels[o] ?? o}
+                                {columnas.map(([key, field]) => (
+                                    <td key={key} className="px-3 py-2">
+                                        {field.kind === "boolean" ? (
+                                            <label
+                                                className="flex items-center h-8 cursor-pointer select-none"
+                                                title={
+                                                    field.labels["con"] ?? `Con ${field.label.toLowerCase()}`
+                                                }
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4 accent-primary"
+                                                    checked={draft?.specs[key] === "con"}
+                                                    onChange={(e) =>
+                                                        setDraft((d) => {
+                                                            if (!d) return d
+                                                            const specs = { ...d.specs }
+                                                            if (e.target.checked) specs[key] = "con"
+                                                            else delete specs[key]
+                                                            return { ...d, specs }
+                                                        })
+                                                    }
+                                                />
+                                            </label>
+                                        ) : field.kind === "text" ? (
+                                            <Input
+                                                value={draft?.specs[key] ?? ""}
+                                                placeholder="—"
+                                                className="h-8 text-[13px] min-w-[160px]"
+                                                onChange={(e) =>
+                                                    setDraft((d) => {
+                                                        if (!d) return d
+                                                        const specs = { ...d.specs }
+                                                        if (e.target.value) specs[key] = e.target.value
+                                                        else delete specs[key]
+                                                        return { ...d, specs }
+                                                    })
+                                                }
+                                            />
+                                        ) : (
+                                            <Select
+                                                value={draft?.specs[key] ?? SIN}
+                                                onValueChange={(v) =>
+                                                    setDraft((d) => {
+                                                        if (!d) return d
+                                                        const specs = { ...d.specs }
+                                                        if (v === SIN) delete specs[key]
+                                                        else specs[key] = v
+                                                        return { ...d, specs }
+                                                    })
+                                                }
+                                            >
+                                                <SelectTrigger className="h-8 text-[13px] min-w-[92px]">
+                                                    <span className="truncate">
+                                                        {draft?.specs[key]
+                                                            ? field.labels[draft.specs[key]] ?? draft.specs[key]
+                                                            : <span className="text-muted-foreground/60">—</span>}
+                                                    </span>
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value={SIN} className="text-muted-foreground">
+                                                        Sin especificar
                                                     </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    ),
-                                )}
-                            </div>
+                                                    {field.options.map((o) => (
+                                                        <SelectItem key={o} value={o}>
+                                                            {field.labels[o] ?? o}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    </td>
+                                ))}
+                            </tr>
 
-                            <div className="flex items-center justify-end gap-2">
-                                <Button variant="ghost" size="sm" onClick={cerrar} disabled={savingLine}>
-                                    Cancelar
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    disabled={!sucio || savingLine}
-                                    onClick={async () => {
-                                        if (!draft) return
-                                        setSavingLine(true)
-                                        const ok = await run(
-                                            () =>
-                                                updateOrderItem(item.id, {
-                                                    quantity: draft.quantity,
-                                                    specs: draft.specs,
-                                                }),
-                                            "Cambios guardados",
-                                        )
-                                        setSavingLine(false)
-                                        if (ok) cerrar()
-                                    }}
-                                >
-                                    {savingLine && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                                    Guardar
-                                </Button>
-                            </div>
-                          </td>
-                        </tr>
+                            <tr className="bg-muted/30">
+                                <td colSpan={2 + columnas.length} className="px-3 pb-3">
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-muted-foreground hover:text-destructive"
+                                            onClick={() => setPendingDelete(item.id)}
+                                        >
+                                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                            Quitar
+                                        </Button>
+                                        <div className="ml-auto flex items-center gap-2">
+                                            <Button variant="ghost" size="sm" onClick={cerrar} disabled={savingLine}>
+                                                Cancelar
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                disabled={!sucio || savingLine}
+                                                onClick={async () => {
+                                                    if (!draft) return
+                                                    setSavingLine(true)
+                                                    const ok = await run(
+                                                        () =>
+                                                            updateOrderItem(item.id, {
+                                                                quantity: draft.quantity,
+                                                                specs: draft.specs,
+                                                            }),
+                                                        "Cambios guardados",
+                                                    )
+                                                    setSavingLine(false)
+                                                    if (ok) cerrar()
+                                                }}
+                                            >
+                                                {savingLine && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                                                Guardar
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </Fragment>
                     )
                 })}
 

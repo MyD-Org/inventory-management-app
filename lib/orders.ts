@@ -31,10 +31,16 @@ export async function getCustomerStatusMap(): Promise<Record<string, string>> {
     }
 }
 
+export type SpecKind = "list" | "text" | "boolean"
+
 export interface SpecField {
     label: string
     options: string[]
     free_text: boolean
+    // 'list' lista cerrada · 'text' texto libre · 'boolean' sí/no con un tilde.
+    // En 'boolean' NO marcar es una respuesta válida (el "no"), no un dato que
+    // falte confirmar: por eso no entra en el conteo de faltantes.
+    kind: SpecKind
     // Cómo se muestra cada opción ("calido" -> "Cálido", "8" -> "8°"). Es solo
     // para la UI: GET /api/specs sigue devolviendo options tal cual manda el doc
     // del CRM, porque esos son los valores del contrato con el bot.
@@ -46,7 +52,7 @@ export interface SpecField {
 // sin romper los pedidos históricos que la usaron.
 export async function getSpecs(): Promise<Record<string, SpecField>> {
     const rows = await sql`
-        SELECT f.key, f.label, f.free_text, o.value, o.label AS option_label
+        SELECT f.key, f.label, f.free_text, f.kind, o.value, o.label AS option_label
         FROM spec_fields f
         LEFT JOIN spec_options o ON o.field_key = f.key AND o.active = TRUE
         WHERE f.active = TRUE
@@ -55,7 +61,13 @@ export async function getSpecs(): Promise<Record<string, SpecField>> {
     const specs: Record<string, SpecField> = {}
     for (const r of rows as any[]) {
         if (!specs[r.key]) {
-            specs[r.key] = { label: r.label, options: [], free_text: r.free_text, labels: {} }
+            specs[r.key] = {
+                label: r.label,
+                options: [],
+                free_text: r.free_text,
+                kind: (r.kind ?? (r.free_text ? "text" : "list")) as SpecKind,
+                labels: {},
+            }
         }
         if (r.value) {
             specs[r.key].options.push(r.value)
@@ -76,9 +88,15 @@ export function validateSpecs(specs: Record<string, unknown>, vocab: Record<stri
             errors.push(`Campo de spec desconocido: "${key}". Válidos: ${Object.keys(vocab).join(", ")}`)
             continue
         }
-        if (field.free_text) continue
+        if (field.kind === "text") continue
         // Vacío = no especificado, no es un error.
         if (value === "" || value === null || value === undefined) continue
+        if (field.kind === "boolean") {
+            if (String(value) !== "con" && String(value) !== "sin") {
+                errors.push(`Valor inválido para "${key}": "${value}". Válidos: con, sin`)
+            }
+            continue
+        }
         if (!field.options.includes(String(value))) {
             errors.push(`Valor inválido para "${key}": "${value}". Válidos: ${field.options.join(", ")}`)
         }

@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
             Object.fromEntries(
                 Object.entries(specs).map(([key, f]) => [
                     key,
-                    { label: f.label, options: f.options, free_text: f.free_text },
+                    { label: f.label, options: f.options, free_text: f.free_text, kind: f.kind },
                 ]),
             ),
         )

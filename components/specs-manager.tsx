@@ -34,6 +34,7 @@ export interface SpecFieldRow {
     key: string
     label: string
     free_text: boolean
+    kind: "list" | "text" | "boolean"
     active: boolean
     options: SpecOptionRow[]
 }
@@ -123,8 +124,11 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                         <div className="min-w-0">
                             <h2 className="font-semibold">{field.label}</h2>
                             <code className="text-xs text-muted-foreground">{field.key}</code>
-                            {field.free_text && (
+                            {field.kind === "text" && (
                                 <Badge variant="outline" className="ml-2">Texto libre</Badge>
+                            )}
+                            {field.kind === "boolean" && (
+                                <Badge variant="outline" className="ml-2">Sí / No</Badge>
                             )}
                         </div>
 
@@ -166,9 +170,15 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                         </div>
                     </div>
 
-                    {field.free_text ? (
+                    {field.kind === "text" ? (
                         <p className="text-sm text-muted-foreground">
                             El asistente escribe acá lo que le pida el cliente. No tiene lista de opciones.
+                        </p>
+                    ) : field.kind === "boolean" ? (
+                        <p className="text-sm text-muted-foreground">
+                            Se marca o no se marca. Sin marcar vale como
+                            {" "}&quot;{field.options.find((o) => o.value === "sin")?.label ?? "No"}&quot;,
+                            no como un dato que falta confirmar.
                         </p>
                     ) : (
                     <>

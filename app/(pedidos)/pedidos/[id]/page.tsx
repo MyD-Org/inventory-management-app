@@ -57,8 +57,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             .map((k) => specs[k])
             .join(" · ")
 
+    // Los boolean no cuentan como faltantes: no marcarlos ya es una respuesta.
     const unanswered = (specs: Record<string, string>) =>
-        Object.entries(vocab).filter(([k, f]) => !f.free_text && !specs[k])
+        Object.entries(vocab).filter(([k, f]) => f.kind === "list" && !specs[k])
 
     // Materiales del pedido ENTERO, sumados. Al taller le sirve una sola lista
     // para ir a buscar al depósito, no una por línea: si dos productos llevan la

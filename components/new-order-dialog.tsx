@@ -124,7 +124,35 @@ export function NewOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
                                     <div className="flex gap-1.5 flex-wrap">
                                         {Object.entries(options?.specs ?? {})
-                                            .filter(([, f]) => !f.free_text)
+                                            .filter(([, f]) => f.kind === "boolean")
+                                            .map(([key, field]) => (
+                                                <label
+                                                    key={key}
+                                                    className={`flex items-center gap-1.5 h-6 rounded-full border px-2 text-[11px] cursor-pointer select-none ${
+                                                        line.specs[key] === "con" ? "" : "text-muted-foreground"
+                                                    }`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        className="h-3 w-3 accent-primary"
+                                                        checked={line.specs[key] === "con"}
+                                                        onChange={(e) =>
+                                                            setLines((ls) =>
+                                                                ls.map((l, i) => {
+                                                                    if (i !== idx) return l
+                                                                    const next = { ...l.specs }
+                                                                    if (e.target.checked) next[key] = "con"
+                                                                    else delete next[key]
+                                                                    return { ...l, specs: next }
+                                                                }),
+                                                            )
+                                                        }
+                                                    />
+                                                    {field.label}
+                                                </label>
+                                            ))}
+                                        {Object.entries(options?.specs ?? {})
+                                            .filter(([, f]) => f.kind === "list")
                                             .map(([key, field]) => (
                                                 <Select
                                                     key={key}

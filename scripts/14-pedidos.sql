@@ -29,15 +29,25 @@
 
 -- ---------- Vocabulario de opciones ----------
 
--- free_text: el campo 'other' del doc es texto libre, no una lista cerrada.
--- Para esos campos no validamos contra spec_options.
+-- kind define cómo se completa el campo y qué significa dejarlo vacío:
+--   'list'    lista cerrada de spec_options. Vacío = sin confirmar.
+--   'text'    texto libre (el campo 'other' del doc). Vacío = sin indicaciones.
+--   'boolean' sí/no con un tilde. Vacío NO es "sin confirmar": es el "no".
+--             Sirve para cosas como la estaca, donde no marcarla ya es una
+--             respuesta ("sin estaca"), no un dato que falta preguntar.
+-- free_text se mantiene por compatibilidad y queda derivado de kind.
 CREATE TABLE IF NOT EXISTS spec_fields (
     key VARCHAR(50) PRIMARY KEY,
     label VARCHAR(100) NOT NULL,
     free_text BOOLEAN NOT NULL DEFAULT FALSE,
+    kind VARCHAR(10) NOT NULL DEFAULT 'list' CHECK (kind IN ('list', 'text', 'boolean')),
     position INTEGER NOT NULL DEFAULT 0,
     active BOOLEAN NOT NULL DEFAULT TRUE
 );
+
+-- Para bases donde la tabla ya existía sin la columna.
+ALTER TABLE spec_fields ADD COLUMN IF NOT EXISTS kind VARCHAR(10) NOT NULL DEFAULT 'list';
+UPDATE spec_fields SET kind = 'text' WHERE free_text AND kind = 'list';
 
 CREATE TABLE IF NOT EXISTS spec_options (
     id SERIAL PRIMARY KEY,
@@ -136,12 +146,13 @@ CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders
 --
 -- 'other' es texto libre (así viene en el doc), no valida contra una lista.
 
-INSERT INTO spec_fields (key, label, free_text, position) VALUES
-    ('clamp', 'Grampa', FALSE, 1),
-    ('led_color', 'Color de LED', FALSE, 2),
-    ('optic', 'Óptica (grados)', FALSE, 3),
-    ('body_color', 'Color del equipo', FALSE, 4),
-    ('other', 'Otras indicaciones', TRUE, 5)
+INSERT INTO spec_fields (key, label, free_text, kind, position) VALUES
+    ('clamp', 'Grampa', FALSE, 'list', 1),
+    ('led_color', 'Color de LED', FALSE, 'list', 2),
+    ('optic', 'Óptica (grados)', FALSE, 'list', 3),
+    ('body_color', 'Color del equipo', FALSE, 'list', 4),
+    ('stake', 'Estaca', FALSE, 'boolean', 5),
+    ('other', 'Otras indicaciones', TRUE, 'text', 6)
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO spec_options (field_key, value, label, position) VALUES
@@ -164,7 +175,10 @@ INSERT INTO spec_options (field_key, value, label, position) VALUES
     ('body_color', 'blanco', 'Blanco', 2),
     ('body_color', 'aluminio', 'Aluminio', 3),
     ('body_color', 'bronce', 'Bronce', 4),
-    ('body_color', 'tornasolado', 'Tornasolado', 5)
+    ('body_color', 'tornasolado', 'Tornasolado', 5),
+    -- El campo boolean igual declara sus valores, para que el bot sepa qué mandar.
+    ('stake', 'con', 'Con estaca', 1),
+    ('stake', 'sin', 'Sin estaca', 2)
 ON CONFLICT (field_key, value) DO NOTHING;
 
 -- ---------- Mapa estado interno -> texto al cliente ----------
@@ -189,3 +203,7 @@ ON CONFLICT (key) DO NOTHING;
 -- se toca, es el contrato con el bot. Idempotente, por si la migración ya corrió.
 UPDATE spec_fields SET label = 'Color del equipo'
 WHERE key = 'body_color' AND label = 'Color del cuerpo';
+
+-- 'other' va siempre al final: se agregó 'stake' antes y en bases ya creadas el
+-- ON CONFLICT DO NOTHING no reordena.
+UPDATE spec_fields SET position = 6 WHERE key = 'other';

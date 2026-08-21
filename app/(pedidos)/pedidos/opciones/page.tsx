@@ -18,7 +18,7 @@ export default async function SpecsPage() {
     const statusMap = await getCustomerStatusMap()
 
     const rows = await sql`
-        SELECT f.key, f.label, f.free_text, f.active AS field_active,
+        SELECT f.key, f.label, f.free_text, f.kind, f.active AS field_active,
                o.id AS option_id, o.value, o.label AS option_label, o.active AS option_active
         FROM spec_fields f
         LEFT JOIN spec_options o ON o.field_key = f.key
@@ -32,6 +32,7 @@ export default async function SpecsPage() {
                 key: r.key,
                 label: r.label,
                 free_text: r.free_text,
+                kind: r.kind ?? (r.free_text ? "text" : "list"),
                 active: r.field_active,
                 options: [],
             })
