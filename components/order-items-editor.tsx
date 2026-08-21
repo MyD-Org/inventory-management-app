@@ -284,6 +284,7 @@ export function OrderItemsEditor({
                         <span className="text-[13px] text-muted-foreground shrink-0">Agregar</span>
                         <ProductPicker
                             products={products}
+                            autoFocus
                             onCancel={() => setAdding(false)}
                             onPick={async (product) => {
                                 setAdding(false)

@@ -6,21 +6,27 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 export function ProductPicker({
     products,
     onPick,
     onCancel,
-    autoFocus = true,
-    placeholder = "Producto",
+    // Por defecto NO enfoca ni despliega: se abre al hacer foco, igual que el
+    // buscador de clientes. Se enfoca solo cuando el usuario pidió agregar.
+    autoFocus = false,
+    label,
+    placeholder = "Buscá o escribí un producto",
 }: {
     products: string[]
     onPick: (product: string) => void
     onCancel?: () => void
     autoFocus?: boolean
+    label?: string
     placeholder?: string
 }) {
     const [query, setQuery] = useState("")
+    const [open, setOpen] = useState(autoFocus)
     const [cursor, setCursor] = useState(0)
     const boxRef = useRef<HTMLDivElement>(null)
 
@@ -39,7 +45,10 @@ export function ProductPicker({
 
     useEffect(() => {
         function onClickOutside(e: MouseEvent) {
-            if (boxRef.current && !boxRef.current.contains(e.target as Node)) onCancel?.()
+            if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+                setOpen(false)
+                onCancel?.()
+            }
         }
         document.addEventListener("mousedown", onClickOutside)
         return () => document.removeEventListener("mousedown", onClickOutside)
@@ -47,13 +56,19 @@ export function ProductPicker({
 
     return (
         <div ref={boxRef} className="relative flex-1 min-w-0">
+            {label && <Label htmlFor="producto">{label}</Label>}
             <Input
+                id="producto"
                 autoFocus={autoFocus}
                 autoComplete="off"
-                className="h-8 text-[13px]"
+                className={label ? "mt-1.5" : "h-8 text-[13px]"}
                 placeholder={placeholder}
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => setOpen(true)}
+                onChange={(e) => {
+                    setQuery(e.target.value)
+                    setOpen(true)
+                }}
                 onKeyDown={(e) => {
                     if (e.key === "ArrowDown") {
                         e.preventDefault()
@@ -67,18 +82,23 @@ export function ProductPicker({
                         else if (ofrecerNuevo) onPick(nuevo)
                     } else if (e.key === "Escape") {
                         e.preventDefault()
+                        setOpen(false)
                         onCancel?.()
                     }
                 }}
             />
 
+            {open && (
             <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-md overflow-hidden">
                 {matches.map((p, i) => (
                     <button
                         key={p}
                         type="button"
                         onMouseEnter={() => setCursor(i)}
-                        onClick={() => onPick(p)}
+                        onClick={() => {
+                            setOpen(false)
+                            onPick(p)
+                        }}
                         className={`block w-full px-3 py-1.5 text-left text-[13px] ${
                             i === cursor ? "bg-muted" : ""
                         }`}
@@ -89,7 +109,10 @@ export function ProductPicker({
                 {ofrecerNuevo && (
                     <button
                         type="button"
-                        onClick={() => onPick(nuevo)}
+                        onClick={() => {
+                            setOpen(false)
+                            onPick(nuevo)
+                        }}
                         className={`block w-full px-3 py-1.5 text-left text-[13px] ${
                             matches.length > 0 ? "border-t" : ""
                         }`}
@@ -104,6 +127,7 @@ export function ProductPicker({
                     </p>
                 )}
             </div>
+            )}
         </div>
     )
 }

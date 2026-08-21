@@ -413,3 +413,37 @@ export async function getNewOrderOptions() {
     const [specs, costed] = await Promise.all([getSpecs(), getCostedProducts()]);
     return { specs, products: costed.map((p) => p.name) };
 }
+
+// Borrar una opción del vocabulario, de verdad. No rompe el historial: las
+// specs de cada línea se guardan como texto en order_items.specs, no como
+// referencia a spec_options, así que los pedidos viejos siguen mostrando lo que
+// se pidió aunque la opción ya no exista.
+export async function deleteSpecOption(id: number) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') return { error: 'Solo un admin puede editar el vocabulario' };
+
+    try {
+        await sql`DELETE FROM spec_options WHERE id = ${id}`;
+        revalidatePath('/pedidos/opciones');
+        return { ok: true };
+    } catch (error) {
+        console.error('Error en deleteSpecOption:', error);
+        return { error: 'No se pudo borrar la opción' };
+    }
+}
+
+// Borrar un campo entero se lleva sus opciones por CASCADE. Mismo criterio: los
+// pedidos que ya lo usaron conservan el valor en su specs.
+export async function deleteSpecField(key: string) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') return { error: 'Solo un admin puede editar el vocabulario' };
+
+    try {
+        await sql`DELETE FROM spec_fields WHERE key = ${key}`;
+        revalidatePath('/pedidos/opciones');
+        return { ok: true };
+    } catch (error) {
+        console.error('Error en deleteSpecField:', error);
+        return { error: 'No se pudo borrar el campo' };
+    }
+}

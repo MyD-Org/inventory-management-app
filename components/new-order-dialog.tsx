@@ -172,6 +172,7 @@ export function NewOrderDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                         <div className="flex items-center gap-2">
                             <ProductPicker
                                 products={options?.products ?? []}
+                                label={lines.length === 0 ? "Producto" : undefined}
                                 onCancel={() => lines.length > 0 && setAdding(false)}
                                 onPick={(product) => {
                                     setLines((ls) => [...ls, { product, quantity: 1, specs: {} }])
