@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
-import { Check, Loader2, Plus, Trash2 } from "lucide-react"
+import { Check, Loader2, PackageX, Plus, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { addOrderItem, deleteOrderItem, updateOrderItem } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -136,8 +136,19 @@ export function OrderItemsEditor({
                                     </span>
                                 </td>
                                 <td className="px-3 py-2 text-sm font-medium">
-                                    <span className="block truncate" title={item.product}>
-                                        {item.product}
+                                    <span className="flex items-center gap-1.5 min-w-0">
+                                        <span className="truncate" title={item.product}>
+                                            {item.product}
+                                        </span>
+                                        {/* Este producto no aporta materiales a la lista de
+                                            abajo: hay que descontarlos a mano. Se marca acá,
+                                            en la fila, que es donde se ve de cuál se trata. */}
+                                        {item.needs_review && (
+                                            <PackageX
+                                                className="h-3.5 w-3.5 shrink-0 text-destructive"
+                                                aria-label="Sin lista de materiales"
+                                            />
+                                        )}
                                     </span>
                                 </td>
                                 {columnas.map(([key, field]) => {
@@ -333,6 +344,18 @@ export function OrderItemsEditor({
                     </tbody>
                 </table>
             </div>
+
+            {/* El icono en la fila dice CUÁL; esta línea dice QUÉ significa, sin
+                volver al cartel grande que ocupaba media pantalla. */}
+            {items.some((i) => i.needs_review) && (
+                <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
+                    <PackageX className="h-3.5 w-3.5 shrink-0 mt-px" />
+                    <span>
+                        Los productos marcados no tienen cargada su lista de materiales, así que no
+                        aparecen abajo. Hay que descontarlos de forma manual.
+                    </span>
+                </p>
+            )}
 
             {adding ? (
                 <div className="mt-2 max-w-sm no-print">

@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
-import { CalendarClock, Search, PackageX } from "lucide-react"
+import { CalendarClock, Search } from "lucide-react"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import { BOARD_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
@@ -207,13 +207,6 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                             <div className="text-sm font-medium leading-snug truncate mb-1.5">
                                                 {card.customer_name ?? card.customer_external_id}
                                             </div>
-
-                                            {card.needs_review && (
-                                                <div className="flex items-center gap-1 text-xs text-destructive mb-1">
-                                                    <PackageX className="h-3 w-3 shrink-0" />
-                                                    Sin lista de materiales
-                                                </div>
-                                            )}
 
                                             {/* Con pocos productos los listamos: saber que
                                                 son "20 × Optic 1" sirve, saber que es "1
