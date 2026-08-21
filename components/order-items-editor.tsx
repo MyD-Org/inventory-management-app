@@ -330,34 +330,27 @@ export function OrderItemsEditor({
                     )
                 })}
 
-                {adding && (
-                    <tr className="border-t bg-muted/30">
-                      <td colSpan={2 + columnas.length} className="px-4 py-3">
-                       <div className="flex items-center gap-3">
-                        <span className="text-sm text-muted-foreground shrink-0">Agregar</span>
-                        <ProductPicker
-                            products={products}
-                            autoFocus
-                            onCancel={() => setAdding(false)}
-                            onPick={async (product) => {
-                                setAdding(false)
-                                // Entra con cantidad 1; se ajusta tocando la línea,
-                                // igual que las specs. Un campo, no un formulario.
-                                await run(
-                                    () => addOrderItem(orderId, { product, quantity: 1 }),
-                                    `${product} agregado`,
-                                )
-                            }}
-                        />
-                       </div>
-                      </td>
-                    </tr>
-                )}
                     </tbody>
                 </table>
             </div>
 
-            {!adding && (
+            {adding ? (
+                <div className="mt-2 max-w-sm no-print">
+                    <ProductPicker
+                        products={products}
+                        autoFocus
+                        onCancel={() => setAdding(false)}
+                        onPick={async (product) => {
+                            setAdding(false)
+                            // Entra con cantidad 1; se ajusta tocando la línea.
+                            await run(
+                                () => addOrderItem(orderId, { product, quantity: 1 }),
+                                `${product} agregado`,
+                            )
+                        }}
+                    />
+                </div>
+            ) : (
                 <Button
                     variant="ghost"
                     size="sm"

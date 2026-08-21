@@ -237,33 +237,7 @@ export function NewOrderPage({
                                         </tr>
                                     ))}
 
-                                    {agregando && (
-                                        <tr className="border-t bg-muted/30">
-                                            <td colSpan={3 + columnas.length} className="px-3 py-3">
-                                                <div className="flex items-center gap-3 max-w-md">
-                                                    <span className="text-sm text-muted-foreground shrink-0">
-                                                        Agregar
-                                                    </span>
-                                                    <ProductPicker
-                                                        products={products}
-                                                        autoFocus
-                                                        onCancel={() =>
-                                                            lines.length > 0 && setAgregando(false)
-                                                        }
-                                                        onPick={(product) => {
-                                                            setLines((ls) => [
-                                                                ...ls,
-                                                                { product, quantity: 1, specs: {} },
-                                                            ])
-                                                            setAgregando(false)
-                                                        }}
-                                                    />
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )}
-
-                                    {lines.length === 0 && !agregando && (
+                                    {lines.length === 0 && (
                                         <tr className="border-t">
                                             <td
                                                 colSpan={3 + columnas.length}
@@ -277,7 +251,19 @@ export function NewOrderPage({
                             </table>
                         </div>
 
-                        {!agregando && (
+                        {agregando ? (
+                            <div className="mt-2 max-w-sm">
+                                <ProductPicker
+                                    products={products}
+                                    autoFocus
+                                    onCancel={() => lines.length > 0 && setAgregando(false)}
+                                    onPick={(product) => {
+                                        setLines((ls) => [...ls, { product, quantity: 1, specs: {} }])
+                                        setAgregando(false)
+                                    }}
+                                />
+                            </div>
+                        ) : (
                             <Button
                                 variant="ghost"
                                 size="sm"
