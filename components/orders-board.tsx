@@ -28,6 +28,7 @@ export interface BoardCard {
     created_at: string
     line_count: number
     units: number
+    items: { quantity: number; product: string }[]
     needs_review: boolean
 }
 
@@ -214,11 +215,33 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                 </div>
                                             )}
 
+                                            {/* Con pocos productos los listamos: saber que
+                                                son "20 × Optic 1" sirve, saber que es "1
+                                                línea" no. Con muchos no entran, y alcanza
+                                                el total. */}
+                                            {card.items.length > 0 && card.items.length <= 4 && (
+                                                <div className="text-xs text-muted-foreground/90 mb-1 space-y-0.5">
+                                                    {card.items.map((i, n) => (
+                                                        <div key={n} className="truncate">
+                                                            <span className="tabular-nums font-medium text-foreground/80">
+                                                                {i.quantity}
+                                                            </span>
+                                                            {" × "}
+                                                            {i.product}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
                                             <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
-                                                <span className="tabular-nums">{card.units} u.</span>
                                                 <span className="tabular-nums">
-                                                    {card.line_count} {card.line_count === 1 ? "línea" : "líneas"}
+                                                    {card.units} {card.units === 1 ? "unidad" : "unidades"}
                                                 </span>
+                                                {card.items.length > 4 && (
+                                                    <span className="tabular-nums">
+                                                        {card.line_count} productos
+                                                    </span>
+                                                )}
                                                 {card.delivery_date_estimate && (
                                                     <span
                                                         className={`flex items-center gap-1 ml-auto ${

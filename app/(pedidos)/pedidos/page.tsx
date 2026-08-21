@@ -24,7 +24,13 @@ export default async function OrdersPage({
                o.delivery_date_estimate::text AS delivery_date_estimate, o.created_at,
                COUNT(i.id) AS line_count,
                COALESCE(SUM(i.quantity), 0) AS units,
-               BOOL_OR(i.needs_review) AS needs_review
+               BOOL_OR(i.needs_review) AS needs_review,
+               -- Qué hay que armar, para mostrarlo en la tarjeta sin abrir el pedido.
+               COALESCE(
+                   json_agg(json_build_object('quantity', i.quantity, 'product', i.product)
+                            ORDER BY i.line_no) FILTER (WHERE i.id IS NOT NULL),
+                   '[]'
+               ) AS items
         FROM orders o
         LEFT JOIN order_items i ON i.order_id = o.id
         GROUP BY o.id
@@ -48,6 +54,10 @@ export default async function OrdersPage({
         delivery_date_estimate: r.delivery_date_estimate,
         line_count: Number(r.line_count),
         units: Number(r.units),
+        items: (r.items as any[]).map((i) => ({
+            quantity: Number(i.quantity),
+            product: i.product as string,
+        })),
         needs_review: Boolean(r.needs_review),
     }))
 
