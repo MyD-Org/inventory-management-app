@@ -71,11 +71,6 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             <div className="hidden print:flex items-baseline justify-between gap-4 border-b pb-3 mb-5">
                 <h1 className="text-lg font-semibold">
                     {order.customer_name ?? order.customer_external_id}
-                    {order.customer_phone && (
-                        <span className="ml-3 text-sm font-normal text-muted-foreground">
-                            {order.customer_phone}
-                        </span>
-                    )}
                 </h1>
                 <span className="text-sm text-muted-foreground tabular-nums">
                     Pedido #{order.order_number}
