@@ -206,11 +206,20 @@ export async function MovementHistory({
                     const badgeVariant = getMovementBadge(movement.movement_type)
 
                     return (
-                      <Link
+                      // La fila entera lleva al material, pero como capa invisible
+                      // por encima (no envolviendo el contenido): así el link al
+                      // pedido puede vivir arriba de ella. Un <a> dentro de otro
+                      // <a> es inválido y el navegador lo descarta, que es por lo
+                      // que la referencia terminaba abriendo el material.
+                      <div
                         key={movement.id}
-                        href={`/materials/${movement.material_id}`}
-                        className="flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:flex-row md:items-center md:gap-4"
+                        className="relative flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 md:flex-row md:items-center md:gap-4"
                       >
+                        <Link
+                          href={`/materials/${movement.material_id}`}
+                          aria-label={`Ver ${movement.material_name}`}
+                          className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        />
                         <div className="flex items-center gap-2 md:w-[36%] md:min-w-0">
                           <Icon className={`h-4 w-4 ${colorClass}`} />
                           <div className="min-w-0">
@@ -244,7 +253,7 @@ export async function MovementHistory({
                                 href={`/pedidos/${movement.order_id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-primary hover:underline"
+                                className="relative z-10 inline-flex items-center gap-1 text-primary hover:underline"
                                 title="Abrir el pedido"
                               >
                                 Ref: {movement.reference_number}
@@ -273,7 +282,7 @@ export async function MovementHistory({
                             </div>
                           </div>
                         </div>
-                      </Link>
+                      </div>
                     )
                   })
                 )}
