@@ -140,7 +140,7 @@ INSERT INTO spec_fields (key, label, free_text, position) VALUES
     ('clamp', 'Grampa', FALSE, 1),
     ('led_color', 'Color de LED', FALSE, 2),
     ('optic', 'Óptica (grados)', FALSE, 3),
-    ('body_color', 'Color del cuerpo', FALSE, 4),
+    ('body_color', 'Color del equipo', FALSE, 4),
     ('other', 'Otras indicaciones', TRUE, 5)
 ON CONFLICT (key) DO NOTHING;
 
@@ -184,3 +184,8 @@ INSERT INTO app_settings (key, value) VALUES ('order_customer_status', '{
     "cancelado": "Cancelado"
 }'::jsonb)
 ON CONFLICT (key) DO NOTHING;
+
+-- Renombre posterior: la etiqueta era "Color del cuerpo". La CLAVE body_color no
+-- se toca, es el contrato con el bot. Idempotente, por si la migración ya corrió.
+UPDATE spec_fields SET label = 'Color del equipo'
+WHERE key = 'body_color' AND label = 'Color del cuerpo';
