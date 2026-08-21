@@ -9,14 +9,10 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ExternalLink, Loader2, PackageMinus } from "lucide-react"
-import {
-    consumeOrderMaterials,
-    getOrderNeeds,
-    listOrdersWithPendingMaterials,
-} from "@/lib/order-actions"
+import { ExternalLink, PackageMinus } from "lucide-react"
+import { getOrderNeeds, listOrdersWithPendingMaterials } from "@/lib/order-actions"
+import { ConsumeMaterialsForm } from "@/components/consume-materials-form"
 import { useToast } from "@/hooks/use-toast"
 import type { MaterialNeed } from "@/lib/orders"
 
@@ -32,9 +28,7 @@ export function ConsumeFromOrder() {
     const [orders, setOrders] = useState<OrderOption[]>([])
     const [orderId, setOrderId] = useState<string>("")
     const [needs, setNeeds] = useState<MaterialNeed[] | null>(null)
-    const [cant, setCant] = useState<Record<number, number>>({})
     const [loading, setLoading] = useState(false)
-    const [saving, setSaving] = useState(false)
 
     useEffect(() => {
         listOrdersWithPendingMaterials().then(setOrders)
@@ -46,30 +40,6 @@ export function ConsumeFromOrder() {
         const n = await getOrderNeeds(Number(value))
         setLoading(false)
         setNeeds(n)
-        const inicial: Record<number, number> = {}
-        for (const m of n) {
-            // Sugerimos lo que falta descontar, sin pasarnos de lo que hay.
-            if (m.material_id !== null && m.pending > 0) {
-                inicial[m.material_id] = Math.min(m.pending, m.available ?? m.pending)
-            }
-        }
-        setCant(inicial)
-    }
-
-    async function descontar() {
-        setSaving(true)
-        const result = await consumeOrderMaterials(
-            Number(orderId),
-            Object.entries(cant).map(([id, quantity]) => ({ material_id: Number(id), quantity })),
-        )
-        setSaving(false)
-        if (result.error) {
-            toast.error("No se pudo descontar", { description: result.error })
-            return
-        }
-        toast.success(`${result.count} materiales descontados`)
-        await elegir(orderId)
-        router.refresh()
     }
 
     if (orders.length === 0) return null
@@ -120,48 +90,16 @@ export function ConsumeFromOrder() {
                         Este pedido ya tiene todos sus materiales descontados.
                     </p>
                 ) : (
-                    <>
-                        <div className="divide-y border rounded-md">
-                            {pendientes.map((n) => {
-                                const valor = cant[n.material_id!] ?? 0
-                                const excede = n.available !== null && valor > n.available
-                                return (
-                                    <div key={n.material_id} className="flex items-center gap-3 px-3 py-1.5">
-                                        <Input
-                                            type="number"
-                                            min={0}
-                                            max={n.available ?? undefined}
-                                            value={valor}
-                                            onChange={(e) =>
-                                                setCant((c) => ({
-                                                    ...c,
-                                                    [n.material_id!]: Number(e.target.value),
-                                                }))
-                                            }
-                                            className={`h-8 w-20 text-[13px] ${excede ? "border-destructive" : ""}`}
-                                        />
-                                        <span className="text-sm flex-1 min-w-0 truncate">{n.label}</span>
-                                        <span
-                                            className={`text-xs shrink-0 ${
-                                                n.available !== null && n.available < n.pending
-                                                    ? "text-destructive"
-                                                    : "text-muted-foreground"
-                                            }`}
-                                        >
-                                            necesita {n.pending} · hay {n.available ?? "—"}
-                                        </span>
-                                    </div>
-                                )
-                            })}
-                        </div>
-
-                        <div className="flex justify-end mt-3">
-                            <Button size="sm" onClick={descontar} disabled={saving}>
-                                {saving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                                Descontar del inventario
-                            </Button>
-                        </div>
-                    </>
+                    <div className="space-y-2">
+                        <ConsumeMaterialsForm
+                            orderId={Number(orderId)}
+                            needs={needs}
+                            onDone={async () => {
+                                await elegir(orderId)
+                                router.refresh()
+                            }}
+                        />
+                    </div>
                 )
             )}
         </div>

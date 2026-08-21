@@ -567,3 +567,32 @@ export async function getOrderNeeds(orderId: number) {
     if (!session?.user) return [];
     return materialNeeds(orderId);
 }
+
+// Materiales del inventario, para agregar una fila al descuento que no venía
+// en la receta del pedido (un consumible, algo que se rompió al armar).
+export async function searchInventoryMaterials(q: string) {
+    const session = await auth();
+    if (!session?.user) return [];
+
+    const term = q.trim();
+    if (term.length < 2) return [];
+
+    try {
+        const rows = await sql`
+            SELECT m.id, m.name, COALESCE(i.available_stock, 0) AS available
+            FROM materials m
+            LEFT JOIN inventory i ON i.material_id = m.id
+            WHERE m.name ILIKE ${`%${term}%`} OR m.barcode ILIKE ${`%${term}%`}
+            ORDER BY m.name ASC
+            LIMIT 8
+        `;
+        return (rows as any[]).map((r) => ({
+            material_id: r.id as number,
+            label: r.name as string,
+            available: Number(r.available),
+        }));
+    } catch (error) {
+        console.error('Error en searchInventoryMaterials:', error);
+        return [];
+    }
+}
