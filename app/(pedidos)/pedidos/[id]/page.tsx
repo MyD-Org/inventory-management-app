@@ -108,9 +108,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                                 Sin lista de materiales
                             </h2>
                             <p className="text-sm text-muted-foreground">
-                                {sinMateriales.map((i) => i.product).join(", ")} todavía no tiene el costo
-                                cargado, así que sus materiales no aparecen arriba. Cargalo en{" "}
-                                <strong className="text-foreground">Calcular Costos</strong> o resolvelo a mano.
+                                <strong className="text-foreground">
+                                    {sinMateriales.map((i) => i.product).join(", ")}
+                                </strong>{" "}
+                                no tiene cargada su lista de materiales, así que no aparece en la lista de
+                                arriba. Hay que prepararlo a mano.
                             </p>
                         </section>
                     )}

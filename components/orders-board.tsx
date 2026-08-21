@@ -200,20 +200,19 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                 <span className="text-xs text-muted-foreground tabular-nums">
                                                     #{card.order_number}
                                                 </span>
-                                                <div className="flex items-center gap-1.5">
-                                                    {card.needs_review && (
-                                                        <PackageX
-                                                            className="h-3.5 w-3.5 text-destructive"
-                                                            aria-label="Sin lista de materiales"
-                                                        />
-                                                    )}
-                                                    <PriorityIcon priority={card.priority} />
-                                                </div>
+                                                <PriorityIcon priority={card.priority} />
                                             </div>
 
                                             <div className="text-sm font-medium leading-snug truncate mb-1.5">
                                                 {card.customer_name ?? card.customer_external_id}
                                             </div>
+
+                                            {card.needs_review && (
+                                                <div className="flex items-center gap-1 text-xs text-destructive mb-1">
+                                                    <PackageX className="h-3 w-3 shrink-0" />
+                                                    Sin lista de materiales
+                                                </div>
+                                            )}
 
                                             <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
                                                 <span className="tabular-nums">{card.units} u.</span>
