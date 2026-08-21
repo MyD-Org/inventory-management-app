@@ -112,7 +112,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                                     {sinMateriales.map((i) => i.product).join(", ")}
                                 </strong>{" "}
                                 no tiene cargada su lista de materiales, así que no aparece en la lista de
-                                arriba. Hay que prepararlo a mano.
+                                arriba. Hay que descontarlo de forma manual.
                             </p>
                         </section>
                     )}
