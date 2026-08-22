@@ -1,5 +1,12 @@
 import { sql } from "@/lib/database"
-import { customerStatus as toCustomerStatus, ORDER_PRIORITIES as PRIORITIES, type OrderStatus as Status } from "@/lib/order-statuses"
+import { customerStatus as toCustomerStatus, type OrderStatus as Status } from "@/lib/order-statuses"
+import {
+    validateOrderPayloadWith,
+    validateSpecs,
+    type OrderPayload,
+    type SpecField,
+    type SpecKind,
+} from "@/lib/order-validation"
 
 // Módulo de pedidos. El contrato de los endpoints sigue docs/pedidos-avantec.md
 // del CRM: nombres de campo, forma del payload y estados salen de ahí.
@@ -31,21 +38,16 @@ export async function getCustomerStatusMap(): Promise<Record<string, string>> {
     }
 }
 
-export type SpecKind = "list" | "text" | "boolean"
-
-export interface SpecField {
-    label: string
-    options: string[]
-    free_text: boolean
-    // 'list' lista cerrada · 'text' texto libre · 'boolean' sí/no con un tilde.
-    // En 'boolean' NO marcar es una respuesta válida (el "no"), no un dato que
-    // falte confirmar: por eso no entra en el conteo de faltantes.
-    kind: SpecKind
-    // Cómo se muestra cada opción ("calido" -> "Cálido", "8" -> "8°"). Es solo
-    // para la UI: GET /api/specs sigue devolviendo options tal cual manda el doc
-    // del CRM, porque esos son los valores del contrato con el bot.
-    labels: Record<string, string>
-}
+// Los tipos y la validación viven en lib/order-validation.ts, sin importar la
+// base, para poder testearlos sin Postgres. Se reexportan por comodidad.
+export {
+    validateSpecs,
+    validateOrderPayloadWith,
+    type SpecKind,
+    type SpecField,
+    type OrderItemPayload,
+    type OrderPayload,
+} from "@/lib/order-validation"
 
 // Vocabulario vigente: { clamp: { label: "Grampa", options: ["larga","corta"] } }.
 // Solo campos y opciones activas — desactivar una opción la saca del vocabulario
@@ -75,33 +77,6 @@ export async function getSpecs(): Promise<Record<string, SpecField>> {
         }
     }
     return specs
-}
-
-// Valida las specs de una línea contra el vocabulario. Los campos free_text
-// (como 'other') aceptan cualquier cosa. Errores en texto legible: los lee una
-// persona en la vista, o el bot en el 400 del POST.
-export function validateSpecs(specs: Record<string, unknown>, vocab: Record<string, SpecField>): string[] {
-    const errors: string[] = []
-    for (const [key, value] of Object.entries(specs)) {
-        const field = vocab[key]
-        if (!field) {
-            errors.push(`Campo de spec desconocido: "${key}". Válidos: ${Object.keys(vocab).join(", ")}`)
-            continue
-        }
-        if (field.kind === "text") continue
-        // Vacío = no especificado, no es un error.
-        if (value === "" || value === null || value === undefined) continue
-        if (field.kind === "boolean") {
-            if (String(value) !== "con" && String(value) !== "sin") {
-                errors.push(`Valor inválido para "${key}": "${value}". Válidos: con, sin`)
-            }
-            continue
-        }
-        if (!field.options.includes(String(value))) {
-            errors.push(`Valor inválido para "${key}": "${value}". Válidos: ${field.options.join(", ")}`)
-        }
-    }
-    return errors
 }
 
 interface ResolvedProduct {
@@ -249,46 +224,12 @@ export async function missingMaterials(orderId: number): Promise<MissingMaterial
 
 // ---------- Escritura ----------
 
-export interface OrderItemPayload {
-    product: string
-    product_external_id?: string | null
-    quantity: number
-    specs?: Record<string, unknown>
-}
-
-export interface OrderPayload {
-    external_id: string
-    origin?: string
-    customer: {
-        external_id: string
-        name?: string | null
-        phone?: string | null
-    }
-    items: OrderItemPayload[]
-    delivery_date_estimate?: string | null
-    priority?: string
-    notes?: string | null
-    source_conversation?: string | null
-}
-
-export async function validateOrderPayload(payload: OrderPayload): Promise<string[]> {
-    const errors: string[] = []
-    if (!payload.external_id?.trim()) errors.push("Falta external_id")
-    if (!payload.customer?.external_id?.trim()) errors.push("Falta customer.external_id")
-    if (!payload.items || payload.items.length === 0) errors.push("El pedido no tiene items")
-    if (payload.priority && !PRIORITIES.includes(payload.priority as any)) {
-        errors.push(`priority inválida: "${payload.priority}". Válidas: ${PRIORITIES.join(", ")}`)
-    }
-    if (errors.length > 0) return errors
-
-    const vocab = await getSpecs()
-    payload.items.forEach((item, idx) => {
-        if (!String(item?.product ?? "").trim()) errors.push(`Item ${idx + 1}: falta product`)
-        const qty = Number(item?.quantity ?? 1)
-        if (!Number.isFinite(qty) || qty <= 0) errors.push(`Item ${idx + 1}: quantity inválida`)
-        for (const e of validateSpecs(item?.specs ?? {}, vocab)) errors.push(`Item ${idx + 1}: ${e}`)
-    })
-    return errors
+// Valida trayendo el vocabulario vigente de la base.
+export async function validateOrderPayload(
+    payload: OrderPayload,
+    vocabOverride?: Record<string, SpecField>,
+): Promise<string[]> {
+    return validateOrderPayloadWith(payload, vocabOverride ?? (await getSpecs()))
 }
 
 // Crea el pedido y explota el BOM de cada línea desde la hoja de costo.
@@ -324,8 +265,22 @@ export async function createOrder(payload: OrderPayload) {
         RETURNING id
     `
     if (inserted.length === 0) {
+        // Ya existe: devolvemos el mismo pedido en vez de duplicar.
+        //
+        // Salvo que esté A MEDIO ESCRIBIR. Dos casos reales:
+        //   - Dos requests con el mismo external_id casi juntas (el bot
+        //     reintenta tras un timeout): la perdedora entra acá mientras la
+        //     ganadora todavía está insertando las líneas.
+        //   - El proceso se murió a mitad del loop de abajo (timeout de la
+        //     función, deploy, OOM) y el catch compensatorio nunca corrió.
+        //
+        // En los dos casos el pedido queda sin líneas y el UNIQUE impide
+        // recrearlo, así que devolverlo como bueno lo deja roto para siempre.
+        // Lo marcamos incompleto y que el bot reintente.
         const [existing] = await sql`SELECT id FROM orders WHERE external_id = ${externalId}`
-        return { created: false, order: await readOrder(existing.id) }
+        const order = await readOrder(existing.id)
+        const incomplete = payload.items.length > 0 && (order?.items.length ?? 0) === 0
+        return { created: false, incomplete, order }
     }
 
     const orderId = inserted[0].id as number

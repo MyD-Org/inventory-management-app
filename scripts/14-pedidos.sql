@@ -21,8 +21,23 @@
 -- Las specs NO eligen la hoja de costo (hay una sola hoja por producto): son
 -- instrucciones para el taller que viajan con la línea.
 --
--- Todo aditivo: CREATE TABLE IF NOT EXISTS, sin ALTER ni UPDATE sobre tablas
--- existentes.
+-- LIMITACIÓN CONOCIDA: como el BOM se copia de budget_materials sin mirar las
+-- specs, el material explotado puede no corresponder a lo pedido. En el
+-- inventario "Grampa optic 1 corta" y "Grampa optic 1 larga" son materiales
+-- distintos, así que un pedido con clamp='larga' va a arrastrar el que tenga
+-- cargada la hoja de costo, sea cual sea. Por eso missing_materials puede
+-- marcar faltante del material equivocado. Lo salva que el descuento es
+-- sugerido y editable. Resolverlo de verdad pide una tabla de sustitución
+-- (field_key, value) -> material_id, que no está en este cambio.
+--
+-- QUÉ TOCA ESTA MIGRACIÓN:
+--   - Crea 5 tablas nuevas (spec_fields, spec_options, orders, order_items,
+--     order_item_materials) y una secuencia.
+--   - Agrega DOS columnas nullable a tablas existentes: spec_fields.kind (si la
+--     tabla ya existía de una corrida anterior) y stock_movements.order_id.
+--   - Siembra el vocabulario y el mapa de estados con ON CONFLICT DO NOTHING:
+--     no pisa nada que ya esté cargado.
+-- No reescribe filas de tablas existentes ni borra nada.
 --
 -- Aplicar en prod:  node scripts/run-sql.js scripts/14-pedidos.sql
 -- ============================================
@@ -201,23 +216,12 @@ INSERT INTO app_settings (key, value) VALUES ('order_customer_status', '{
 }'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
--- Renombre posterior: la etiqueta era "Color del cuerpo". La CLAVE body_color no
--- se toca, es el contrato con el bot. Idempotente, por si la migración ya corrió.
-UPDATE spec_fields SET label = 'Color del equipo'
-WHERE key = 'body_color' AND label = 'Color del cuerpo';
-
--- 'other' va siempre al final: se agregó 'stake' antes y en bases ya creadas el
--- ON CONFLICT DO NOTHING no reordena.
-UPDATE spec_fields SET position = 6 WHERE key = 'other';
-
--- Reordenar en bases donde los campos ya existían (ON CONFLICT DO NOTHING no
--- reordena). Grampa queda pegada a Estaca: son los dos datos de montaje.
-UPDATE spec_fields SET position = 1 WHERE key = 'led_color';
-UPDATE spec_fields SET position = 2 WHERE key = 'optic';
-UPDATE spec_fields SET position = 3 WHERE key = 'body_color';
-UPDATE spec_fields SET position = 4 WHERE key = 'clamp';
-UPDATE spec_fields SET position = 5 WHERE key = 'stake';
-UPDATE spec_fields SET position = 6 WHERE key = 'other';
+-- Nota: acá había UPDATE de posición y etiqueta para reordenar bases de
+-- corridas anteriores. Se sacaron: corrían en cada ejecución y revertían en
+-- silencio lo que se hubiera editado desde /pedidos/opciones, que es
+-- justamente donde vive el vocabulario. Después del seed inicial el dueño de
+-- las etiquetas y el orden es la UI, no este archivo. Una base que venga de
+-- una corrida vieja se reordena una vez a mano.
 
 -- ---------- Consumo de materiales de un pedido ----------
 -- Descontar los materiales de un pedido del inventario se registra como una

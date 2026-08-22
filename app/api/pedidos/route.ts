@@ -59,8 +59,21 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Pedido inválido", details: errors }, { status: 400 })
         }
 
-        const { created, order } = await createOrder(payload)
+        const { created, incomplete, order } = await createOrder(payload)
         if (!order) return NextResponse.json({ error: "Error interno" }, { status: 500 })
+
+        // El pedido existe pero quedó a medio escribir (ver createOrder). 409
+        // para que el bot reintente en vez de darlo por bueno vacío.
+        if (incomplete) {
+            return NextResponse.json(
+                {
+                    error: "El pedido está en creación o quedó incompleto. Reintentá.",
+                    order_id: order.id,
+                    order_number: order.order_number,
+                },
+                { status: 409 },
+            )
+        }
 
         // Forma de respuesta según el doc del CRM.
         const response = {
