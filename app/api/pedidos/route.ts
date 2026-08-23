@@ -32,19 +32,42 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Body inválido: se esperaba JSON" }, { status: 400 })
     }
 
+    // El contrato del doc es anidado (customer.external_id, items[]). Pero las
+    // tools del agente arman el body con plantillas que SOLO interpolan valores
+    // planos: un {{params.items}} que sea array tira error antes de salir.
+    // Por eso aceptamos además una forma plana equivalente. La anidada tiene
+    // prioridad; la plana es el fallback.
+    const vacioEsNull = (v: unknown) => {
+        const s = typeof v === "string" ? v.trim() : v
+        return s === "" || s === undefined ? null : (s as any)
+    }
+
+    let items: any[] = Array.isArray(body?.items) ? body.items : []
+    if (items.length === 0 && typeof body?.items_json === "string" && body.items_json.trim()) {
+        try {
+            const parsed = JSON.parse(body.items_json)
+            if (Array.isArray(parsed)) items = parsed
+        } catch {
+            return NextResponse.json(
+                { error: "items_json no es JSON válido" },
+                { status: 400 },
+            )
+        }
+    }
+
     const payload: OrderPayload = {
         external_id: String(body?.external_id ?? ""),
         origin: body?.origin,
         customer: {
-            external_id: String(body?.customer?.external_id ?? ""),
-            name: body?.customer?.name ?? null,
-            phone: body?.customer?.phone ?? null,
+            external_id: String(body?.customer?.external_id ?? body?.customer_external_id ?? ""),
+            name: vacioEsNull(body?.customer?.name ?? body?.customer_name),
+            phone: vacioEsNull(body?.customer?.phone ?? body?.customer_phone),
         },
-        items: Array.isArray(body?.items) ? body.items : [],
-        delivery_date_estimate: body?.delivery_date_estimate ?? null,
-        priority: body?.priority,
-        notes: body?.notes ?? null,
-        source_conversation: body?.source_conversation ?? null,
+        items,
+        delivery_date_estimate: vacioEsNull(body?.delivery_date_estimate),
+        priority: vacioEsNull(body?.priority) ?? undefined,
+        notes: vacioEsNull(body?.notes),
+        source_conversation: vacioEsNull(body?.source_conversation),
     }
 
     try {
