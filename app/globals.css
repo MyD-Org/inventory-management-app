@@ -59,8 +59,12 @@
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
+  /* En oscuro el rojo estaba en luminosidad 0.396 sobre un fondo de 0.145: como
+     texto no se leía. Subido al rojo claro estándar, que contrasta contra el
+     fondo oscuro. El botón destructivo no se ve afectado: usa text-white con
+     bg-destructive/60, así que sigue teniendo contraste de sobra. */
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
   --ring: oklch(0.439 0 0);
@@ -185,8 +189,52 @@
 }
 
 /* Impresión: solo se ve el contenido del documento (presupuesto en PDF). */
+/* Sin margen de página el navegador no tiene dónde poner su encabezado y su
+   pie (fecha, título de la pestaña, URL), así que los omite. El aire de la
+   hoja lo damos nosotros con padding. */
+@page {
+  margin: 0;
+}
+
 @media print {
+  body { padding: 14mm !important; }
+
   .no-print { display: none !important; }
   .aichat-root { display: none !important; }
   body { background: #fff !important; }
+
+  /* La app puede estar en modo oscuro, y el navegador no imprime fondos: sin
+     esto sale texto casi blanco sobre papel blanco, o sea una hoja vacía.
+     Forzamos la paleta clara para imprimir, venga de donde venga el tema. */
+  :root, .dark {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.40 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.45 0.20 27.3);
+    --border: oklch(0.80 0 0);
+    --input: oklch(0.80 0 0);
+  }
+
+  /* La orden de trabajo: una sola columna, las propiedades debajo del trabajo
+     en vez de en una barra lateral, y sin cortar una fila entre dos hojas. */
+  .orden-trabajo {
+    display: block !important;
+  }
+  .orden-trabajo table { border-collapse: collapse; }
+  .orden-trabajo thead { display: table-header-group; }
+  .orden-trabajo tr { break-inside: avoid; }
+  .orden-trabajo th,
+  .orden-trabajo td { border-bottom: 1px solid var(--border); }
+  .orden-trabajo section { break-inside: avoid; }
 }

@@ -2,7 +2,7 @@ import Link from "next/link"
 import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, TrendingDown, RotateCcw, Calendar } from "lucide-react"
+import { TrendingUp, TrendingDown, RotateCcw, Calendar, ExternalLink } from "lucide-react"
 import { MovementFilters } from "./movement-filters"
 import { DownloadMovementsButton } from "./download-movements-button"
 import { MovementHistoryLoadingOverlay, MovementHistoryProvider } from "./movement-history-context"
@@ -57,6 +57,7 @@ async function getMovementHistory(params: { search?: string; type?: string; from
         sm.previous_stock,
         sm.new_stock,
         sm.reference_number,
+        sm.order_id,
         sm.notes,
         sm.user_name,
         sm.created_at,
@@ -85,6 +86,7 @@ async function getMovementHistory(params: { search?: string; type?: string; from
       previous_stock: Number(movement.previous_stock),
       new_stock: Number(movement.new_stock),
       reference_number: movement.reference_number,
+      order_id: movement.order_id,
       notes: movement.notes,
       user_name: movement.user_name,
       created_at: movement.created_at,
@@ -204,11 +206,20 @@ export async function MovementHistory({
                     const badgeVariant = getMovementBadge(movement.movement_type)
 
                     return (
-                      <Link
+                      // La fila entera lleva al material, pero como capa invisible
+                      // por encima (no envolviendo el contenido): así el link al
+                      // pedido puede vivir arriba de ella. Un <a> dentro de otro
+                      // <a> es inválido y el navegador lo descarta, que es por lo
+                      // que la referencia terminaba abriendo el material.
+                      <div
                         key={movement.id}
-                        href={`/materials/${movement.material_id}`}
-                        className="flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:flex-row md:items-center md:gap-4"
+                        className="relative flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 md:flex-row md:items-center md:gap-4"
                       >
+                        <Link
+                          href={`/materials/${movement.material_id}`}
+                          aria-label={`Ver ${movement.material_name}`}
+                          className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        />
                         <div className="flex items-center gap-2 md:w-[36%] md:min-w-0">
                           <Icon className={`h-4 w-4 ${colorClass}`} />
                           <div className="min-w-0">
@@ -234,7 +245,23 @@ export async function MovementHistory({
                         {movement.reference_number && (
                           <>
                             <span className="hidden md:inline">•</span>
-                            <span>Ref: {movement.reference_number}</span>
+                            {movement.order_id ? (
+                              // Los pedidos viven en otro módulo, que se abre en
+                              // su propia pestaña: así no se pierde el historial
+                              // que estabas mirando.
+                              <a
+                                href={`/pedidos/${movement.order_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="relative z-10 inline-flex items-center gap-1 text-primary hover:underline"
+                                title="Abrir el pedido"
+                              >
+                                Ref: {movement.reference_number}
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ) : (
+                              <span>Ref: {movement.reference_number}</span>
+                            )}
                           </>
                         )}
                       </div>
@@ -255,7 +282,7 @@ export async function MovementHistory({
                             </div>
                           </div>
                         </div>
-                      </Link>
+                      </div>
                     )
                   })
                 )}
