@@ -5,7 +5,8 @@ import { BudgetEditor, type BudgetEditorData } from "@/components/budget-editor"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { getDefaultMargin, getWorkHoursPerMonth } from "@/lib/budget-actions"
-import { alegraEstimatesEnabled } from "@/lib/alegra"
+import { listSpecChoices } from "@/lib/spec-choices"
+import { isAlegraConfigured } from "@/lib/alegra"
 
 export const dynamic = 'force-dynamic';
 
@@ -18,13 +19,29 @@ export default async function EditCostPage({ params }: { params: { id: string } 
 
     const [budgetRows, materials, labor, extras, resources, defaultMargin, workHoursPerMonth] = await Promise.all([
         sql`SELECT * FROM budgets WHERE id = ${budgetId}`,
-        sql`SELECT * FROM budget_materials WHERE budget_id = ${budgetId} ORDER BY id ASC`,
+        sql`
+            SELECT
+                bm.*,
+                COALESCE(
+                    json_agg(
+                        json_build_object('specValue', o.spec_value, 'materialId', o.material_id, 'label', o.label)
+                        ORDER BY o.id
+                    ) FILTER (WHERE o.id IS NOT NULL),
+                    '[]'
+                ) AS options
+            FROM budget_materials bm
+            LEFT JOIN budget_material_options o ON o.budget_material_id = bm.id
+            WHERE bm.budget_id = ${budgetId}
+            GROUP BY bm.id
+            ORDER BY bm.id ASC
+        `,
         sql`SELECT * FROM budget_labor WHERE budget_id = ${budgetId} ORDER BY id ASC`,
         sql`SELECT * FROM budget_extras WHERE budget_id = ${budgetId} ORDER BY id ASC`,
         sql`SELECT id, name, role, monthly_value FROM labor_resources WHERE active = TRUE ORDER BY name ASC`,
         getDefaultMargin(),
         getWorkHoursPerMonth(),
     ])
+    const specFields = await listSpecChoices()
 
     const row = budgetRows[0]
     if (!row) notFound()
@@ -48,6 +65,12 @@ export default async function EditCostPage({ params }: { params: { id: string } 
             label: m.label,
             qty: Number(m.qty),
             unitCost: Number(m.unit_cost),
+            specFieldKey: m.spec_field_key ?? null,
+            options: (m.options as Array<{ specValue: string; materialId: number | null; label: string }>).map((o) => ({
+                specValue: String(o.specValue),
+                materialId: o.materialId == null ? null : Number(o.materialId),
+                label: String(o.label),
+            })),
         })),
         labor: labor.map((l) => ({
             resourceId: l.resource_id,
@@ -92,7 +115,10 @@ export default async function EditCostPage({ params }: { params: { id: string } 
                     }))}
                     defaultMargin={defaultMargin}
                     workHoursPerMonth={workHoursPerMonth}
-                    alegraEnabled={alegraEstimatesEnabled()}
+                    // Solo credenciales: el buscador de productos es de LECTURA. Emitir
+                    // cotizaciones es otro permiso (alegraEstimatesEnabled) y no se usa acá.
+                    alegraEnabled={isAlegraConfigured()}
+                    specFields={specFields}
                 />
             </main>
         </div>

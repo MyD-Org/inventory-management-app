@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
-import { Check, Loader2, PackageX, Plus, Trash2 } from "lucide-react"
+import { Check, Loader2, PackageX, Plus, TriangleAlert, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { addOrderItem, deleteOrderItem, updateOrderItem } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -21,7 +21,11 @@ interface Item {
     product: string
     quantity: number
     specs: Record<string, string>
+    // El producto no matcheó ninguna hoja de costo: la línea no aporta materiales.
     needs_review: boolean
+    // Hay materiales, pero algún valor pedido no está mapeado en la hoja y se
+    // explotó el material de referencia, que puede no ser el correcto.
+    unmapped_specs: string[]
 }
 
 const SIN = "__ninguna__"
@@ -64,11 +68,18 @@ export function OrderItemsEditor({
     } | null>(null)
     const [addingSave, setAddingSave] = useState(false)
 
-    async function run(fn: () => Promise<{ error?: string }>, ok: string) {
+    async function run(fn: () => Promise<{ error?: string; warning?: string }>, ok: string) {
         const result = await fn()
         if (result.error) {
             toast.error("No se pudo guardar", { description: result.error })
             return false
+        }
+        // Se guardó, pero hay algo que el taller tiene que mirar: p. ej. cambiar
+        // las specs de una línea cuyo stock ya se descontó no rehace el BOM.
+        if (result.warning) {
+            toast.warning(ok, { description: result.warning })
+            router.refresh()
+            return true
         }
         toast.success(ok)
         router.refresh()
@@ -153,6 +164,14 @@ export function OrderItemsEditor({
                                             <PackageX
                                                 className="no-print h-3.5 w-3.5 shrink-0 text-destructive"
                                                 aria-label="Sin lista de materiales"
+                                            />
+                                        )}
+                                        {/* Distinto problema que el de arriba: acá SÍ hay
+                                            materiales, pero uno puede ser el equivocado. */}
+                                        {!item.needs_review && item.unmapped_specs.length > 0 && (
+                                            <TriangleAlert
+                                                className="no-print h-3.5 w-3.5 shrink-0 text-amber-600"
+                                                aria-label="Variante sin resolver"
                                             />
                                         )}
                                     </span>
@@ -497,6 +516,18 @@ export function OrderItemsEditor({
 
             {/* El icono en la fila dice CUÁL; esta línea dice QUÉ significa, sin
                 volver al cartel grande que ocupaba media pantalla. */}
+            {items.some((i) => !i.needs_review && i.unmapped_specs.length > 0) && (
+                <p className="no-print mt-2 flex items-start gap-1.5 text-sm text-amber-600">
+                    <TriangleAlert className="h-3.5 w-3.5 shrink-0 mt-px" />
+                    <span>
+                        En los productos marcados hay una opción que la hoja de costo no tiene
+                        cargada ({[...new Set(items.flatMap((i) => i.unmapped_specs))].join(", ")}), así
+                        que se listó el material por defecto. Revisá que sea el que va antes de
+                        descontar.
+                    </span>
+                </p>
+            )}
+
             {items.some((i) => i.needs_review) && (
                 <p className="no-print mt-2 flex items-start gap-1.5 text-sm text-destructive">
                     <PackageX className="h-3.5 w-3.5 shrink-0 mt-px" />

@@ -25,3 +25,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Carpeta de build alterna (NEXT_DIST_DIR), para correr un segundo dev server
+.next-verify

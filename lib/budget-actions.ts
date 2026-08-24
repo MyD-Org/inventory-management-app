@@ -147,7 +147,17 @@ export interface BudgetPayload {
     alegra_item_id?: number | null;
     status: 'draft' | 'final';
     margin_pct: number;
-    materials: Array<{ material_id: number | null; label: string; qty: number; unit_cost: number }>;
+    // spec_field_key + options: variantes de la línea (la tira LED cálida y la
+    // azul son materiales distintos). El costo lo define SIEMPRE el material de
+    // la línea (material_id / unit_cost); las variantes no tienen costo propio.
+    materials: Array<{
+        material_id: number | null;
+        label: string;
+        qty: number;
+        unit_cost: number;
+        spec_field_key?: string | null;
+        options?: Array<{ spec_value: string; material_id: number | null; label: string }>;
+    }>;
     labor: Array<{ resource_id: number | null; label: string; hours: number; hourly_rate: number }>;
     extras: Array<{ label: string; amount: number }>;
 }
@@ -159,6 +169,16 @@ function validBudgetPayload(p: BudgetPayload): string | null {
     for (const m of p.materials) {
         if (!m.label?.trim() || !Number.isFinite(m.qty) || m.qty < 0 || !Number.isFinite(m.unit_cost) || m.unit_cost < 0) {
             return 'Hay líneas de materiales inválidas';
+        }
+        const options = m.options ?? [];
+        if (options.length > 0 && !m.spec_field_key?.trim()) {
+            return `La línea "${m.label.trim()}" tiene variantes pero no dice según qué campo varía`;
+        }
+        const seen = new Set<string>();
+        for (const o of options) {
+            if (!o.spec_value?.trim() || !o.label?.trim()) return `Hay variantes incompletas en "${m.label.trim()}"`;
+            if (seen.has(o.spec_value.trim())) return `La variante "${o.spec_value.trim()}" está repetida en "${m.label.trim()}"`;
+            seen.add(o.spec_value.trim());
         }
     }
     for (const l of p.labor) {
@@ -207,11 +227,22 @@ export async function saveBudget(id: number | null, payload: BudgetPayload) {
             await sql`DELETE FROM budget_extras WHERE budget_id = ${budgetId}`;
         }
 
+        // Las líneas se reinsertan con id nuevo en cada guardado (delete + insert),
+        // y budget_material_options cuelga de ese id por CASCADE: por eso hace
+        // falta el RETURNING id y reinsertar las variantes acá, o se pierden en
+        // silencio en la primera edición.
         for (const m of payload.materials) {
-            await sql`
-                INSERT INTO budget_materials (budget_id, material_id, label, qty, unit_cost)
-                VALUES (${budgetId}, ${m.material_id}, ${m.label.trim()}, ${m.qty}, ${m.unit_cost})
+            const [line] = await sql`
+                INSERT INTO budget_materials (budget_id, material_id, label, qty, unit_cost, spec_field_key)
+                VALUES (${budgetId}, ${m.material_id}, ${m.label.trim()}, ${m.qty}, ${m.unit_cost}, ${m.spec_field_key?.trim() || null})
+                RETURNING id
             `;
+            for (const o of m.options ?? []) {
+                await sql`
+                    INSERT INTO budget_material_options (budget_material_id, spec_value, material_id, label)
+                    VALUES (${line.id}, ${o.spec_value.trim()}, ${o.material_id}, ${o.label.trim()})
+                `;
+            }
         }
         for (const l of payload.labor) {
             await sql`

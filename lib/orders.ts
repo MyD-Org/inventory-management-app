@@ -1,3 +1,4 @@
+import { resolveBom, type BomLine, type BomOption } from "@/lib/bom"
 import { sql } from "@/lib/database"
 import { customerStatus as toCustomerStatus, type OrderStatus as Status } from "@/lib/order-statuses"
 import {
@@ -121,6 +122,8 @@ export interface OrderItem {
     specs: Record<string, string>
     quantity: number
     needs_review: boolean
+    /** Valores que el pedido pidió y la hoja de costo no mapea, p. ej. ["clamp=media"]. */
+    unmapped_specs: string[]
     materials: OrderMaterial[]
 }
 
@@ -164,7 +167,8 @@ export async function readOrder(orderId: number): Promise<Order | null> {
     if (!order) return null
 
     const items = await sql`
-        SELECT id, line_no, budget_id, product, product_external_id, specs, quantity, needs_review
+        SELECT id, line_no, budget_id, product, product_external_id, specs, quantity,
+               needs_review, unmapped_specs
         FROM order_items WHERE order_id = ${orderId} ORDER BY line_no ASC
     `
     const itemIds = (items as any[]).map((i) => i.id)
@@ -230,6 +234,76 @@ export async function validateOrderPayload(
     vocabOverride?: Record<string, SpecField>,
 ): Promise<string[]> {
     return validateOrderPayloadWith(payload, vocabOverride ?? (await getSpecs()))
+}
+
+// Explota la receta de un producto sobre una línea de pedido: copia congelada de
+// budget_materials en order_item_materials.
+//
+// No es una copia literal. Una línea de receta puede variar según lo que pidió el
+// cliente (la tira LED cálida y la azul son materiales distintos con precios
+// distintos, aunque el equipo se cobre igual), así que acá se elige el material
+// REAL con lib/bom.ts antes de insertar. Sin variantes cargadas el resultado es
+// idéntico al INSERT … SELECT que había antes.
+//
+// Si el pedido trae un valor que la hoja no tiene mapeado, se cae al material de
+// referencia —que puede ser el equivocado— y se anota en order_items.unmapped_specs,
+// en vez de descontar en silencio del rollo que no era. NO usa needs_review: esa
+// bandera significa "esta línea no tiene lista de materiales" y acá el BOM sí está.
+export async function explodeBom(
+    orderItemId: number,
+    budgetId: number,
+    specs: Record<string, unknown>,
+    quantity: number,
+): Promise<{ unmapped: string[] }> {
+    const rows = await sql`
+        SELECT
+            bm.id, bm.material_id, bm.label, bm.qty, bm.spec_field_key,
+            COALESCE(
+                json_agg(
+                    json_build_object('specValue', o.spec_value, 'materialId', o.material_id, 'label', o.label)
+                    ORDER BY o.id
+                ) FILTER (WHERE o.id IS NOT NULL),
+                '[]'
+            ) AS options
+        FROM budget_materials bm
+        LEFT JOIN budget_material_options o ON o.budget_material_id = bm.id
+        WHERE bm.budget_id = ${budgetId}
+        GROUP BY bm.id
+        ORDER BY bm.id ASC
+    `
+
+    const lines: BomLine[] = rows.map((r) => ({
+        id: r.id as number,
+        materialId: r.material_id as number | null,
+        label: r.label as string,
+        qty: Number(r.qty),
+        specFieldKey: (r.spec_field_key as string | null) ?? null,
+        options: (r.options as BomOption[]).map((o) => ({
+            specValue: String(o.specValue),
+            materialId: o.materialId == null ? null : Number(o.materialId),
+            label: String(o.label),
+        })),
+    }))
+
+    const { lines: resolved, unmapped } = resolveBom(lines, specs, quantity)
+
+    for (const line of resolved) {
+        await sql`
+            INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total)
+            VALUES (${orderItemId}, ${line.materialId}, ${line.label}, ${line.qty}, ${line.qtyTotal})
+        `
+    }
+
+    // Se escribe SIEMPRE, también vacío: es un hecho derivado de las specs y la
+    // receta actuales, no una marca que alguien tenga que ir a apagar. Corregir
+    // el pedido y re-explotar lo limpia solo.
+    await sql`
+        UPDATE order_items
+        SET unmapped_specs = ${JSON.stringify(unmapped)}::jsonb
+        WHERE id = ${orderItemId}
+    `
+
+    return { unmapped }
 }
 
 // Crea el pedido y explota el BOM de cada línea desde la hoja de costo.
@@ -309,13 +383,7 @@ export async function createOrder(payload: OrderPayload) {
             // BOM: copia congelada de la receta. Si el producto no matcheó, la
             // línea queda sin BOM y marcada needs_review para el taller.
             if (resolved) {
-                await sql`
-                    INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total)
-                    SELECT ${line.id}, bm.material_id, bm.label, bm.qty, bm.qty * ${quantity}
-                    FROM budget_materials bm
-                    WHERE bm.budget_id = ${resolved.budgetId}
-                    ORDER BY bm.id ASC
-                `
+                await explodeBom(line.id as number, resolved.budgetId, item.specs ?? {}, quantity)
             }
         }
     } catch (error) {

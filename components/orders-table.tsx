@@ -8,7 +8,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Trash2, ExternalLink, PackageX, CalendarClock } from "lucide-react"
+import { Trash2, ExternalLink, PackageX, TriangleAlert, CalendarClock } from "lucide-react"
 import { deleteOrder } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useToast } from "@/hooks/use-toast"
@@ -71,6 +71,13 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                                 <span className="flex items-center gap-1 text-sm text-destructive shrink-0 whitespace-nowrap">
                                     <PackageX className="h-3 w-3" />
                                     Sin materiales
+                                </span>
+                            )}
+
+                            {!o.needs_review && o.has_unmapped && (
+                                <span className="flex items-center gap-1 text-sm text-amber-600 shrink-0 whitespace-nowrap">
+                                    <TriangleAlert className="h-3 w-3" />
+                                    Variante sin resolver
                                 </span>
                             )}
 

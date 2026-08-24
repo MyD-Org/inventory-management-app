@@ -101,6 +101,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                                 quantity: i.quantity,
                                 specs: i.specs,
                                 needs_review: i.needs_review,
+                                unmapped_specs: i.unmapped_specs ?? [],
                             }))}
                             vocab={vocab}
                             products={costed.map((p) => p.name)}

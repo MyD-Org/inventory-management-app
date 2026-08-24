@@ -5,13 +5,20 @@
 
 const ALEGRA_BASE = "https://api.alegra.com/api/v1"
 
+// Hay credenciales: alcanza para todo lo de LECTURA (buscar contactos y
+// productos). Es la bandera que gatea los autocompletados, tanto el de clientes
+// en presupuestos como el del nombre del producto en costos.
 export function isAlegraConfigured(): boolean {
     return Boolean(process.env.ALEGRA_EMAIL && process.env.ALEGRA_TOKEN)
 }
 
 // Crear cotizaciones por API requiere un plan de Alegra que incluya el módulo de ventas
 // (hoy da 402). Se habilita explícitamente con ALEGRA_ESTIMATES_ENABLED=true cuando el plan
-// lo soporte. El buscador de CONTACTOS no depende de esto (funciona con cualquier plan).
+// lo soporte.
+//
+// SOLO para ESCRITURA. Ningún buscador debe depender de esta bandera: emitir un
+// documento en la contabilidad y leer un catálogo son permisos distintos, y
+// mezclarlos obliga a habilitar la emisión para poder autocompletar un nombre.
 export function alegraEstimatesEnabled(): boolean {
     return isAlegraConfigured() && process.env.ALEGRA_ESTIMATES_ENABLED === "true"
 }
