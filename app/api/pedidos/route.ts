@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
+import { normalizePhone } from "@/lib/order-validation"
 import {
     createOrder,
     customerStatus,
@@ -115,35 +116,46 @@ export async function POST(request: NextRequest) {
     }
 }
 
-// Consulta de estado por cliente. customer_external_id es OBLIGATORIO: sin el
-// filtro, un bug del bot listaría los pedidos de todos los clientes.
-// Se puede acotar a un pedido puntual con external_id.
+// Consulta de estado por cliente. Hace falta SIEMPRE un filtro de identidad —
+// phone o customer_external_id—: sin eso, un bug del bot listaría los pedidos de
+// todos los clientes. Se puede acotar a un pedido puntual con external_id.
 export async function GET(request: NextRequest) {
     const denied = requireInternalSecret(request)
     if (denied) return denied
 
     const { searchParams } = new URL(request.url)
     const customerExternalId = (searchParams.get("customer_external_id") ?? "").trim()
-    if (!customerExternalId) {
-        return NextResponse.json({ error: "Falta customer_external_id" }, { status: 400 })
+    // El teléfono es el filtro preferido: en WhatsApp sale de end_user.external_id,
+    // que lo inyecta ai-api y el modelo NO controla. customer_external_id, en cambio,
+    // lo elige el modelo, y un cliente mal identificado ahí le mostraría a alguien los
+    // pedidos de otro. Se mantiene por compatibilidad con el CRM, que sí lo tiene.
+    const phone = normalizePhone(searchParams.get("phone"))
+    if (!customerExternalId && !phone) {
+        return NextResponse.json({ error: "Falta phone o customer_external_id" }, { status: 400 })
     }
 
     const externalId = (searchParams.get("external_id") ?? "").trim()
 
     try {
         const overrides = await getCustomerStatusMap()
-        const rows = externalId
-            ? await sql`
-                SELECT id, order_number, external_id, status, delivery_date_estimate::text AS delivery_date_estimate, updated_at
-                FROM orders
-                WHERE customer_external_id = ${customerExternalId} AND external_id = ${externalId}
-            `
-            : await sql`
-                SELECT id, order_number, external_id, status, delivery_date_estimate::text AS delivery_date_estimate, updated_at
-                FROM orders
-                WHERE customer_external_id = ${customerExternalId}
-                ORDER BY created_at DESC LIMIT 50
-            `
+        // Un solo query con los tres filtros opcionales: el de identidad (por teléfono
+        // normalizado o por id del CRM) y el de external_id. La comparación por teléfono
+        // normaliza también el lado guardado, porque en la base hay números cargados a
+        // mano con espacios y guiones.
+        const rows = await sql`
+            SELECT id, order_number, external_id, status, delivery_date_estimate::text AS delivery_date_estimate, updated_at
+            FROM orders
+            WHERE (
+                (${customerExternalId}::text <> '' AND customer_external_id = ${customerExternalId})
+                OR (
+                    ${phone}::text <> ''
+                    AND length(regexp_replace(coalesce(customer_phone, ''), '\D', '', 'g')) >= 8
+                    AND right(regexp_replace(coalesce(customer_phone, ''), '\D', '', 'g'), 10) = ${phone}
+                )
+            )
+              AND (${externalId}::text = '' OR external_id = ${externalId})
+            ORDER BY created_at DESC LIMIT 50
+        `
 
         // Solo lo que el cliente puede ver: nada de materiales ni jerga interna.
         const orders = (rows as any[]).map((r) => ({
