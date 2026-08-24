@@ -6,7 +6,7 @@ import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { getDefaultMargin, getWorkHoursPerMonth } from "@/lib/budget-actions"
 import { listSpecChoices } from "@/lib/spec-choices"
-import { alegraEstimatesEnabled } from "@/lib/alegra"
+import { isAlegraConfigured } from "@/lib/alegra"
 
 export const dynamic = 'force-dynamic';
 
@@ -115,7 +115,9 @@ export default async function EditCostPage({ params }: { params: { id: string } 
                     }))}
                     defaultMargin={defaultMargin}
                     workHoursPerMonth={workHoursPerMonth}
-                    alegraEnabled={alegraEstimatesEnabled()}
+                    // Solo credenciales: el buscador de productos es de LECTURA. Emitir
+                    // cotizaciones es otro permiso (alegraEstimatesEnabled) y no se usa acá.
+                    alegraEnabled={isAlegraConfigured()}
                     specFields={specFields}
                 />
             </main>
