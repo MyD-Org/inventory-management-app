@@ -29,7 +29,11 @@ export interface BoardCard {
     line_count: number
     units: number
     items: { quantity: number; product: string }[]
+    // Alguna línea no tiene lista de materiales (el producto no matcheó una hoja).
     needs_review: boolean
+    // Hay lista, pero una opción pedida no está mapeada y se explotó el material
+    // por defecto. Son problemas distintos y se resuelven distinto.
+    has_unmapped: boolean
 }
 
 export function formatDate(d: string | null): string | null {

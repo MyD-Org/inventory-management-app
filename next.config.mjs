@@ -1,5 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Carpeta de build. Es configurable para poder correr DOS dev servers sobre este
+  // mismo repo a la vez (p. ej. el tuyo y uno de verificación en otro puerto): sin
+  // esto los dos escriben .next y se corrompen los módulos entre ellos, con errores
+  // del estilo "__webpack_modules__[moduleId] is not a function". Sin la variable,
+  // se comporta como siempre.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+
   typescript: {
     ignoreBuildErrors: true,
   },

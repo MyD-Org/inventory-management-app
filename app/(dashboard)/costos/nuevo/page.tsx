@@ -5,6 +5,7 @@ import { BudgetEditor } from "@/components/budget-editor"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { getDefaultMargin, getWorkHoursPerMonth } from "@/lib/budget-actions"
+import { listSpecChoices } from "@/lib/spec-choices"
 import { alegraEstimatesEnabled } from "@/lib/alegra"
 
 export const dynamic = 'force-dynamic';
@@ -13,10 +14,11 @@ export default async function NewCostPage() {
     const session = await auth();
     if (!session?.user) redirect('/login')
 
-    const [resources, defaultMargin, workHoursPerMonth] = await Promise.all([
+    const [resources, defaultMargin, workHoursPerMonth, specFields] = await Promise.all([
         sql`SELECT id, name, role, monthly_value FROM labor_resources WHERE active = TRUE ORDER BY name ASC`,
         getDefaultMargin(),
         getWorkHoursPerMonth(),
+        listSpecChoices(),
     ])
 
     return (
@@ -47,6 +49,7 @@ export default async function NewCostPage() {
                     defaultMargin={defaultMargin}
                     workHoursPerMonth={workHoursPerMonth}
                     alegraEnabled={alegraEstimatesEnabled()}
+                    specFields={specFields}
                 />
             </main>
         </div>

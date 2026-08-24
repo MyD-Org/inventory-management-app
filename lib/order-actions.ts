@@ -9,8 +9,10 @@ import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import { sql } from '@/lib/database';
 import { getCostedProducts } from '@/lib/costed-products';
+import { sameSpecs } from '@/lib/bom';
 import {
     createOrder,
+    explodeBom,
     getSpecs,
     materialNeeds,
     ORDER_PRIORITIES,
@@ -260,9 +262,18 @@ export async function updateOrderFields(
     }
 }
 
-// Cambiar cantidad o specs de una línea. La cantidad REESCALA el BOM guardado:
-// mantenemos el qty_per_unit congelado del pedido y recalculamos el total, para
-// no traer una receta que pudo cambiar después de tomar el pedido.
+// Cambiar cantidad o specs de una línea.
+//
+// CANTIDAD: reescala el BOM guardado (mantiene el qty_per_unit congelado del
+// pedido y recalcula el total), para no traer una receta que pudo cambiar después
+// de tomar el pedido.
+//
+// SPECS: acá el congelado NO se puede sostener. Pasar de clamp='larga' a 'corta'
+// es otra grampa, y para saber cuál hay que volver a leer budget_materials. O sea
+// que corregir las specs de un pedido viejo lo re-explota con la receta de HOY: si
+// la hoja de costo cambió desde que se tomó, el BOM queda actualizado, no como
+// estaba. Es el precio de poder corregir la variante; la alternativa —dejar el
+// material equivocado— es peor. Si el pedido ya descontó stock no se toca nada.
 export async function updateOrderItem(
     itemId: number,
     patch: { quantity?: number; specs?: Record<string, string> },
@@ -271,7 +282,7 @@ export async function updateOrderItem(
     if (!session?.user) return { error: 'No autenticado' };
 
     try {
-        const [item] = await sql`SELECT order_id, quantity FROM order_items WHERE id = ${itemId}`;
+        const [item] = await sql`SELECT order_id, quantity, budget_id, specs FROM order_items WHERE id = ${itemId}`;
         if (!item) return { error: 'La línea no existe' };
 
         if (patch.specs) {
@@ -289,7 +300,52 @@ export async function updateOrderItem(
             WHERE id = ${itemId}
         `;
 
-        if (patch.quantity !== undefined) {
+        // Si cambian las specs puede cambiar el MATERIAL, no solo la cantidad:
+        // pasar de clamp='larga' a 'corta' es otra grampa. Ahí hay que re-explotar
+        // la receta, salvo que ya se haya descontado stock contra este pedido —
+        // ahí el BOM guardado es el registro de lo que efectivamente salió del
+        // depósito y no se toca; el taller ajusta a mano.
+        const specsChanged =
+            patch.specs !== undefined && !sameSpecs(patch.specs, (item.specs ?? {}) as Record<string, unknown>);
+        let consumed = false;
+
+        if (specsChanged && item.budget_id) {
+            const [{ count }] = await sql`
+                SELECT COUNT(*)::int AS count FROM stock_movements
+                WHERE order_id = ${item.order_id} AND movement_type = 'salida'
+            `;
+            consumed = count > 0;
+            if (!consumed) {
+                // El driver HTTP de neon no da transacciones interactivas, así que
+                // el DELETE + INSERT no es atómico: si falla en el medio la línea
+                // se queda sin materiales. Guardamos el BOM viejo en memoria y lo
+                // reponemos en el catch, igual que el DELETE compensatorio de
+                // createOrder. Sin esto, un timeout deja el pedido sin receta y no
+                // hay de dónde recuperarla.
+                const previo = await sql`
+                    SELECT material_id, label, qty_per_unit, qty_total
+                    FROM order_item_materials WHERE order_item_id = ${itemId} ORDER BY id ASC
+                `;
+                await sql`DELETE FROM order_item_materials WHERE order_item_id = ${itemId}`;
+                try {
+                    await explodeBom(itemId, item.budget_id as number, patch.specs ?? {}, quantity);
+                } catch (error) {
+                    await sql`DELETE FROM order_item_materials WHERE order_item_id = ${itemId}`;
+                    for (const m of previo) {
+                        await sql`
+                            INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total)
+                            VALUES (${itemId}, ${m.material_id}, ${m.label}, ${m.qty_per_unit}, ${m.qty_total})
+                        `;
+                    }
+                    throw error;
+                }
+            }
+        }
+
+        // Si no se re-explotó (specs iguales, línea sin receta, o stock ya
+        // descontado) la cantidad igual tiene que reescalar el BOM guardado.
+        const reexploded = specsChanged && Boolean(item.budget_id) && !consumed;
+        if (!reexploded && patch.quantity !== undefined) {
             await sql`
                 UPDATE order_item_materials
                 SET qty_total = qty_per_unit * ${quantity}
@@ -299,6 +355,13 @@ export async function updateOrderItem(
 
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${item.order_id}`);
+        if (consumed) {
+            return {
+                ok: true,
+                warning:
+                    'Se guardaron los cambios, pero los materiales no se recalcularon porque este pedido ya descontó stock. Revisá el descuento a mano.',
+            };
+        }
         return { ok: true };
     } catch (error) {
         console.error('Error en updateOrderItem:', error);
@@ -359,18 +422,22 @@ export async function addOrderItem(
             RETURNING id
         `;
 
+        let unmapped: string[] = [];
         if (resolved) {
-            await sql`
-                INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total)
-                SELECT ${line.id}, bm.material_id, bm.label, bm.qty, bm.qty * ${payload.quantity}
-                FROM budget_materials bm WHERE bm.budget_id = ${resolved.budgetId}
-                ORDER BY bm.id ASC
-            `;
+            ({ unmapped } = await explodeBom(
+                line.id as number,
+                resolved.budgetId,
+                payload.specs ?? {},
+                payload.quantity,
+            ));
         }
 
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${orderId}`);
-        return { ok: true, needs_review: resolved === null };
+        // needs_review = el producto no matcheó ninguna hoja de costo (no hay BOM).
+        // unmapped = hay BOM, pero algún valor pedido no está mapeado. Son cosas
+        // distintas y el taller hace algo distinto con cada una.
+        return { ok: true, needs_review: resolved === null, unmapped };
     } catch (error) {
         console.error('Error en addOrderItem:', error);
         return { error: 'No se pudo agregar la línea' };
@@ -440,8 +507,17 @@ export async function deleteSpecField(key: string) {
     if (session?.user?.role !== 'admin') return { error: 'Solo un admin puede editar el vocabulario' };
 
     try {
+        // Las variantes cuelgan de la LÍNEA de la hoja de costo, no del campo, así
+        // que el ON DELETE SET NULL de budget_materials.spec_field_key las dejaría
+        // huérfanas: filas invisibles desde la UI que nadie vuelve a usar. Se van
+        // primero, mientras todavía se sabe cuáles eran.
+        await sql`
+            DELETE FROM budget_material_options
+            WHERE budget_material_id IN (SELECT id FROM budget_materials WHERE spec_field_key = ${key})
+        `;
         await sql`DELETE FROM spec_fields WHERE key = ${key}`;
         revalidatePath('/pedidos/opciones');
+        revalidatePath('/costos');
         return { ok: true };
     } catch (error) {
         console.error('Error en deleteSpecField:', error);

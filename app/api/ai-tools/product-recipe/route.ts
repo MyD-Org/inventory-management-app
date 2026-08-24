@@ -37,11 +37,24 @@ export async function GET(request: NextRequest) {
                 i.current_stock,
                 m.min_stock,
                 (i.current_stock IS NOT NULL AND i.current_stock <= m.min_stock) AS bajo_minimo,
-                (bm.unit_cost = 0) AS costo_cero
+                (bm.unit_cost = 0) AS costo_cero,
+                -- Variantes: qué material sale del depósito según lo que pida el
+                -- cliente (led_color='calido' -> otra tira). El COSTO es siempre
+                -- el de arriba: el color no cambia el precio de venta.
+                bm.spec_field_key,
+                COALESCE(
+                    json_agg(
+                        json_build_object('spec_value', o.spec_value, 'material_id', o.material_id, 'label', o.label)
+                        ORDER BY o.id
+                    ) FILTER (WHERE o.id IS NOT NULL),
+                    '[]'
+                ) AS options
             FROM budget_materials bm
             LEFT JOIN materials m ON m.id = bm.material_id
             LEFT JOIN inventory i ON i.material_id = bm.material_id
+            LEFT JOIN budget_material_options o ON o.budget_material_id = bm.id
             WHERE bm.budget_id = ${budgetId}
+            GROUP BY bm.id, m.unit_cost, i.current_stock, m.min_stock
             ORDER BY bm.id ASC
         `
         const labor = await sql`SELECT label, hours, hourly_rate FROM budget_labor WHERE budget_id = ${budgetId} ORDER BY id ASC`

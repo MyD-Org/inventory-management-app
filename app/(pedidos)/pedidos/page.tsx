@@ -25,6 +25,9 @@ export default async function OrdersPage({
                COUNT(i.id) AS line_count,
                COALESCE(SUM(i.quantity), 0) AS units,
                BOOL_OR(i.needs_review) AS needs_review,
+               -- Alguna línea pidió una opción que su hoja de costo no mapea: hay
+               -- materiales, pero uno puede ser el equivocado. Distinto de needs_review.
+               BOOL_OR(i.unmapped_specs <> '[]'::jsonb) AS has_unmapped,
                -- Qué hay que armar, para mostrarlo en la tarjeta sin abrir el pedido.
                COALESCE(
                    json_agg(json_build_object('quantity', i.quantity, 'product', i.product)
@@ -59,6 +62,7 @@ export default async function OrdersPage({
             product: i.product as string,
         })),
         needs_review: Boolean(r.needs_review),
+        has_unmapped: Boolean(r.has_unmapped),
     }))
 
     return (
