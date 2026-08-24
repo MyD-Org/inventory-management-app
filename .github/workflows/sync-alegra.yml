@@ -1,0 +1,95 @@
+name: Sincronizar espejo de Alegra
+
+# Refresca alegra_clients desde la API de Alegra llamando a POST /api/alegra/sync.
+#
+# Por qué existe: el espejo se llenaba con exports CSV a mano y quedaba meses
+# atrasado (medido: 42 clientes espejados contra 110 en Alegra). Como el buscador
+# de clientes de pedidos y las tools de IA leen de esa tabla, los clientes nuevos
+# no aparecían — y el bot del CRM identifica al cliente por teléfono contra ella.
+#
+# Corre acá y no en Vercel Cron porque el plan Hobby permite una sola ejecución
+# diaria; acá podemos ir más seguido sin costo.
+#
+# Requiere estos secrets del repo (Settings -> Secrets and variables -> Actions):
+#   INTERNAL_SECRET -> el mismo valor que la variable INTERNAL_SECRET de Vercel
+# Y esta variable (misma pantalla, pestaña Variables):
+#   APP_URL         -> https://v0-inventoryapp.vercel.app  (sin barra final)
+#
+# OJO: los workflows programados solo corren desde la rama por defecto (main), y
+# GitHub los desactiva solo si el repo pasa 60 días sin actividad.
+
+on:
+  schedule:
+    - cron: "0 9,21 * * *" # 09:00 y 21:00 UTC = 06:00 y 18:00 ART
+  workflow_dispatch: {} # permite correrlo a mano desde la pestaña Actions
+
+# Dos syncs simultáneos se pisarían y además comerían el rate limit de Alegra
+# (100 requests por minuto en contactos).
+concurrency:
+  group: sync-alegra
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Llamar al endpoint de sync
+        run: |
+          set -euo pipefail
+
+          if [ -z "${APP_URL}" ]; then
+            echo "ERROR: falta la variable APP_URL del repo." >&2
+            exit 1
+          fi
+
+          # -sS: sin barra de progreso pero con errores visibles.
+          # El status va aparte del cuerpo para poder reportar los dos.
+          HTTP_CODE=$(curl -sS -o response.json -w '%{http_code}' \
+            -X POST "${APP_URL}/api/alegra/sync" \
+            -H "Authorization: Bearer ${INTERNAL_SECRET}" \
+            --max-time 300)
+
+          echo "HTTP ${HTTP_CODE}"
+          cat response.json
+
+          if [ "${HTTP_CODE}" != "200" ]; then
+            echo "ERROR: el sync falló (HTTP ${HTTP_CODE})." >&2
+            # 401 = INTERNAL_SECRET no coincide con el de Vercel.
+            # 503 = faltan ALEGRA_EMAIL / ALEGRA_TOKEN en Vercel.
+            # 502 = Alegra respondió mal; el cuerpo trae su mensaje (un 402 ahí
+            #       significa que el plan dejó de habilitar el endpoint).
+            exit 1
+          fi
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          INTERNAL_SECRET: ${{ secrets.INTERNAL_SECRET }}
+
+      - name: Resumen
+        if: always()
+        run: |
+          set -euo pipefail
+          [ -f response.json ] || exit 0
+          {
+            echo "### Sync de contactos de Alegra"
+            echo ""
+            if jq -e '.ok == true' response.json > /dev/null 2>&1; then
+              jq -r '.contacts | "- Traídos de Alegra: \(.fetched)\n- Nuevos: \(.inserted)\n- Actualizados: \(.updated)\n- Sin nombre, ignorados: \(.skipped)"' response.json
+              echo ""
+              # Duplicados = dos clientes con el mismo nombre en Alegra. El espejo
+              # no puede representarlos (name_normalized es UNIQUE), así que se
+              # conserva uno y se avisa acá para unificarlos en Alegra.
+              DUPS=$(jq '.contacts.duplicates | length' response.json)
+              if [ "${DUPS}" != "0" ]; then
+                echo "**${DUPS} duplicado(s) en Alegra** (mismo nombre, distinto id) — conviene unificarlos allá:"
+                echo ""
+                jq -r '.contacts.duplicates[] | "- \(.name): se conservó el id \(.kept_alegra_id), se ignoró el \(.alegra_id)"' response.json
+              fi
+            else
+              echo "El sync **falló**:"
+              echo ""
+              echo '```'
+              cat response.json
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,5 +1,5 @@
 import { sql } from "@/lib/database"
-import { listAllContacts } from "@/lib/alegra"
+import { listAllContacts, listInvoicesSince, listPaymentsSince } from "@/lib/alegra"
 
 // Sync del espejo de Alegra contra la API.
 //
@@ -107,6 +107,184 @@ export async function syncContacts(): Promise<SyncResult> {
         `
         if (upsert[0]?.is_insert) result.inserted++
         else result.updated++
+    }
+
+    return result
+}
+
+// ── Documentos de venta y pagos ──────────────────────────────────────────────
+
+// Alegra devuelve 'open' | 'closed' | 'void'; el espejo tiene 2622 filas cargadas
+// desde los CSV, que usan el vocabulario en castellano. Traducimos para no partir
+// la tabla en dos idiomas: hay queries de dashboards y tools de IA que filtran
+// por estos valores.
+const STATUS_ES: Record<string, string> = {
+    closed: "Cobrada",
+    open: "Por cobrar",
+    void: "Anulada",
+}
+
+// Desde cuándo pedirle documentos a Alegra.
+//
+// Se toma la fecha más reciente del espejo y se restan 7 días de margen: un
+// documento puede editarse o pagarse después de emitido, y así lo volvemos a
+// traer. IGNORA fechas futuras: en esta cuenta hay un pago tipeado con año 3023,
+// y si el cursor se guiara por él el sync no traería nunca más nada.
+async function cursorSince(table: "alegra_sales_documents" | "alegra_payments", column: "issue_date" | "payment_date"): Promise<string> {
+    const rows = table === "alegra_sales_documents"
+        ? await sql`SELECT MAX(issue_date)::text AS d FROM alegra_sales_documents WHERE issue_date <= CURRENT_DATE`
+        : await sql`SELECT MAX(payment_date)::text AS d FROM alegra_payments WHERE payment_date <= CURRENT_DATE`
+    const last = rows[0]?.d as string | null
+    if (!last) return "2000-01-01" // espejo vacío: backfill completo
+    const d = new Date(last + "T00:00:00Z")
+    d.setUTCDate(d.getUTCDate() - 7)
+    return d.toISOString().slice(0, 10)
+}
+
+export interface DocSyncResult {
+    since: string
+    fetched: number
+    upserted: number
+    items: number
+    skipped: number
+}
+
+// Facturas + sus líneas. Las líneas se borran y reinsertan por documento, igual
+// que hace el importador de CSV: es más simple que diffear y el volumen por
+// documento es de unas pocas filas.
+//
+// NO cubre notas de crédito ni de débito: viven en otro endpoint (/credit-notes)
+// y las 31 que hay en el espejo siguen viniendo del CSV. Queda pendiente.
+export async function syncInvoices(sinceOverride?: string): Promise<DocSyncResult> {
+    const since = sinceOverride || (await cursorSince("alegra_sales_documents", "issue_date"))
+    const invoices = await listInvoicesSince(since)
+    const result: DocSyncResult = { since, fetched: invoices.length, upserted: 0, items: 0, skipped: 0 }
+
+    for (const inv of invoices) {
+        const code = inv.numberTemplate?.fullNumber ?? inv.number ?? null
+        if (!code || !inv.date) {
+            result.skipped++
+            continue
+        }
+
+        // El cliente se matchea por alegra_id, no por nombre: es estable aunque lo
+        // renombren, y ahora que syncContacts() llena esa columna está disponible.
+        const clientAlegraId = inv.client?.id != null ? Number(inv.client.id) : null
+        const [client] = clientAlegraId
+            ? await sql`SELECT id FROM alegra_clients WHERE alegra_id = ${clientAlegraId}`
+            : [undefined]
+
+        const [doc] = await sql`
+            INSERT INTO alegra_sales_documents (
+                doc_type, code, issue_date, due_date, status, client_id, client_name,
+                seller, warehouse, payment_term, notes, subtotal, total, paid_amount, source_file
+            )
+            VALUES (
+                'invoice', ${code}, ${inv.date}, ${inv.dueDate || null},
+                ${STATUS_ES[inv.status] ?? inv.status ?? null},
+                ${client?.id ?? null}, ${inv.client?.name ?? null},
+                ${inv.seller?.name ?? null}, ${inv.warehouse?.name ?? null},
+                ${inv.term?.name ?? null}, ${inv.observations || null},
+                ${Number(inv.subtotal) || 0}, ${Number(inv.total) || 0},
+                ${Number(inv.totalPaid) || 0}, 'api'
+            )
+            ON CONFLICT (doc_type, code) DO UPDATE SET
+                issue_date = EXCLUDED.issue_date,
+                due_date = EXCLUDED.due_date,
+                status = EXCLUDED.status,
+                client_id = COALESCE(EXCLUDED.client_id, alegra_sales_documents.client_id),
+                client_name = COALESCE(EXCLUDED.client_name, alegra_sales_documents.client_name),
+                seller = COALESCE(EXCLUDED.seller, alegra_sales_documents.seller),
+                subtotal = EXCLUDED.subtotal,
+                total = EXCLUDED.total,
+                -- paid_amount de la API es el real (totalPaid); el del CSV era una
+                -- reconstrucción del importador asignando pagos a mano.
+                paid_amount = EXCLUDED.paid_amount,
+                source_file = 'api',
+                updated_at = NOW()
+            RETURNING id
+        `
+        result.upserted++
+
+        const lines = Array.isArray(inv.items) ? inv.items : []
+        await sql`DELETE FROM alegra_sales_items WHERE document_id = ${doc.id}`
+        for (const [idx, it] of lines.entries()) {
+            const qty = Number(it.quantity) || 0
+            const price = Number(it.price) || 0
+            const taxPct = Number(it.tax?.[0]?.percentage) || 0
+            const lineTotal = Number(it.total)
+            await sql`
+                INSERT INTO alegra_sales_items (
+                    document_id, line_no, item_name, item_reference, description,
+                    quantity, unit_price, discount, tax_pct, tax_amount, line_total
+                )
+                VALUES (
+                    ${doc.id}, ${idx + 1}, ${it.name ?? "(sin nombre)"}, ${it.reference ?? null},
+                    ${it.description ?? null}, ${qty}, ${price}, ${Number(it.discount) || 0},
+                    ${taxPct}, ${(qty * price * taxPct) / 100},
+                    ${Number.isFinite(lineTotal) ? lineTotal : qty * price}
+                )
+            `
+            result.items++
+        }
+    }
+
+    return result
+}
+
+export interface PaymentSyncResult {
+    since: string
+    fetched: number
+    upserted: number
+    skipped: number
+}
+
+export async function syncPayments(sinceOverride?: string): Promise<PaymentSyncResult> {
+    const since = sinceOverride || (await cursorSince("alegra_payments", "payment_date"))
+    const payments = await listPaymentsSince(since)
+    const result: PaymentSyncResult = { since, fetched: payments.length, upserted: 0, skipped: 0 }
+
+    for (const p of payments) {
+        if (!p.number || !p.date) {
+            result.skipped++
+            continue
+        }
+
+        const clientAlegraId = p.client?.id != null ? Number(p.client.id) : null
+        const [client] = clientAlegraId
+            ? await sql`SELECT id FROM alegra_clients WHERE alegra_id = ${clientAlegraId}`
+            : [undefined]
+
+        // La API trae los documentos asociados estructurados; el CSV los traía como
+        // texto libre. Se guarda el mismo formato de siempre para no romper lo que
+        // ya lee esa columna.
+        const docs = Array.isArray(p.invoices)
+            ? p.invoices.map((i: any) => i.numberTemplate?.fullNumber ?? i.number).filter(Boolean).join(", ")
+            : null
+
+        await sql`
+            INSERT INTO alegra_payments (
+                number, payment_date, account, client_id, client_name,
+                amount, method, associated_docs, notes, status, source_file
+            )
+            VALUES (
+                ${String(p.number)}, ${p.date}, ${p.bankAccount?.name ?? null},
+                ${client?.id ?? null}, ${p.client?.name ?? null},
+                ${Number(p.amount) || 0}, ${p.paymentMethod ?? null},
+                ${docs}, ${p.observations || null}, ${p.status ?? null}, 'api'
+            )
+            ON CONFLICT (number, payment_date) DO UPDATE SET
+                account = COALESCE(EXCLUDED.account, alegra_payments.account),
+                client_id = COALESCE(EXCLUDED.client_id, alegra_payments.client_id),
+                client_name = COALESCE(EXCLUDED.client_name, alegra_payments.client_name),
+                amount = EXCLUDED.amount,
+                method = COALESCE(EXCLUDED.method, alegra_payments.method),
+                associated_docs = COALESCE(EXCLUDED.associated_docs, alegra_payments.associated_docs),
+                status = COALESCE(EXCLUDED.status, alegra_payments.status),
+                source_file = 'api',
+                updated_at = NOW()
+        `
+        result.upserted++
     }
 
     return result

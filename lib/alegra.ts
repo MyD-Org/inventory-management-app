@@ -129,6 +129,35 @@ export async function listAllContacts(): Promise<AlegraContactFull[]> {
     return out
 }
 
+// Documentos de venta y pagos, para el espejo. Se filtran por fecha
+// (date_afterOrNow) para que el sync incremental no tenga que traer los 2600
+// documentos históricos en cada corrida.
+export async function listInvoicesSince(since: string, maxPages = 120): Promise<any[]> {
+    const PAGE = 30
+    const out: any[] = []
+    for (let page = 0; page < maxPages; page++) {
+        const rows = await fetchPageWithRetry(
+            `/invoices?limit=${PAGE}&start=${page * PAGE}&date_afterOrNow=${since}&order_field=date&order_direction=ASC`,
+        )
+        out.push(...rows)
+        if (rows.length < PAGE) break
+    }
+    return out
+}
+
+export async function listPaymentsSince(since: string, maxPages = 120): Promise<any[]> {
+    const PAGE = 30
+    const out: any[] = []
+    for (let page = 0; page < maxPages; page++) {
+        const rows = await fetchPageWithRetry(
+            `/payments?limit=${PAGE}&start=${page * PAGE}&date_afterOrNow=${since}`,
+        )
+        out.push(...rows)
+        if (rows.length < PAGE) break
+    }
+    return out
+}
+
 export async function createContact(name: string): Promise<AlegraContact> {
     const c = await alegraFetch<AlegraContact>(`/contacts`, {
         method: "POST",
