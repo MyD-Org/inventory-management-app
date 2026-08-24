@@ -94,3 +94,18 @@ export function validateOrderPayloadWith(
     })
     return errors
 }
+
+// Los teléfonos vienen de tres lados con tres formatos: WhatsApp manda el wa_id
+// sin '+' ("5492235903012"), Alegra tiene cargado de todo ("+5492235903012",
+// "223 4959686", "011 4574-3077") y a mano se escribe cualquier cosa. Comparar
+// los últimos 10 dígitos empareja los tres sin tener que saber si el número trae
+// código de país o el 15: en Argentina esos 10 dígitos son área + abonado, que
+// es lo que identifica la línea.
+//
+// Devuelve "" si no hay al menos 8 dígitos: un número tan corto no alcanza para
+// identificar a nadie y matchearía de más, así que se trata como ausente.
+export function normalizePhone(raw: string | null | undefined): string {
+    const digits = String(raw ?? "").replace(/\D/g, "")
+    if (digits.length < 8) return ""
+    return digits.slice(-10)
+}

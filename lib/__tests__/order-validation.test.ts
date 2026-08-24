@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { validateOrderPayloadWith, validateSpecs, type SpecField } from "@/lib/order-validation"
+import { normalizePhone, validateOrderPayloadWith, validateSpecs, type SpecField } from "@/lib/order-validation"
 
 // Vocabulario de prueba con los tres tipos de campo que existen.
 const vocab: Record<string, SpecField> = {
@@ -140,5 +140,34 @@ describe("validateOrderPayloadWith", () => {
             vocab,
         )
         expect(errores).toHaveLength(3)
+    })
+})
+
+describe("normalizePhone", () => {
+    it("empareja los formatos de WhatsApp, Alegra y carga manual del mismo número", () => {
+        const wa = normalizePhone("5492235903012")      // wa_id, sin +
+        expect(normalizePhone("+5492235903012")).toBe(wa)
+        expect(normalizePhone("+54 9 223 590-3012")).toBe(wa)
+        expect(normalizePhone("02235903012")).toBe(wa)
+        expect(normalizePhone("223 590 3012")).toBe(wa)
+    })
+
+    it("distingue números realmente distintos", () => {
+        expect(normalizePhone("+5492235903012")).not.toBe(normalizePhone("+5492235903025"))
+    })
+
+    it("normaliza los formatos que ya están cargados en Alegra", () => {
+        expect(normalizePhone("011 4574-3077")).toBe("1145743077")
+        expect(normalizePhone("223 4959686")).toBe("2234959686")
+        expect(normalizePhone("+54 (11) 4707-0184 ")).toBe("1147070184")
+    })
+
+    it("trata como ausente lo que no identifica una línea", () => {
+        expect(normalizePhone("")).toBe("")
+        expect(normalizePhone(null)).toBe("")
+        expect(normalizePhone(undefined)).toBe("")
+        expect(normalizePhone("   ")).toBe("")
+        expect(normalizePhone("1234567")).toBe("")   // 7 dígitos: matchearía de más
+        expect(normalizePhone("no tengo")).toBe("")
     })
 })
