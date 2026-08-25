@@ -73,6 +73,91 @@ export async function searchContacts(query: string): Promise<AlegraContact[]> {
     return rows.map((c) => ({ id: Number(c.id), name: c.name, email: c.email ?? null }))
 }
 
+// Trae TODOS los contactos, paginando. El espejo (alegra_clients) se llenaba con
+// exports CSV a mano, lo que lo dejaba meses atrasado: sirve para reemplazar eso.
+// La API pagina con start/limit; 30 es el máximo que devuelve por página.
+export interface AlegraContactFull {
+    id: number
+    name: string
+    identification: string | null
+    email: string | null
+    phone: string | null
+    address: string | null
+    city: string | null
+    status: string | null
+}
+
+// El rate limit de contactos es 100/min y se llega fácil: cada sync son varias
+// páginas, y dos corridas seguidas ya devuelven 429. Reintenta respetando el
+// x-rate-limit-reset que manda Alegra en vez de abandonar el sync a la mitad.
+async function fetchPageWithRetry(path: string, attempt = 0): Promise<any[]> {
+    try {
+        return await alegraFetch<any[]>(path)
+    } catch (error) {
+        // Solo 429. Un 402 (plan) o un 401 (credenciales) no mejoran esperando.
+        if (!(error instanceof AlegraError) || error.status !== 429 || attempt >= 3) throw error
+        // La ventana del rate limit es de un minuto; 15s, 30s, 45s cubre el peor
+        // caso sin dejar el cron colgado más de lo razonable.
+        await new Promise((r) => setTimeout(r, 15_000 * (attempt + 1)))
+        return fetchPageWithRetry(path, attempt + 1)
+    }
+}
+
+export async function listAllContacts(): Promise<AlegraContactFull[]> {
+    const PAGE = 30
+    const out: AlegraContactFull[] = []
+    // Tope defensivo: si la API dejara de respetar 'start' esto no dispara un
+    // bucle infinito contra un servicio con rate limit de 100/min.
+    for (let start = 0; start < 5000; start += PAGE) {
+        const rows = await fetchPageWithRetry(`/contacts?limit=${PAGE}&start=${start}`)
+        for (const c of rows) {
+            out.push({
+                id: Number(c.id),
+                name: String(c.name ?? "").trim(),
+                identification: c.identification ?? null,
+                email: c.email ?? null,
+                // Alegra guarda hasta tres teléfonos; el bot identifica al cliente
+                // por el suyo, así que preferimos el principal y caemos al móvil.
+                phone: c.phonePrimary || c.mobile || c.phoneSecondary || null,
+                address: c.address?.address ?? null,
+                city: c.address?.city ?? null,
+                status: c.status ?? null,
+            })
+        }
+        if (rows.length < PAGE) break
+    }
+    return out
+}
+
+// Documentos de venta y pagos, para el espejo. Se filtran por fecha
+// (date_afterOrNow) para que el sync incremental no tenga que traer los 2600
+// documentos históricos en cada corrida.
+export async function listInvoicesSince(since: string, maxPages = 120): Promise<any[]> {
+    const PAGE = 30
+    const out: any[] = []
+    for (let page = 0; page < maxPages; page++) {
+        const rows = await fetchPageWithRetry(
+            `/invoices?limit=${PAGE}&start=${page * PAGE}&date_afterOrNow=${since}&order_field=date&order_direction=ASC`,
+        )
+        out.push(...rows)
+        if (rows.length < PAGE) break
+    }
+    return out
+}
+
+export async function listPaymentsSince(since: string, maxPages = 120): Promise<any[]> {
+    const PAGE = 30
+    const out: any[] = []
+    for (let page = 0; page < maxPages; page++) {
+        const rows = await fetchPageWithRetry(
+            `/payments?limit=${PAGE}&start=${page * PAGE}&date_afterOrNow=${since}`,
+        )
+        out.push(...rows)
+        if (rows.length < PAGE) break
+    }
+    return out
+}
+
 export async function createContact(name: string): Promise<AlegraContact> {
     const c = await alegraFetch<AlegraContact>(`/contacts`, {
         method: "POST",

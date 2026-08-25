@@ -33,13 +33,45 @@ export async function alegraConfigured(): Promise<boolean> {
     return isAlegraConfigured();
 }
 
+// Buscar cliente. Pega primero al ESPEJO (alegra_clients) y solo cae a la API si
+// no encuentra nada.
+//
+// Antes iba siempre en vivo, mientras que el buscador de pedidos usaba el espejo:
+// la misma búsqueda con dos fuentes distintas, una tardando ~1,5s por request y la
+// otra sirviendo una copia que se llenaba con CSVs a mano. Con el sync andando
+// (POST /api/alegra/sync) el espejo está al día, así que gana en velocidad sin
+// perder cobertura.
+//
+// El fallback a la API cubre el hueco que queda: un cliente dado de alta en Alegra
+// hace cinco minutos, todavía no espejado. Solo se paga ese ~1,5s cuando el espejo
+// no tiene la respuesta.
 export async function searchAlegraContacts(query: string) {
     const session = await auth();
     if (!session?.user) return { error: 'No autenticado' as const, contacts: [] };
-    if (!query.trim()) return { contacts: [] };
+    const term = query.trim();
+    if (!term) return { contacts: [] };
 
     try {
-        const contacts = await searchContacts(query);
+        // Solo filas con alegra_id: para crear la cotización hace falta el id del
+        // contacto en Alegra, y las filas que vinieron del CSV no lo tienen.
+        const rows = await sql`
+            SELECT alegra_id, name, email
+            FROM alegra_clients
+            WHERE alegra_id IS NOT NULL AND name ILIKE ${`%${term}%`}
+            ORDER BY name ASC
+            LIMIT 10
+        `;
+        if (rows.length > 0) {
+            return {
+                contacts: rows.map((r: any) => ({
+                    id: Number(r.alegra_id),
+                    name: r.name as string,
+                    email: (r.email as string) ?? null,
+                })),
+            };
+        }
+
+        const contacts = await searchContacts(term);
         return { contacts };
     } catch (error) {
         console.error('Error searching Alegra contacts:', error);
