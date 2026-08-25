@@ -12,7 +12,6 @@ import {
     isAlegraConfigured,
     searchContacts,
     createContact,
-    searchItems,
     createItem,
     ensureGenericItem,
     createEstimate,
@@ -79,14 +78,33 @@ export async function searchAlegraContacts(query: string) {
     }
 }
 
+// Buscar el producto para vincular la hoja de costo con su ítem de Alegra.
+//
+// Va contra el ESPEJO, no contra la API, por tres razones:
+//   - Filtra por account = 'Ventas': el catálogo mezcla los equipos con las
+//     grampas y arandelas que se compran para fabricarlos, y una materia prima
+//     no es algo que se costee como producto.
+//   - Deja afuera las variantes de color: se costea "Optic 1 12-24v", no cada
+//     uno de sus doce colores. El color decide qué material sale del depósito
+//     (budget_material_options) y a qué ítem se factura, no cómo se calcula.
+//   - Es instantáneo. La API tarda ~1,5s por request y esto se dispara mientras
+//     se tipea.
 export async function searchAlegraItems(query: string) {
     const session = await auth();
     if (!session?.user) return { error: 'No autenticado' as const, items: [] };
-    if (!query.trim()) return { items: [] };
+    const term = query.trim();
+    if (!term) return { items: [] };
 
     try {
-        const items = await searchItems(query);
-        return { items };
+        const rows = await sql`
+            SELECT alegra_id, base_name
+            FROM alegra_items
+            WHERE status = 'active' AND account = 'Ventas' AND variant_label IS NULL
+              AND base_name ILIKE ${`%${term}%`}
+            ORDER BY (base_normalized = lower(${term})) DESC, base_name ASC
+            LIMIT 10
+        `;
+        return { items: rows.map((r: any) => ({ id: Number(r.alegra_id), name: r.base_name as string })) };
     } catch (error) {
         console.error('Error searching Alegra items:', error);
         return { error: errorMessage(error), items: [] };
