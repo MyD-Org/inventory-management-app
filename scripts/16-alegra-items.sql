@@ -54,6 +54,11 @@ CREATE TABLE IF NOT EXISTS alegra_items (
     -- 'active' / 'inactive' en Alegra. No se borran los inactivos: pueden estar
     -- referenciados por facturas históricas.
     status VARCHAR(20),
+    -- Cuenta de ingresos de Alegra: 'Ventas' o 'Materia Prima'. Es la propia
+    -- clasificación contable del taller y separa lo que se le puede vender a un
+    -- cliente de lo que solo se compra para fabricar. Sin esto, el buscador del
+    -- bot ofrecía grampas y arandelas como si fueran equipos.
+    account VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -62,6 +67,9 @@ CREATE TABLE IF NOT EXISTS alegra_items (
 CREATE INDEX IF NOT EXISTS idx_alegra_items_base ON alegra_items(base_normalized);
 CREATE INDEX IF NOT EXISTS idx_alegra_items_variant ON alegra_items(base_normalized, variant_normalized);
 CREATE INDEX IF NOT EXISTS idx_alegra_items_name ON alegra_items(name_normalized);
+
+-- Para corridas sobre una tabla ya creada por una versión anterior de este script.
+ALTER TABLE alegra_items ADD COLUMN IF NOT EXISTS account VARCHAR(100);
 
 DROP TRIGGER IF EXISTS update_alegra_items_updated_at ON alegra_items;
 CREATE TRIGGER update_alegra_items_updated_at BEFORE UPDATE ON alegra_items

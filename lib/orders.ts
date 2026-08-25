@@ -108,10 +108,13 @@ export async function resolveProduct(name: string): Promise<ResolvedProduct | nu
 
     // Exacto primero; si no, parcial y solo si es UNO (ambiguo = mejor que lo mire
     // una persona que adivinar, sobre todo cuando de esto sale un precio).
+    // account = 'Ventas' deja afuera las materias primas: en el catálogo conviven
+    // los equipos con las grampas y arandelas que se compran para fabricarlos, y
+    // un pedido de "grampa larga" es un error, no una venta.
     const items = await sql`
         SELECT alegra_id, base_name, (base_normalized = lower(${clean})) AS exact
         FROM alegra_items
-        WHERE status = 'active' AND variant_label IS NULL
+        WHERE status = 'active' AND account = 'Ventas' AND variant_label IS NULL
           AND (base_normalized = lower(${clean}) OR base_name ILIKE ${like})
         ORDER BY exact DESC, alegra_id DESC
     `

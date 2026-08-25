@@ -356,6 +356,8 @@ export async function syncItems(): Promise<ItemSyncResult> {
                 variantNorm: normalizeVariant(variant),
                 price: Number.isFinite(price) ? price : 0,
                 status: (it.status as string) ?? null,
+                // Cuenta de ingresos: 'Ventas' o 'Materia Prima'.
+                account: (it.category?.name as string) ?? null,
             }
         })
         .filter((r): r is NonNullable<typeof r> => r !== null)
@@ -365,7 +367,7 @@ export async function syncItems(): Promise<ItemSyncResult> {
         const inserted = await sql`
             INSERT INTO alegra_items (
                 alegra_id, name, name_normalized, base_name, base_normalized,
-                variant_label, variant_normalized, price, status
+                variant_label, variant_normalized, price, status, account
             )
             SELECT * FROM UNNEST(
                 ${chunk.map((r) => r.alegraId)}::int[],
@@ -376,7 +378,8 @@ export async function syncItems(): Promise<ItemSyncResult> {
                 ${chunk.map((r) => r.variant)}::varchar[],
                 ${chunk.map((r) => r.variantNorm)}::varchar[],
                 ${chunk.map((r) => r.price)}::numeric[],
-                ${chunk.map((r) => r.status)}::varchar[]
+                ${chunk.map((r) => r.status)}::varchar[],
+                ${chunk.map((r) => r.account)}::varchar[]
             )
             ON CONFLICT (alegra_id) DO UPDATE SET
                 name = EXCLUDED.name,
@@ -387,6 +390,7 @@ export async function syncItems(): Promise<ItemSyncResult> {
                 variant_normalized = EXCLUDED.variant_normalized,
                 price = EXCLUDED.price,
                 status = EXCLUDED.status,
+                account = EXCLUDED.account,
                 updated_at = NOW()
             RETURNING (xmax = 0) AS is_insert
         `
