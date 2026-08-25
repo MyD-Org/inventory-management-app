@@ -7,6 +7,7 @@ import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
 import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
 import { OrderItemsEditor } from "@/components/order-items-editor"
+import { InvoiceButton } from "@/components/invoice-button"
 import { OrderMaterials } from "@/components/order-materials"
 import { DateField, NotesField, PriorityField, TextField } from "@/components/order-props-editor"
 import { getCostedProducts } from "@/lib/costed-products"
@@ -168,7 +169,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                         operador del taller, que trabaja con la misma pantalla.
                         Cualquiera puede mover la tarjeta a "facturado" y la factura
                         se emite igual; lo que no ve el operador es el resultado. */}
-                    {isAdmin && (order.alegra_invoice_id || order.invoice_warnings?.length > 0) && (
+                    {isAdmin && (
                         <Prop label="Factura">
                             {order.alegra_invoice_id ? (
                                 <>
@@ -186,9 +187,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                                     </span>
                                 </>
                             ) : (
-                                // Se intentó emitir y no se pudo. Si movió la tarjeta un
-                                // operador, este cartel es el único rastro que queda.
-                                <span className="no-print text-destructive">Sin emitir</span>
+                                <div className="-ml-1.5">
+                                    <InvoiceButton orderId={order.id} />
+                                </div>
                             )}
                             {order.invoice_warnings?.length > 0 && (
                                 <p className="no-print mt-1 text-xs text-amber-600">

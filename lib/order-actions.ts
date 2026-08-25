@@ -10,7 +10,6 @@ import { auth } from '@/auth';
 import { sql } from '@/lib/database';
 import { getCostedProducts } from '@/lib/costed-products';
 import { sameSpecs } from '@/lib/bom';
-import { invoiceOrder } from '@/lib/invoicing';
 import {
     createOrder,
     explodeBom,
@@ -70,48 +69,15 @@ export async function updateOrderStatus(id: number, status: string) {
     try {
         await sql`UPDATE orders SET status = ${status} WHERE id = ${id}`;
 
-        // Pasar a 'facturado' emite la factura en Alegra. La emite CUALQUIERA que
-        // pueda mover la tarjeta, operador incluido: si dependiera del rol, un
-        // pedido podría quedar en 'facturado' sin factura y nadie enterarse.
-        //
-        // Lo que sí depende del rol es QUÉ SE CUENTA. El número de factura y el
-        // detalle de cómo se resolvió son datos contables: los ve el admin. El
-        // operador mueve la tarjeta y sigue trabajando, sin ruido que no puede
-        // accionar. El aviso queda guardado igual en invoice_warnings.
-        //
-        // Dos recaudos más, porque esto escribe en la contabilidad real:
-        //   - invoiceOrder() es idempotente: si el pedido ya tiene factura no crea
-        //     otra, así que mover la tarjeta dos veces es inofensivo.
-        //   - Si Alegra falla, el estado YA quedó guardado: mover una tarjeta no
-        //     puede quedar bloqueado porque un servicio externo esté caído.
-        const esAdmin = session.user.role === 'admin';
-        let warning: string | undefined;
-        if (status === 'facturado') {
-            try {
-                const r = await invoiceOrder(id);
-                if (r.invoiceId == null) {
-                    warning = r.warnings[0] ?? 'No se pudo emitir la factura.';
-                    // Se persiste aunque no haya factura: si movió la tarjeta un
-                    // operador no ve el aviso, y sin esto el admin no tendría de
-                    // dónde enterarse de que quedó sin emitir.
-                    await sql`
-                        UPDATE orders SET invoice_warnings = ${JSON.stringify(r.warnings)}::jsonb
-                        WHERE id = ${id}
-                    `;
-                } else if (r.warnings.length > 0) {
-                    warning = `Factura ${r.invoiceNumber ?? r.invoiceId} emitida, pero: ${r.warnings.join(' ')}`;
-                }
-            } catch (error) {
-                console.error('Error facturando al cambiar de estado:', error);
-                warning = 'El estado se guardó, pero no se pudo emitir la factura en Alegra.';
-            }
-            if (!esAdmin) warning = undefined;
-        }
-
+        // Mover la tarjeta a 'facturado' NO emite nada. Emitir es irreversible del
+        // lado de Alegra —una factura se anula, no se borra— y cualquiera puede
+        // mover una tarjeta, incluso sin querer. La emisión es un acto explícito:
+        // el botón del detalle del pedido, que además muestra antes qué se va a
+        // facturar. 'facturado' vuelve a ser lo que era: un estado del tablero.
         revalidatePath('/pedidos');
         revalidatePath('/pedidos/lista');
         revalidatePath(`/pedidos/${id}`);
-        return warning ? { ok: true, warning } : { ok: true };
+        return { ok: true };
     } catch (error) {
         console.error('Error en updateOrderStatus:', error);
         return { error: 'No se pudo cambiar el estado' };
