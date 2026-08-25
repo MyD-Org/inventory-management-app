@@ -165,24 +165,35 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     </Prop>
 
                     {/* La factura es información contable: la ve el admin, no el
-                        operador del taller, que trabaja con la misma pantalla. */}
-                    {isAdmin && order.alegra_invoice_id && (
+                        operador del taller, que trabaja con la misma pantalla.
+                        Cualquiera puede mover la tarjeta a "facturado" y la factura
+                        se emite igual; lo que no ve el operador es el resultado. */}
+                    {isAdmin && (order.alegra_invoice_id || order.invoice_warnings?.length > 0) && (
                         <Prop label="Factura">
-                            <a
-                                href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="no-print inline-flex items-center gap-1 text-primary hover:underline"
-                            >
-                                {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
-                                <ExternalLink className="h-3 w-3" />
-                            </a>
-                            <span className="hidden print:inline">
-                                {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
-                            </span>
+                            {order.alegra_invoice_id ? (
+                                <>
+                                    <a
+                                        href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="no-print inline-flex items-center gap-1 text-primary hover:underline"
+                                    >
+                                        {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
+                                        <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                    <span className="hidden print:inline">
+                                        {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
+                                    </span>
+                                </>
+                            ) : (
+                                // Se intentó emitir y no se pudo. Si movió la tarjeta un
+                                // operador, este cartel es el único rastro que queda.
+                                <span className="no-print text-destructive">Sin emitir</span>
+                            )}
                             {order.invoice_warnings?.length > 0 && (
                                 <p className="no-print mt-1 text-xs text-amber-600">
-                                    Salió incompleta: {order.invoice_warnings.join(" ")}
+                                    {order.alegra_invoice_id ? "Salió incompleta: " : ""}
+                                    {order.invoice_warnings.join(" ")}
                                 </p>
                             )}
                         </Prop>
