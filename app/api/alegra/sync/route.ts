@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
 import { isAlegraConfigured } from "@/lib/alegra"
-import { syncContacts, syncInvoices, syncPayments } from "@/lib/alegra-sync"
+import { syncContacts, syncInvoices, syncItems, syncPayments } from "@/lib/alegra-sync"
 
 // Refresca el espejo de Alegra desde la API. Pensado para un cron (Vercel Cron o
 // el que sea) y para poder dispararlo a mano cuando hace falta.
@@ -11,7 +11,7 @@ import { syncContacts, syncInvoices, syncPayments } from "@/lib/alegra-sync"
 //
 // POST y no GET porque escribe.
 //
-// ?only=contacts|invoices|payments  limita la corrida a una parte (para probar,
+// ?only=contacts|items|invoices|payments  limita la corrida a una parte (para probar,
 //                                   o para correr contactos más seguido que el resto).
 // ?since=YYYY-MM-DD                 pisa el cursor incremental. Sin esto, arranca
 //                                   desde la fecha más nueva del espejo menos 7
@@ -22,7 +22,9 @@ import { syncContacts, syncInvoices, syncPayments } from "@/lib/alegra-sync"
 // siguen viniendo del import CSV.
 
 export const dynamic = "force-dynamic"
-export const maxDuration = 60
+// El sync de productos son ~57 páginas de la API a ~1s cada una: 67s medidos.
+// 60 no alcanza.
+export const maxDuration = 300
 
 export async function POST(request: NextRequest) {
     const unauthorized = requireInternalSecret(request)
@@ -45,12 +47,15 @@ export async function POST(request: NextRequest) {
         // El orden importa: los contactos primero, porque las facturas y los pagos
         // se vinculan al cliente por alegra_id contra la tabla ya actualizada.
         const contacts = run("contacts") ? await syncContacts() : null
+        // Los productos son el catálogo: un pedido resuelve contra esto.
+        const items = run("items") ? await syncItems() : null
         const invoices = run("invoices") ? await syncInvoices(since) : null
         const payments = run("payments") ? await syncPayments(since) : null
 
         return NextResponse.json({
             ok: true,
             contacts,
+            items,
             invoices,
             payments,
             duration_ms: Date.now() - startedAt,

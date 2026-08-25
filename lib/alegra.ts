@@ -158,6 +158,19 @@ export async function listPaymentsSince(since: string, maxPages = 120): Promise<
     return out
 }
 
+// Todos los productos, para el espejo. Sin filtro: el catálogo es de ~1700 ítems
+// (57 páginas), y no hay forma de pedir "los modificados desde tal fecha".
+export async function listAllItems(maxPages = 120): Promise<any[]> {
+    const PAGE = 30
+    const out: any[] = []
+    for (let page = 0; page < maxPages; page++) {
+        const rows = await fetchPageWithRetry(`/items?limit=${PAGE}&start=${page * PAGE}`)
+        out.push(...rows)
+        if (rows.length < PAGE) break
+    }
+    return out
+}
+
 export async function createContact(name: string): Promise<AlegraContact> {
     const c = await alegraFetch<AlegraContact>(`/contacts`, {
         method: "POST",
@@ -190,7 +203,11 @@ export async function createItem(name: string, price: number): Promise<number> {
 
 // Busca (o crea) el ítem genérico usado para líneas que no queremos dar de alta como
 // producto propio en Alegra. El detalle real viaja en la descripción de la línea.
-export const GENERIC_ITEM_NAME = "Trabajo de fabricación"
+//
+// Es el último recurso: se usa cuando no se encontró ni el producto con su color ni
+// el producto base. "Equipo especial" y no "Trabajo de fabricación" porque es lo que
+// realmente es desde el lado del cliente que lee la factura.
+export const GENERIC_ITEM_NAME = "Equipo especial"
 
 export async function ensureGenericItem(): Promise<number> {
     const q = encodeURIComponent(GENERIC_ITEM_NAME)

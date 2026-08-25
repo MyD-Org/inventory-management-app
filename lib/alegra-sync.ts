@@ -1,5 +1,5 @@
 import { sql } from "@/lib/database"
-import { listAllContacts, listInvoicesSince, listPaymentsSince } from "@/lib/alegra"
+import { listAllContacts, listAllItems, listInvoicesSince, listPaymentsSince } from "@/lib/alegra"
 
 // Sync del espejo de Alegra contra la API.
 //
@@ -287,5 +287,115 @@ export async function syncPayments(sinceOverride?: string): Promise<PaymentSyncR
         result.upserted++
     }
 
+    return result
+}
+
+
+// ── Productos ────────────────────────────────────────────────────────────────
+
+// Normaliza una etiqueta de variante (el color del LED).
+//
+// Además de tildes y mayúsculas, saca la "k" de kelvin pegada a un número: en
+// Alegra conviven "Blanco cálido 2200k" y "Blanco calido 3000K", y el vocabulario
+// de specs los tiene cargados sin la k. La regla es angosta a propósito —solo una
+// k que sigue a dígitos— así que "Blanco calido" a secas NO se vuelve igual a
+// "Blanco calido 3000": son productos distintos y confundirlos factura mal.
+export function normalizeVariant(s: string | null | undefined): string | null {
+    if (!s) return null
+    const n = normalizeName(s).replace(/(\d)\s*k\b/g, "$1").replace(/\s+/g, " ").trim()
+    return n || null
+}
+
+// En Alegra el color del LED genera productos distintos, nombrados
+// "Producto / Color". Partimos el nombre para poder resolver las dos direcciones:
+// el pedido habla de producto y color por separado, la factura necesita el ítem
+// combinado.
+//
+// Se parte por el PRIMER " / ": hay cuatro ítems mal cargados con dos barras
+// ("... 2500 / Ambar"), y así el resto de la barra queda dentro de la variante en
+// vez de romper el parseo.
+export function splitItemName(name: string): { base: string; variant: string | null } {
+    const i = name.indexOf(" / ")
+    if (i < 0) return { base: name.trim(), variant: null }
+    return { base: name.slice(0, i).trim(), variant: name.slice(i + 3).trim() || null }
+}
+
+export interface ItemSyncResult {
+    fetched: number
+    inserted: number
+    updated: number
+    withVariant: number
+    bases: number
+}
+
+export async function syncItems(): Promise<ItemSyncResult> {
+    const items = await listAllItems()
+    const result: ItemSyncResult = { fetched: items.length, inserted: 0, updated: 0, withVariant: 0, bases: 0 }
+    const bases = new Set<string>()
+
+    // Un INSERT por ítem serían ~1700 round trips: tarda más de un minuto y no
+    // entra en el maxDuration de la función en producción. Se cargan por lotes con
+    // UNNEST, que manda cada columna como un array y resuelve todo el lote en una
+    // sola sentencia.
+    const CHUNK = 200
+    const rows = items
+        .map((it) => {
+            const name = String(it.name ?? "").trim()
+            if (!name) return null
+            const { base, variant } = splitItemName(name)
+            const price = Array.isArray(it.price) ? Number(it.price[0]?.price) : Number(it.price)
+            if (variant) result.withVariant++
+            bases.add(normalizeName(base))
+            return {
+                alegraId: Number(it.id),
+                name,
+                nameNorm: normalizeName(name),
+                base,
+                baseNorm: normalizeName(base),
+                variant,
+                variantNorm: normalizeVariant(variant),
+                price: Number.isFinite(price) ? price : 0,
+                status: (it.status as string) ?? null,
+            }
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null)
+
+    for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK)
+        const inserted = await sql`
+            INSERT INTO alegra_items (
+                alegra_id, name, name_normalized, base_name, base_normalized,
+                variant_label, variant_normalized, price, status
+            )
+            SELECT * FROM UNNEST(
+                ${chunk.map((r) => r.alegraId)}::int[],
+                ${chunk.map((r) => r.name)}::varchar[],
+                ${chunk.map((r) => r.nameNorm)}::varchar[],
+                ${chunk.map((r) => r.base)}::varchar[],
+                ${chunk.map((r) => r.baseNorm)}::varchar[],
+                ${chunk.map((r) => r.variant)}::varchar[],
+                ${chunk.map((r) => r.variantNorm)}::varchar[],
+                ${chunk.map((r) => r.price)}::numeric[],
+                ${chunk.map((r) => r.status)}::varchar[]
+            )
+            ON CONFLICT (alegra_id) DO UPDATE SET
+                name = EXCLUDED.name,
+                name_normalized = EXCLUDED.name_normalized,
+                base_name = EXCLUDED.base_name,
+                base_normalized = EXCLUDED.base_normalized,
+                variant_label = EXCLUDED.variant_label,
+                variant_normalized = EXCLUDED.variant_normalized,
+                price = EXCLUDED.price,
+                status = EXCLUDED.status,
+                updated_at = NOW()
+            RETURNING (xmax = 0) AS is_insert
+        `
+        for (const r of inserted) {
+            if (r.is_insert) result.inserted++
+            else result.updated++
+        }
+    }
+
+    result.bases = bases.size
     return result
 }
