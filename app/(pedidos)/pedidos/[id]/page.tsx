@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { auth } from "@/auth"
 import { getSpecs, materialNeeds, readOrder } from "@/lib/orders"
 import { STATUS_LABELS } from "@/lib/order-statuses"
 import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
@@ -43,6 +44,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
     const order = await readOrder(id)
     if (!order) notFound()
+
+    const session = await auth()
+    const isAdmin = session?.user?.role === "admin"
 
     const [needs, vocab, costed] = await Promise.all([
         materialNeeds(id),
@@ -159,6 +163,30 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                         </div>
                         <span className="hidden print:inline">{STATUS_LABELS[order.status]}</span>
                     </Prop>
+
+                    {/* La factura es información contable: la ve el admin, no el
+                        operador del taller, que trabaja con la misma pantalla. */}
+                    {isAdmin && order.alegra_invoice_id && (
+                        <Prop label="Factura">
+                            <a
+                                href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="no-print inline-flex items-center gap-1 text-primary hover:underline"
+                            >
+                                {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
+                                <ExternalLink className="h-3 w-3" />
+                            </a>
+                            <span className="hidden print:inline">
+                                {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
+                            </span>
+                            {order.invoice_warnings?.length > 0 && (
+                                <p className="no-print mt-1 text-xs text-amber-600">
+                                    Salió incompleta: {order.invoice_warnings.join(" ")}
+                                </p>
+                            )}
+                        </Prop>
+                    )}
 
                     <Prop label="Prioridad">
                         <span className="no-print block">

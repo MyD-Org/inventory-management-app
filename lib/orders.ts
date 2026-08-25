@@ -80,28 +80,62 @@ export async function getSpecs(): Promise<Record<string, SpecField>> {
     return specs
 }
 
-interface ResolvedProduct {
-    budgetId: number
+export interface ResolvedProduct {
+    /** Producto del catálogo de Alegra. null = no está allá, la línea no se puede facturar. */
+    alegraItemId: number | null
+    /** Hoja de costo, para explotar el BOM. null = el producto no tiene receta cargada. */
+    budgetId: number | null
     label: string
 }
 
-// Busca la hoja de costo del producto: primero nombre exacto (case-insensitive),
-// como /api/budgets/find; si no, ILIKE parcial y solo si el resultado es UNO
-// (ambiguo = mejor que lo revise el taller que adivinar).
+// Identifica el producto de una línea de pedido.
+//
+// EL CATÁLOGO ES ALEGRA. Un producto existe porque está allá, con su precio; la
+// hoja de costo es información opcional que dice cómo se fabrica. Antes era al
+// revés —existía si tenía hoja— y eso dejaba productos que se vendían pero que el
+// sistema no conocía, y obligaba a mantener dos catálogos en paralelo.
+//
+// Busca el PRODUCTO BASE, sin color: el color viaja en las specs y recién se usa
+// al facturar, para elegir la variante. Solo ítems ACTIVOS: los 635 inactivos del
+// catálogo son versiones viejas con precios viejos, y facturar uno de esos cobra
+// mal.
+//
+// Devuelve null solo si el nombre no matchea nada, ni en Alegra ni en las hojas de
+// costo. Que falte una de las dos no es un fallo: son señales distintas.
 export async function resolveProduct(name: string): Promise<ResolvedProduct | null> {
-    const like = `%${name}%`
-    const rows = await sql`
-        SELECT id, name, (lower(name) = lower(${name})) AS exact
+    const clean = name.trim()
+    const like = `%${clean}%`
+
+    // Exacto primero; si no, parcial y solo si es UNO (ambiguo = mejor que lo mire
+    // una persona que adivinar, sobre todo cuando de esto sale un precio).
+    const items = await sql`
+        SELECT alegra_id, base_name, (base_normalized = lower(${clean})) AS exact
+        FROM alegra_items
+        WHERE status = 'active' AND variant_label IS NULL
+          AND (base_normalized = lower(${clean}) OR base_name ILIKE ${like})
+        ORDER BY exact DESC, alegra_id DESC
+    `
+    const exactItems = (items as any[]).filter((r) => r.exact)
+    const item = exactItems.length > 0 ? exactItems[0] : items.length === 1 ? (items[0] as any) : null
+
+    // La hoja de costo se busca por separado y con el mismo criterio.
+    const budgets = await sql`
+        SELECT id, name, (lower(name) = lower(${clean})) AS exact
         FROM budgets
-        WHERE lower(name) = lower(${name}) OR name ILIKE ${like}
+        WHERE lower(name) = lower(${clean}) OR name ILIKE ${like}
         ORDER BY exact DESC, id DESC
     `
-    if (rows.length === 0) return null
-    const exactMatches = (rows as any[]).filter((r) => r.exact)
-    if (exactMatches.length === 0 && rows.length > 1) return null
+    const exactBudgets = (budgets as any[]).filter((r) => r.exact)
+    const budget = exactBudgets.length > 0 ? exactBudgets[0] : budgets.length === 1 ? (budgets[0] as any) : null
 
-    const r = (exactMatches[0] ?? rows[0]) as any
-    return { budgetId: r.id, label: r.name }
+    if (!item && !budget) return null
+
+    return {
+        alegraItemId: item ? Number(item.alegra_id) : null,
+        budgetId: budget ? Number(budget.id) : null,
+        // El nombre del catálogo manda: es el que va a figurar en la factura.
+        label: (item?.base_name as string) ?? (budget?.name as string) ?? clean,
+    }
 }
 
 // ---------- Lectura ----------
@@ -151,6 +185,11 @@ export interface Order {
     notes: string | null
     created_at: string
     updated_at: string
+    /** Factura emitida en Alegra. null = todavía no se facturó. */
+    alegra_invoice_id: number | null
+    alegra_invoice_number: string | null
+    /** Qué no se pudo facturar, si la factura salió incompleta. */
+    invoice_warnings: string[]
     items: OrderItem[]
 }
 
@@ -161,7 +200,8 @@ export async function readOrder(orderId: number): Promise<Order | null> {
                customer_phone, status, priority,
                -- ::text para no arrastrar corrimiento de zona: es una fecha, no un instante
                delivery_date_estimate::text AS delivery_date_estimate,
-               source_conversation, notes, created_at, updated_at
+               source_conversation, notes, created_at, updated_at,
+               alegra_invoice_id, alegra_invoice_number, invoice_warnings
         FROM orders WHERE id = ${orderId}
     `
     if (!order) return null
@@ -365,24 +405,29 @@ export async function createOrder(payload: OrderPayload) {
             const quantity = Number(item.quantity ?? 1)
             const resolved = await resolveProduct(productName)
 
+            // needs_review = no hay hoja de costo, o sea que la línea no aporta
+            // materiales y el taller descuenta a mano. NO significa "no se puede
+            // facturar": eso lo dice alegra_item_id en NULL, que es otra cosa y
+            // la resuelve otra persona.
             const [line] = await sql`
                 INSERT INTO order_items (
-                    order_id, line_no, budget_id, product, product_external_id,
+                    order_id, line_no, budget_id, alegra_item_id, product, product_external_id,
                     specs, quantity, needs_review
                 )
                 VALUES (
                     ${orderId}, ${idx + 1}, ${resolved?.budgetId ?? null},
+                    ${resolved?.alegraItemId ?? null},
                     ${resolved?.label ?? productName},
                     ${item.product_external_id ?? null},
                     ${JSON.stringify(item.specs ?? {})}::jsonb,
-                    ${quantity}, ${resolved === null}
+                    ${quantity}, ${!resolved?.budgetId}
                 )
                 RETURNING id
             `
 
-            // BOM: copia congelada de la receta. Si el producto no matcheó, la
-            // línea queda sin BOM y marcada needs_review para el taller.
-            if (resolved) {
+            // BOM: copia congelada de la receta. Sin hoja de costo no hay BOM, y
+            // está bien: el producto igual existe y se puede facturar.
+            if (resolved?.budgetId) {
                 await explodeBom(line.id as number, resolved.budgetId, item.specs ?? {}, quantity)
             }
         }

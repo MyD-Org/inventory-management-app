@@ -10,6 +10,7 @@ import { auth } from '@/auth';
 import { sql } from '@/lib/database';
 import { getCostedProducts } from '@/lib/costed-products';
 import { sameSpecs } from '@/lib/bom';
+import { invoiceOrder } from '@/lib/invoicing';
 import {
     createOrder,
     explodeBom,
@@ -68,10 +69,34 @@ export async function updateOrderStatus(id: number, status: string) {
 
     try {
         await sql`UPDATE orders SET status = ${status} WHERE id = ${id}`;
+
+        // Pasar a 'facturado' emite la factura en Alegra. Tres recaudos, porque
+        // esto escribe en la contabilidad real:
+        //   - Solo admin. Un operador puede mover la tarjeta, pero no emite.
+        //   - invoiceOrder() es idempotente: si el pedido ya tiene factura no crea
+        //     otra, así que mover la tarjeta dos veces es inofensivo.
+        //   - Si Alegra falla, el estado YA quedó guardado y se devuelve un aviso:
+        //     mover la tarjeta no puede quedar bloqueado porque un servicio
+        //     externo esté caído.
+        let warning: string | undefined;
+        if (status === 'facturado' && session.user.role === 'admin') {
+            try {
+                const r = await invoiceOrder(id);
+                if (r.invoiceId == null) {
+                    warning = r.warnings[0] ?? 'No se pudo emitir la factura.';
+                } else if (r.warnings.length > 0) {
+                    warning = `Factura ${r.invoiceNumber ?? r.invoiceId} emitida, pero: ${r.warnings.join(' ')}`;
+                }
+            } catch (error) {
+                console.error('Error facturando al cambiar de estado:', error);
+                warning = 'El estado se guardó, pero no se pudo emitir la factura en Alegra.';
+            }
+        }
+
         revalidatePath('/pedidos');
         revalidatePath('/pedidos/lista');
         revalidatePath(`/pedidos/${id}`);
-        return { ok: true };
+        return warning ? { ok: true, warning } : { ok: true };
     } catch (error) {
         console.error('Error en updateOrderStatus:', error);
         return { error: 'No se pudo cambiar el estado' };
@@ -412,18 +437,19 @@ export async function addOrderItem(
         `;
 
         const [line] = await sql`
-            INSERT INTO order_items (order_id, line_no, budget_id, product, specs, quantity, needs_review)
+            INSERT INTO order_items (order_id, line_no, budget_id, alegra_item_id, product, specs, quantity, needs_review)
             VALUES (
                 ${orderId}, ${next}, ${resolved?.budgetId ?? null},
+                ${resolved?.alegraItemId ?? null},
                 ${resolved?.label ?? payload.product.trim()},
                 ${JSON.stringify(payload.specs ?? {})}::jsonb,
-                ${payload.quantity}, ${resolved === null}
+                ${payload.quantity}, ${!resolved?.budgetId}
             )
             RETURNING id
         `;
 
         let unmapped: string[] = [];
-        if (resolved) {
+        if (resolved?.budgetId) {
             ({ unmapped } = await explodeBom(
                 line.id as number,
                 resolved.budgetId,
@@ -434,10 +460,16 @@ export async function addOrderItem(
 
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${orderId}`);
-        // needs_review = el producto no matcheó ninguna hoja de costo (no hay BOM).
-        // unmapped = hay BOM, pero algún valor pedido no está mapeado. Son cosas
-        // distintas y el taller hace algo distinto con cada una.
-        return { ok: true, needs_review: resolved === null, unmapped };
+        // Tres señales distintas, cada una con su dueño:
+        //   needs_review -> sin hoja de costo: no hay lista de materiales.
+        //   unmapped     -> hay BOM pero un valor pedido no está mapeado.
+        //   sin_alegra   -> el producto no está en el catálogo: no se puede facturar.
+        return {
+            ok: true,
+            needs_review: !resolved?.budgetId,
+            unmapped,
+            sin_alegra: !resolved?.alegraItemId,
+        };
     } catch (error) {
         console.error('Error en addOrderItem:', error);
         return { error: 'No se pudo agregar la línea' };

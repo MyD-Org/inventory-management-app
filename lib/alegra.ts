@@ -260,3 +260,39 @@ export async function createEstimate(args: {
         url: `https://app.alegra.com/estimate/view/id/${est.id}`,
     }
 }
+
+// ── Facturas ─────────────────────────────────────────────────────────────────
+
+export interface CreatedInvoice {
+    id: number
+    number: string | null
+    url: string
+}
+
+// Emite una factura. ESCRIBE en la contabilidad real: todo lo que la llama tiene
+// que poder correrse antes en modo simulación (ver lib/invoicing.ts).
+export async function createInvoice(args: {
+    clientId: number
+    lines: EstimateLine[]
+    observations?: string
+}): Promise<CreatedInvoice> {
+    const today = new Date().toISOString().slice(0, 10)
+
+    const inv = await alegraFetch<{ id: number; numberTemplate?: { fullNumber?: string; number?: string | number } }>(`/invoices`, {
+        method: "POST",
+        body: JSON.stringify({
+            client: args.clientId,
+            date: today,
+            dueDate: today,
+            items: args.lines,
+            ...(args.observations ? { observations: args.observations } : {}),
+        }),
+    })
+
+    const number = inv.numberTemplate?.fullNumber ?? inv.numberTemplate?.number ?? null
+    return {
+        id: Number(inv.id),
+        number: number != null ? String(number) : null,
+        url: `https://app.alegra.com/invoice/view/id/${inv.id}`,
+    }
+}
