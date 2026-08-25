@@ -68,6 +68,12 @@ export async function updateOrderStatus(id: number, status: string) {
 
     try {
         await sql`UPDATE orders SET status = ${status} WHERE id = ${id}`;
+
+        // Mover la tarjeta a 'facturado' NO emite nada. Emitir es irreversible del
+        // lado de Alegra —una factura se anula, no se borra— y cualquiera puede
+        // mover una tarjeta, incluso sin querer. La emisión es un acto explícito:
+        // el botón del detalle del pedido, que además muestra antes qué se va a
+        // facturar. 'facturado' vuelve a ser lo que era: un estado del tablero.
         revalidatePath('/pedidos');
         revalidatePath('/pedidos/lista');
         revalidatePath(`/pedidos/${id}`);
@@ -412,18 +418,19 @@ export async function addOrderItem(
         `;
 
         const [line] = await sql`
-            INSERT INTO order_items (order_id, line_no, budget_id, product, specs, quantity, needs_review)
+            INSERT INTO order_items (order_id, line_no, budget_id, alegra_item_id, product, specs, quantity, needs_review)
             VALUES (
                 ${orderId}, ${next}, ${resolved?.budgetId ?? null},
+                ${resolved?.alegraItemId ?? null},
                 ${resolved?.label ?? payload.product.trim()},
                 ${JSON.stringify(payload.specs ?? {})}::jsonb,
-                ${payload.quantity}, ${resolved === null}
+                ${payload.quantity}, ${!resolved?.budgetId}
             )
             RETURNING id
         `;
 
         let unmapped: string[] = [];
-        if (resolved) {
+        if (resolved?.budgetId) {
             ({ unmapped } = await explodeBom(
                 line.id as number,
                 resolved.budgetId,
@@ -434,10 +441,16 @@ export async function addOrderItem(
 
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${orderId}`);
-        // needs_review = el producto no matcheó ninguna hoja de costo (no hay BOM).
-        // unmapped = hay BOM, pero algún valor pedido no está mapeado. Son cosas
-        // distintas y el taller hace algo distinto con cada una.
-        return { ok: true, needs_review: resolved === null, unmapped };
+        // Tres señales distintas, cada una con su dueño:
+        //   needs_review -> sin hoja de costo: no hay lista de materiales.
+        //   unmapped     -> hay BOM pero un valor pedido no está mapeado.
+        //   sin_alegra   -> el producto no está en el catálogo: no se puede facturar.
+        return {
+            ok: true,
+            needs_review: !resolved?.budgetId,
+            unmapped,
+            sin_alegra: !resolved?.alegraItemId,
+        };
     } catch (error) {
         console.error('Error en addOrderItem:', error);
         return { error: 'No se pudo agregar la línea' };

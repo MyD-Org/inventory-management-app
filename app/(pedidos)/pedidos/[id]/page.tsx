@@ -1,11 +1,13 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { auth } from "@/auth"
 import { getSpecs, materialNeeds, readOrder } from "@/lib/orders"
 import { STATUS_LABELS } from "@/lib/order-statuses"
 import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
 import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
 import { OrderItemsEditor } from "@/components/order-items-editor"
+import { InvoiceButton } from "@/components/invoice-button"
 import { OrderMaterials } from "@/components/order-materials"
 import { DateField, NotesField, PriorityField, TextField } from "@/components/order-props-editor"
 import { getCostedProducts } from "@/lib/costed-products"
@@ -43,6 +45,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
     const order = await readOrder(id)
     if (!order) notFound()
+
+    const session = await auth()
+    const isAdmin = session?.user?.role === "admin"
 
     const [needs, vocab, costed] = await Promise.all([
         materialNeeds(id),
@@ -159,6 +164,41 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                         </div>
                         <span className="hidden print:inline">{STATUS_LABELS[order.status]}</span>
                     </Prop>
+
+                    {/* La factura es información contable: la ve el admin, no el
+                        operador del taller, que trabaja con la misma pantalla.
+                        Cualquiera puede mover la tarjeta a "facturado" y la factura
+                        se emite igual; lo que no ve el operador es el resultado. */}
+                    {isAdmin && (
+                        <Prop label="Factura">
+                            {order.alegra_invoice_id ? (
+                                <>
+                                    <a
+                                        href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="no-print inline-flex items-center gap-1 text-primary hover:underline"
+                                    >
+                                        {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
+                                        <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                    <span className="hidden print:inline">
+                                        {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
+                                    </span>
+                                </>
+                            ) : (
+                                <div className="-ml-1.5">
+                                    <InvoiceButton orderId={order.id} />
+                                </div>
+                            )}
+                            {order.invoice_warnings?.length > 0 && (
+                                <p className="no-print mt-1 text-xs text-amber-600">
+                                    {order.alegra_invoice_id ? "Salió incompleta: " : ""}
+                                    {order.invoice_warnings.join(" ")}
+                                </p>
+                            )}
+                        </Prop>
+                    )}
 
                     <Prop label="Prioridad">
                         <span className="no-print block">
