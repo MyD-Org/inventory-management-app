@@ -12,8 +12,10 @@ name: Sincronizar espejo de Alegra
 #
 # Requiere estos secrets del repo (Settings -> Secrets and variables -> Actions):
 #   INTERNAL_SECRET -> el mismo valor que la variable INTERNAL_SECRET de Vercel
-# Y esta variable (misma pantalla, pestaña Variables):
 #   APP_URL         -> https://v0-inventoryapp.vercel.app  (sin barra final)
+# APP_URL sirve como secret o como variable, indistinto: no es un dato sensible
+# (la URL es pública), pero se acepta de las dos formas para no depender de en
+# qué pestaña se haya cargado.
 #
 # OJO: los workflows programados solo corren desde la rama por defecto (main), y
 # GitHub los desactiva solo si el repo pasa 60 días sin actividad.
@@ -62,7 +64,7 @@ jobs:
             exit 1
           fi
         env:
-          APP_URL: ${{ vars.APP_URL }}
+          APP_URL: ${{ vars.APP_URL || secrets.APP_URL }}
           INTERNAL_SECRET: ${{ secrets.INTERNAL_SECRET }}
 
       - name: Resumen
