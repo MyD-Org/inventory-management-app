@@ -72,6 +72,8 @@ export function CustomerAutocomplete({
     return (
         <div className="relative" ref={boxRef}>
             <Input
+                // Chrome abriría su historial encima de nuestra lista.
+                autoComplete="off"
                 value={value}
                 onChange={(e) => handleChange(e.target.value)}
                 onFocus={() => { if (enabled && results.length) setOpen(true) }}

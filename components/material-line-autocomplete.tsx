@@ -53,6 +53,8 @@ export function MaterialLineAutocomplete({
     return (
         <div className="relative" ref={boxRef}>
             <Input
+                // Chrome abriría su historial encima de nuestra lista.
+                autoComplete="off"
                 value={value}
                 onChange={(e) => {
                     onText(e.target.value)

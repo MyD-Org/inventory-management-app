@@ -83,6 +83,10 @@ export function ProductNameAutocomplete({
         <div className="relative" ref={boxRef}>
             <Input
                 id="budget-name"
+                // Sin esto Chrome abre su propio historial de lo tipeado antes,
+                // encima de nuestra lista: tapa los resultados reales y ofrece
+                // nombres que ya no existen.
+                autoComplete="off"
                 value={value}
                 onChange={(e) => handleChange(e.target.value)}
                 onFocus={() => { if (enabled && results.length) setOpen(true) }}
