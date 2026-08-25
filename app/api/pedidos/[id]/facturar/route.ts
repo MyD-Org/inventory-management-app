@@ -18,12 +18,15 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-    // Sesión o INTERNAL_SECRET: la simulación no escribe nada y así se puede
-    // verificar desde un script antes de emitir la primera factura de verdad.
+    // ADMIN o INTERNAL_SECRET. La simulación no escribe nada, pero devuelve
+    // PRECIOS, y el módulo de pedidos es deliberadamente sin plata: el operador
+    // del taller no ve importes en ninguna pantalla. Sin este chequeo, alcanzaba
+    // con pedir la URL a mano para saltear eso.
+    // El secreto queda para poder verificar desde un script.
     const session = await auth()
     const conSecreto = requireInternalSecret(request) === null
-    if (!session?.user && !conSecreto) {
-        return NextResponse.json({ error: "No autenticado" }, { status: 401 })
+    if (session?.user?.role !== "admin" && !conSecreto) {
+        return NextResponse.json({ error: "Solo un admin puede ver la factura" }, { status: 403 })
     }
 
     const orderId = Number.parseInt(params.id, 10)
