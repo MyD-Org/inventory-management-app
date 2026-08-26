@@ -8,12 +8,12 @@
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import { sql } from '@/lib/database';
-import { getCostedProducts } from '@/lib/costed-products';
 import { sameSpecs } from '@/lib/bom';
 import {
     createOrder,
     explodeBom,
     getSpecs,
+    listSellableProducts,
     materialNeeds,
     ORDER_PRIORITIES,
     ORDER_STATUSES,
@@ -491,8 +491,11 @@ export async function getNewOrderOptions() {
     const session = await auth();
     if (!session?.user) return { specs: {}, products: [] };
 
-    const [specs, costed] = await Promise.all([getSpecs(), getCostedProducts()]);
-    return { specs, products: costed.map((p) => p.name) };
+    // Del CATÁLOGO de Alegra, no de las hojas de costo: un producto existe
+    // porque se vende. Listar hojas dejaba el selector vacío en producción,
+    // donde hay 162 productos vendibles y ninguna hoja cargada.
+    const [specs, products] = await Promise.all([getSpecs(), listSellableProducts()]);
+    return { specs, products };
 }
 
 // Borrar una opción del vocabulario, de verdad. No rompe el historial: las

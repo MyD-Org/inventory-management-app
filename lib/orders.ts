@@ -141,6 +141,24 @@ export async function resolveProduct(name: string): Promise<ResolvedProduct | nu
     }
 }
 
+// Productos que se le pueden vender a un cliente, para los selectores del alta
+// de pedidos. Mismos filtros que resolveProduct(), y por la misma razón: el
+// catálogo mezcla los equipos con las materias primas que se compran para
+// fabricarlos, y el color es una variante del producto, no un producto.
+//
+// Antes estos selectores listaban las HOJAS DE COSTO. Cuando el catálogo pasó a
+// ser Alegra quedaron apuntando a lo viejo: en producción hay 162 productos
+// vendibles y 0 hojas de costo, así que no encontraban nada.
+export async function listSellableProducts(): Promise<string[]> {
+    const rows = await sql`
+        SELECT DISTINCT base_name
+        FROM alegra_items
+        WHERE status = 'active' AND account = 'Ventas' AND variant_label IS NULL
+        ORDER BY base_name ASC
+    `
+    return (rows as any[]).map((r) => r.base_name as string)
+}
+
 // ---------- Lectura ----------
 
 export interface OrderMaterial {

@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { auth } from "@/auth"
-import { getSpecs, materialNeeds, readOrder } from "@/lib/orders"
+import { getSpecs, listSellableProducts, materialNeeds, readOrder } from "@/lib/orders"
 import { STATUS_LABELS } from "@/lib/order-statuses"
 import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
 import { PrintIconButton } from "@/components/print-icon-button"
@@ -10,7 +10,6 @@ import { OrderItemsEditor } from "@/components/order-items-editor"
 import { InvoiceButton } from "@/components/invoice-button"
 import { OrderMaterials } from "@/components/order-materials"
 import { DateField, NotesField, PriorityField, TextField } from "@/components/order-props-editor"
-import { getCostedProducts } from "@/lib/costed-products"
 
 export const dynamic = 'force-dynamic';
 
@@ -49,10 +48,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     const session = await auth()
     const isAdmin = session?.user?.role === "admin"
 
-    const [needs, vocab, costed] = await Promise.all([
+    // Los productos del selector salen del CATÁLOGO de Alegra, no de las hojas
+    // de costo: un producto existe porque se vende, y la hoja es opcional.
+    const [needs, vocab, products] = await Promise.all([
         materialNeeds(id),
         getSpecs(),
-        getCostedProducts(),
+        listSellableProducts(),
     ])
 
     // Specs en el orden del vocabulario y solo los valores: "ámbar · grampa larga · 25°"
@@ -109,7 +110,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                                 unmapped_specs: i.unmapped_specs ?? [],
                             }))}
                             vocab={vocab}
-                            products={costed.map((p) => p.name)}
+                            products={products}
                         />
                     </section>
 
