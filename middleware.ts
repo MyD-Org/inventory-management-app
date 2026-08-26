@@ -8,5 +8,9 @@ export const config = {
     // .well-known excluido: ahí vive el discovery endpoint de Vercel Flags
     // (app/.well-known/vercel/flags/route.ts), que Flags Explorer necesita poder
     // leer sin depender de la sesión de la app.
-    matcher: ['/((?!api|_next/static|_next/image|.well-known|.*\\.png$).*)'],
+    //
+    // Los iconos quedan fuera: el favicon se pide desde /login, donde por
+    // definición no hay sesión, y el middleware lo redirigía al propio login.
+    // Resultado: la pestaña se veía sin icono justo en la primera pantalla.
+    matcher: ['/((?!api|_next/static|_next/image|.well-known|.*\\.png$|.*\\.svg$|.*\\.ico$).*)'],
 };
