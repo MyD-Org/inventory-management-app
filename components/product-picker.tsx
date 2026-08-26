@@ -33,7 +33,10 @@ export function ProductPicker({
     const matches = useMemo(() => {
         const q = query.trim().toLowerCase()
         const list = q ? products.filter((p) => p.toLowerCase().includes(q)) : products
-        return list.slice(0, 8)
+        // 15 y no 8: ahora la lista tiene scroll, así que mostrar más no empuja
+        // nada fuera de la pantalla. Con 162 productos en el catálogo, ocho
+        // dejaban afuera resultados válidos de una búsqueda amplia.
+        return list.slice(0, 15)
     }, [products, query])
 
     // Ofrecemos crearlo salvo que ya exista con ese nombre exacto.
@@ -89,7 +92,13 @@ export function ProductPicker({
             />
 
             {open && (
-            <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-md overflow-hidden">
+            // Crece con el contenido en vez de quedar atado al ancho del campo:
+            // en la tabla del pedido esa columna es angosta y los nombres del
+            // catálogo son largos. min-w-full para no achicarse, w-max para
+            // estirarse hasta donde entre el nombre, y un tope para no irse de
+            // la pantalla. max-h + scroll: se listan más opciones sin que el
+            // desplegable tape media página.
+            <div className="absolute z-30 mt-1 min-w-full w-max max-w-[min(34rem,88vw)] max-h-72 overflow-y-auto rounded-md border bg-popover shadow-md">
                 {matches.map((p, i) => (
                     <button
                         key={p}
@@ -99,9 +108,15 @@ export function ProductPicker({
                             setOpen(false)
                             onPick(p)
                         }}
-                        className={`block w-full px-3 py-1.5 text-left text-base ${
+                        // truncate: hay productos del catálogo con el detalle
+                        // entero en el nombre ("10 metros de tiras de led con
+                        // moldura blanca 35cm, segun plano, con 1 fuente 24V…"),
+                        // que ocupaban diez renglones y empujaban al resto fuera
+                        // de la vista. El nombre completo queda en el title.
+                        className={`block w-full truncate px-3 py-1.5 text-left text-base ${
                             i === cursor ? "bg-muted" : ""
                         }`}
+                        title={p}
                     >
                         {p}
                     </button>
@@ -113,9 +128,10 @@ export function ProductPicker({
                             setOpen(false)
                             onPick(nuevo)
                         }}
-                        className={`block w-full px-3 py-1.5 text-left text-base ${
+                        className={`block w-full truncate px-3 py-1.5 text-left text-base ${
                             matches.length > 0 ? "border-t" : ""
                         }`}
+                        title={nuevo}
                     >
                         Usar <strong>{nuevo}</strong>
                         <span className="text-muted-foreground"> · producto nuevo</span>
