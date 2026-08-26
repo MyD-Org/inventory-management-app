@@ -61,8 +61,14 @@ export function NewOrderPage({
     const [saving, setSaving] = useState(false)
 
     const columnas = Object.entries(specs)
-    const anchoCol = (kind: string) =>
-        kind === "boolean" ? "w-[80px]" : kind === "text" ? "w-[18%]" : "w-[13%]"
+    // Anchos: solo se fijan los extremos (cantidad, producto y acciones). Las
+    // columnas de specs NO llevan ancho y se reparten lo que sobra.
+    //
+    // Antes tenían 13% cada una y con el vocabulario actual la suma daba 101%:
+    // la tabla quedaba más ancha que su recuadro y el botón de la última columna
+    // se desbordaba. Con porcentajes fijos, agregar un campo de spec volvía a
+    // romperlo; repartiendo el resto, entra siempre.
+    const anchoCol = (kind: string) => (kind === "boolean" ? "w-[80px]" : "")
 
     const listo = customer !== null && lines.length > 0
 
@@ -138,7 +144,11 @@ export function NewOrderPage({
                                                 <span className="block truncate">{field.label}</span>
                                             </th>
                                         ))}
-                                        <th className="w-[44px]" />
+                                        {/* 80px y no 44: la tabla es table-fixed, y en la
+                                            fila que se está cargando esta columna tiene el
+                                            botón "Listo", que no entra en el ancho de un
+                                            icono y se desbordaba fuera del recuadro. */}
+                                        <th className="w-[80px]" />
                                     </tr>
                                 </thead>
                                 <tbody>

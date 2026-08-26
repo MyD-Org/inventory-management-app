@@ -90,12 +90,15 @@ export function OrderItemsEditor({
     // muestran solo qué falta especificar, sin necesidad de un cartel aparte.
     const columnas = Object.entries(vocab)
 
-    // table-fixed + un ancho por columna: sin esto, al abrir una fila los
-    // controles son más anchos que el texto y la tabla se estira, apareciendo
-    // scroll horizontal y corriéndose todo. Con el ancho fijado, ver y editar
-    // ocupan exactamente lo mismo.
-    const anchoCol = (kind: string) =>
-        kind === "boolean" ? "w-[80px]" : kind === "text" ? "w-[18%]" : "w-[13%]"
+    // table-fixed: sin esto, al abrir una fila los controles son más anchos que
+    // el texto, la tabla se estira y se corre todo. Con la grilla fijada, ver y
+    // editar ocupan exactamente lo mismo.
+    //
+    // Se fijan solo los extremos (cantidad y producto); las columnas de specs se
+    // reparten lo que sobra. Antes tenían 13% cada una y con el vocabulario
+    // actual la suma daba 101%: la tabla quedaba más ancha que su recuadro. Con
+    // porcentajes fijos, agregar un campo de spec volvía a romperlo.
+    const anchoCol = (kind: string) => (kind === "boolean" ? "w-[80px]" : "")
 
     // Specs de corrido, solo los valores, en el orden del vocabulario.
     const specsLine = (specs: Record<string, string>) =>

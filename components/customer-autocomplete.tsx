@@ -96,7 +96,10 @@ export function CustomerAutocomplete({
                             key={c.id}
                             type="button"
                             onClick={() => pick(c)}
-                            className="w-full text-left p-2.5 hover:bg-muted text-sm"
+                            // truncate + title: hay nombres del catálogo con el
+                            // detalle entero adentro, que ocupaban diez renglones.
+                            className="w-full truncate text-left p-2.5 hover:bg-muted text-sm"
+                            title={c.name}
                         >
                             {c.name}
                         </button>
