@@ -204,6 +204,8 @@ export interface Order {
     delivery_date_estimate: string | null
     source_conversation: string | null
     notes: string | null
+    invoice_terms: string | null
+    invoice_notes: string | null
     created_at: string
     updated_at: string
     /** Factura emitida en Alegra. null = todavía no se facturó. */
@@ -221,7 +223,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
                customer_phone, status, priority,
                -- ::text para no arrastrar corrimiento de zona: es una fecha, no un instante
                delivery_date_estimate::text AS delivery_date_estimate,
-               source_conversation, notes, created_at, updated_at,
+               source_conversation, notes, invoice_terms, invoice_notes, created_at, updated_at,
                alegra_invoice_id, alegra_invoice_number, invoice_warnings
         FROM orders WHERE id = ${orderId}
     `

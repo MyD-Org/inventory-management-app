@@ -22,12 +22,14 @@ export function CustomerAutocomplete({
     onChange,
     onSelect,
     enabled,
+    emptyMessage = "Sin contactos en Alegra. Se usará como cliente nuevo (podés crearlo al cotizar).",
 }: {
     value: string
     contactId: number | null
     onChange: (name: string) => void          // texto libre (deselecciona el contacto)
     onSelect: (contact: Contact | null) => void // eligió/limpió un contacto de Alegra
     enabled: boolean
+    emptyMessage?: string
 }) {
     const [results, setResults] = useState<Contact[]>([])
     const [searching, setSearching] = useState(false)
@@ -78,10 +80,14 @@ export function CustomerAutocomplete({
                 onChange={(e) => handleChange(e.target.value)}
                 onFocus={() => { if (enabled && results.length) setOpen(true) }}
                 placeholder={enabled ? "Buscar cliente en Alegra o escribir uno nuevo…" : "Nombre del cliente"}
+                className={contactId != null ? "pr-9" : undefined}
             />
             {contactId != null && (
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-green-600">
-                    <Check className="w-3.5 h-3.5" /> Alegra
+                <span
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600"
+                    title="Cliente vinculado a Alegra"
+                >
+                    <Check className="w-4 h-4" />
                 </span>
             )}
             {enabled && open && value.trim() && (
@@ -106,7 +112,7 @@ export function CustomerAutocomplete({
                     ))}
                     {!searching && results.length === 0 && (
                         <div className="p-3 text-sm text-muted-foreground">
-                            Sin contactos en Alegra. Se usará como cliente nuevo (podés crearlo al cotizar).
+                            {emptyMessage}
                         </div>
                     )}
                 </div>

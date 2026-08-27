@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
-import { CalendarClock, Search } from "lucide-react"
+import { CalendarClock, Search, TriangleAlert } from "lucide-react"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import { BOARD_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
@@ -34,6 +34,9 @@ export interface BoardCard {
     // Hay lista, pero una opción pedida no está mapeada y se explotó el material
     // por defecto. Son problemas distintos y se resuelven distinto.
     has_unmapped: boolean
+    // null = aún no se emitió. Se usa para marcar tarjetas en la columna
+    // "facturado" que todavía necesitan la factura antes de salir.
+    alegra_invoice_id: string | null
 }
 
 export function formatDate(d: string | null): string | null {
@@ -242,11 +245,22 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                     {card.line_count}{" "}
                                                     {card.line_count === 1 ? "producto" : "productos"}
                                                 </span>
+                                                {card.status === "facturado" && !card.alegra_invoice_id && (
+                                                    <span
+                                                        className="ml-auto flex items-center gap-1 text-xs font-medium text-destructive"
+                                                        title="El pedido está en facturado pero falta emitir la factura"
+                                                    >
+                                                        <TriangleAlert className="h-3 w-3" />
+                                                        Falta factura
+                                                    </span>
+                                                )}
                                                 {card.delivery_date_estimate && (
                                                     <span
-                                                        className={`flex items-center gap-1 ml-auto ${
-                                                            overdue ? "text-destructive font-medium" : ""
-                                                        }`}
+                                                        className={`flex items-center gap-1 ${
+                                                            card.status === "facturado" && !card.alegra_invoice_id
+                                                                ? ""
+                                                                : "ml-auto"
+                                                        } ${overdue ? "text-destructive font-medium" : ""}`}
                                                         title={overdue ? "La entrega ya venció" : "Entrega estimada"}
                                                     >
                                                         <CalendarClock className="h-3 w-3" />
