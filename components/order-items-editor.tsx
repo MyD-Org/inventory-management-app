@@ -35,11 +35,17 @@ export function OrderItemsEditor({
     items,
     vocab,
     products,
+    readOnly = false,
+    readOnlyMessage,
+    needsReview = false,
 }: {
     orderId: number
     items: Item[]
     vocab: Record<string, SpecField>
     products: string[]
+    readOnly?: boolean
+    readOnlyMessage?: string
+    needsReview?: boolean
 }) {
     const router = useRouter()
     const { toast } = useToast()
@@ -112,6 +118,12 @@ export function OrderItemsEditor({
 
     return (
         <>
+            {readOnly && readOnlyMessage && (
+                <p className="mb-3 text-sm text-muted-foreground">{readOnlyMessage}</p>
+            )}
+            {needsReview && !readOnly && (
+                <p className="mb-3 text-sm text-amber-600">Pedido modificado desde el CRM. Revisá la fecha de entrega.</p>
+            )}
             <div className="border rounded-lg">
                 <table className="w-full table-fixed">
                     <thead>
@@ -145,10 +157,14 @@ export function OrderItemsEditor({
                         return (
                             <tr
                                 key={item.id}
-                                onClick={() => abrir(item)}
-                                tabIndex={0}
-                                onKeyDown={(e) => e.key === "Enter" && abrir(item)}
-                                className="border-t hover:bg-muted/40 cursor-pointer outline-none focus-visible:bg-muted/40"
+                                onClick={() => !readOnly && abrir(item)}
+                                tabIndex={readOnly ? -1 : 0}
+                                onKeyDown={(e) => e.key === "Enter" && !readOnly && abrir(item)}
+                                className={`border-t outline-none ${
+                                    readOnly
+                                        ? "hover:bg-transparent"
+                                        : "hover:bg-muted/40 cursor-pointer focus-visible:bg-muted/40"
+                                }`}
                             >
                                 <td className="px-3 py-2 text-right align-middle">
                                     <span className="text-lg font-semibold tabular-nums">
@@ -541,7 +557,7 @@ export function OrderItemsEditor({
                 </p>
             )}
 
-            {!nuevo && (
+            {!nuevo && !readOnly && (
                 <Button
                     variant="ghost"
                     size="sm"
