@@ -7,11 +7,11 @@ import {
     customerStatus,
     getCustomerStatusMap,
     missingMaterials,
-    orderNeedsReview,
     readOrder,
     validateOrderPayload,
     type OrderPayload,
 } from "@/lib/orders"
+import { orderNeedsReview } from "@/lib/order-statuses"
 
 // Pedidos del agente del CRM (§3 de docs/pedidos-avantec.md). Auth
 // server-to-server con el mismo Bearer que los endpoints de ai-tools

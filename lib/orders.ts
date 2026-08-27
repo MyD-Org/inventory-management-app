@@ -265,21 +265,6 @@ export async function readOrder(orderId: number): Promise<Order | null> {
     } as Order
 }
 
-export const API_EDITABLE_STATUSES: Status[] = ["por_revisar", "recibido", "en_proceso"]
-
-export function isApiEditable(status: Status): boolean {
-    return API_EDITABLE_STATUSES.includes(status)
-}
-
-export function orderNeedsReview(order: {
-    modified_at: string | null
-    delivery_date_verified_at: string | null
-}): boolean {
-    if (!order.modified_at) return false
-    if (!order.delivery_date_verified_at) return true
-    return new Date(order.modified_at) > new Date(order.delivery_date_verified_at)
-}
-
 // Materiales del pedido que NO alcanzan con el stock actual. Va en la respuesta
 // del POST (missing_materials, según el doc) para que el bot pueda avisar, y lo
 // muestra el detalle del pedido para que el taller sepa qué reponer.

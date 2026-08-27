@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
-import { addOrderItemInternal, isApiEditable, readOrder } from "@/lib/orders"
+import { addOrderItemInternal, readOrder } from "@/lib/orders"
+import { isApiEditable } from "@/lib/order-statuses"
 
 export async function POST(
     request: NextRequest,

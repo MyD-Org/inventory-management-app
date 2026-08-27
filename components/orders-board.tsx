@@ -11,8 +11,7 @@ import { Input } from "@/components/ui/input"
 import { CalendarClock, Search, TriangleAlert } from "lucide-react"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
-import { BOARD_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
-import { orderNeedsReview } from "@/lib/orders"
+import { BOARD_STATUSES, orderNeedsReview, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
 import { PriorityIcon, StatusIcon } from "@/components/order-glyphs"
 
 export interface BoardCard {

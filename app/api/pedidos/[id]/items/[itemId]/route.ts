@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
-import { deleteOrderItemInternal, isApiEditable, readOrder, updateOrderItemInternal } from "@/lib/orders"
+import { deleteOrderItemInternal, readOrder, updateOrderItemInternal } from "@/lib/orders"
+import { isApiEditable } from "@/lib/order-statuses"
 
 async function checkOrder(id: number) {
     const order = await readOrder(id)
