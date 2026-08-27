@@ -23,6 +23,8 @@ export default async function OrdersPage({
                o.status, o.priority, o.origin, o.source_conversation,
                o.delivery_date_estimate::text AS delivery_date_estimate, o.created_at,
                o.alegra_invoice_id,
+               o.modified_at::text AS modified_at,
+               o.delivery_date_verified_at::text AS delivery_date_verified_at,
                COUNT(i.id) AS line_count,
                COALESCE(SUM(i.quantity), 0) AS units,
                BOOL_OR(i.needs_review) AS needs_review,
@@ -56,6 +58,8 @@ export default async function OrdersPage({
         source_conversation: r.source_conversation,
         created_at: r.created_at,
         delivery_date_estimate: r.delivery_date_estimate,
+        modified_at: r.modified_at,
+        delivery_date_verified_at: r.delivery_date_verified_at,
         line_count: Number(r.line_count),
         units: Number(r.units),
         items: (r.items as any[]).map((i) => ({
