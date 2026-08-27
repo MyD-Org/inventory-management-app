@@ -50,7 +50,7 @@ export async function PATCH(
             quantity: body.quantity !== undefined ? Number(body.quantity) : undefined,
             specs: body.specs,
         })
-        if (result.error) {
+        if (!result.ok) {
             return NextResponse.json({ error: result.error }, { status: 400 })
         }
         await markModified(orderId)
@@ -81,7 +81,7 @@ export async function DELETE(
 
     try {
         const result = await deleteOrderItemInternal(itemId)
-        if (result.error) {
+        if (!result.ok) {
             return NextResponse.json({ error: result.error }, { status: 400 })
         }
         await markModified(orderId)

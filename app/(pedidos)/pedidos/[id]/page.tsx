@@ -46,9 +46,17 @@ function Prop({ label, children }: { label: string; children: React.ReactNode })
     )
 }
 
-export default async function OrderDetailPage({ params }: { params: { id: string } }) {
+export default async function OrderDetailPage({
+    params,
+    searchParams,
+}: {
+    params: { id: string }
+    searchParams: { highlight?: string }
+}) {
     const id = Number.parseInt(params.id, 10)
     if (!Number.isFinite(id)) notFound()
+
+    const highlightedItemId = Number(searchParams.highlight)
 
     const order = await readOrder(id)
     if (!order) notFound()
@@ -133,6 +141,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                                 modified_at: order.modified_at,
                                 delivery_date_verified_at: order.delivery_date_verified_at,
                             })}
+                            highlightedItemId={Number.isFinite(highlightedItemId) ? highlightedItemId : undefined}
                         />
                     </section>
 

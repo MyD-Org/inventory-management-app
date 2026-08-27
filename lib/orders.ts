@@ -543,15 +543,27 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
 // (autenticación server-to-server) y las server actions de la web (auth de
 // sesión + revalidación + bloqueo por factura).
 
+export type AddOrderItemResult =
+    | { ok: false; error: string }
+    | { ok: true; itemId: number; needs_review: boolean; unmapped: string[]; sin_alegra: boolean }
+
+export type UpdateOrderItemResult =
+    | { ok: false; error: string }
+    | { ok: true; itemId: number; warning?: string }
+
+export type DeleteOrderItemResult =
+    | { ok: false; error: string }
+    | { ok: true; itemId: number }
+
 export async function addOrderItemInternal(
     orderId: number,
     payload: { product: string; quantity: number; specs?: Record<string, string> },
-) {
-    if (!payload.product?.trim()) return { error: "Elegí un producto" }
-    if (!Number.isFinite(payload.quantity) || payload.quantity <= 0) return { error: "Cantidad inválida" }
+): Promise<AddOrderItemResult> {
+    if (!payload.product?.trim()) return { ok: false, error: "Elegí un producto" }
+    if (!Number.isFinite(payload.quantity) || payload.quantity <= 0) return { ok: false, error: "Cantidad inválida" }
 
     const errors = validateSpecs(payload.specs ?? {}, await getSpecs())
-    if (errors.length > 0) return { error: errors.join(". ") }
+    if (errors.length > 0) return { ok: false, error: errors.join(". ") }
 
     try {
         const resolved = await resolveProduct(payload.product.trim())
@@ -590,25 +602,25 @@ export async function addOrderItemInternal(
         }
     } catch (error) {
         console.error("Error en addOrderItemInternal:", error)
-        return { error: "No se pudo agregar la línea" }
+        return { ok: false, error: "No se pudo agregar la línea" }
     }
 }
 
 export async function updateOrderItemInternal(
     itemId: number,
     patch: { quantity?: number; specs?: Record<string, string> },
-) {
+): Promise<UpdateOrderItemResult> {
     try {
         const [item] = await sql`SELECT order_id, quantity, budget_id, specs FROM order_items WHERE id = ${itemId}`
-        if (!item) return { error: "La línea no existe" }
+        if (!item) return { ok: false, error: "La línea no existe" }
 
         if (patch.specs) {
             const errors = validateSpecs(patch.specs, await getSpecs())
-            if (errors.length > 0) return { error: errors.join(". ") }
+            if (errors.length > 0) return { ok: false, error: errors.join(". ") }
         }
 
         const quantity = patch.quantity ?? Number(item.quantity)
-        if (!Number.isFinite(quantity) || quantity <= 0) return { error: "Cantidad inválida" }
+        if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, error: "Cantidad inválida" }
 
         await sql`
             UPDATE order_items SET
@@ -668,22 +680,22 @@ export async function updateOrderItemInternal(
         return { ok: true, itemId }
     } catch (error) {
         console.error("Error en updateOrderItemInternal:", error)
-        return { error: "No se pudo guardar la línea" }
+        return { ok: false, error: "No se pudo guardar la línea" }
     }
 }
 
-export async function deleteOrderItemInternal(itemId: number) {
+export async function deleteOrderItemInternal(itemId: number): Promise<DeleteOrderItemResult> {
     try {
         const [item] = await sql`SELECT order_id FROM order_items WHERE id = ${itemId}`
-        if (!item) return { error: "La línea no existe" }
+        if (!item) return { ok: false, error: "La línea no existe" }
 
         const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM order_items WHERE order_id = ${item.order_id}`
-        if (count <= 1) return { error: "Un pedido no puede quedar sin líneas" }
+        if (count <= 1) return { ok: false, error: "Un pedido no puede quedar sin líneas" }
 
         await sql`DELETE FROM order_items WHERE id = ${itemId}`
         return { ok: true, itemId }
     } catch (error) {
         console.error("Error en deleteOrderItemInternal:", error)
-        return { error: "No se pudo borrar la línea" }
+        return { ok: false, error: "No se pudo borrar la línea" }
     }
 }

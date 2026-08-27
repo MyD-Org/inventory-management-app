@@ -316,40 +316,40 @@ export async function updateOrderFields(
 export async function updateOrderItem(
     itemId: number,
     patch: { quantity?: number; specs?: Record<string, string> },
-) {
+): Promise<import('@/lib/orders').UpdateOrderItemResult> {
     const session = await auth();
-    if (!session?.user) return { error: 'No autenticado' };
+    if (!session?.user) return { ok: false, error: 'No autenticado' };
 
     const [item] = await sql`SELECT order_id FROM order_items WHERE id = ${itemId}`;
-    if (!item) return { error: 'La línea no existe' };
+    if (!item) return { ok: false, error: 'La línea no existe' };
 
     const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${item.order_id}`;
     if (order?.alegra_invoice_id) {
-        return { error: 'El pedido ya fue facturado: no se pueden modificar ítems' };
+        return { ok: false, error: 'El pedido ya fue facturado: no se pueden modificar ítems' };
     }
 
     const result = await updateOrderItemInternal(itemId, patch);
-    if (!result.error) {
+    if (result.ok) {
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${item.order_id}`);
     }
     return result;
 }
 
-export async function deleteOrderItem(itemId: number) {
+export async function deleteOrderItem(itemId: number): Promise<import('@/lib/orders').DeleteOrderItemResult> {
     const session = await auth();
-    if (!session?.user) return { error: 'No autenticado' };
+    if (!session?.user) return { ok: false, error: 'No autenticado' };
 
     const [item] = await sql`SELECT order_id FROM order_items WHERE id = ${itemId}`;
-    if (!item) return { error: 'La línea no existe' };
+    if (!item) return { ok: false, error: 'La línea no existe' };
 
     const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${item.order_id}`;
     if (order?.alegra_invoice_id) {
-        return { error: 'El pedido ya fue facturado: no se pueden quitar ítems' };
+        return { ok: false, error: 'El pedido ya fue facturado: no se pueden quitar ítems' };
     }
 
     const result = await deleteOrderItemInternal(itemId);
-    if (!result.error) {
+    if (result.ok) {
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${item.order_id}`);
     }
@@ -361,17 +361,17 @@ export async function deleteOrderItem(itemId: number) {
 export async function addOrderItem(
     orderId: number,
     payload: { product: string; quantity: number; specs?: Record<string, string> },
-) {
+): Promise<import('@/lib/orders').AddOrderItemResult> {
     const session = await auth();
-    if (!session?.user) return { error: 'No autenticado' };
+    if (!session?.user) return { ok: false, error: 'No autenticado' };
 
     const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${orderId}`;
     if (order?.alegra_invoice_id) {
-        return { error: 'El pedido ya fue facturado: no se pueden agregar ítems' };
+        return { ok: false, error: 'El pedido ya fue facturado: no se pueden agregar ítems' };
     }
 
     const result = await addOrderItemInternal(orderId, payload);
-    if (!result.error) {
+    if (result.ok) {
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${orderId}`);
     }

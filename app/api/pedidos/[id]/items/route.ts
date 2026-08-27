@@ -40,7 +40,7 @@ export async function POST(
             specs: body.specs ?? {},
         })
 
-        if (result.error) {
+        if (!result.ok) {
             return NextResponse.json({ error: result.error }, { status: 400 })
         }
 
