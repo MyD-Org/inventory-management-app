@@ -7,6 +7,7 @@ import {
     customerStatus,
     getCustomerStatusMap,
     missingMaterials,
+    orderNeedsReview,
     readOrder,
     validateOrderPayload,
     type OrderPayload,
@@ -143,7 +144,9 @@ export async function GET(request: NextRequest) {
         // normaliza también el lado guardado, porque en la base hay números cargados a
         // mano con espacios y guiones.
         const rows = await sql`
-            SELECT id, order_number, external_id, status, delivery_date_estimate::text AS delivery_date_estimate, updated_at
+            SELECT id, order_number, external_id, status, delivery_date_estimate::text AS delivery_date_estimate,
+                   modified_at::text AS modified_at, delivery_date_verified_at::text AS delivery_date_verified_at,
+                   updated_at
             FROM orders
             WHERE (
                 (${customerExternalId}::text <> '' AND customer_external_id = ${customerExternalId})
@@ -189,6 +192,10 @@ export async function GET(request: NextRequest) {
             customer_status: customerStatus(r.status, overrides),
             eta: r.delivery_date_estimate,
             updated_at: r.updated_at,
+            needs_review: orderNeedsReview({
+                modified_at: r.modified_at,
+                delivery_date_verified_at: r.delivery_date_verified_at,
+            }),
             items: itemsByOrder.get(r.id) ?? [],
         }))
 
