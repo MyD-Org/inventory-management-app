@@ -1,5 +1,5 @@
 import { sql } from "@/lib/database"
-import { createInvoice, type EstimateLine } from "@/lib/alegra"
+import { createInvoice, listNumberTemplates, type EstimateLine, type NumberTemplate } from "@/lib/alegra"
 import { normalizeVariant } from "@/lib/alegra-sync"
 
 // Facturar un pedido en Alegra.
@@ -41,13 +41,20 @@ export interface InvoicePreview {
     /** Qué quedó afuera y por qué. Vacío = la factura sale completa. */
     warnings: string[]
     total: number
+    /** Numeración de Alegra que se va a usar. */
+    numberTemplate: NumberTemplate | null
+    /** Términos y condiciones de pago. */
+    terms: string | null
+    /** Notas adicionales de la factura. */
+    notes: string | null
 }
 
 // Resuelve qué se facturaría, sin tocar Alegra. Es lo que consume el modo
 // simulación y también el paso previo a emitir de verdad.
 export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
     const [order] = await sql`
-        SELECT id, customer_external_id, customer_name FROM orders WHERE id = ${orderId}
+        SELECT id, customer_external_id, customer_name, invoice_terms, invoice_notes
+        FROM orders WHERE id = ${orderId}
     `
     if (!order) throw new Error("El pedido no existe")
 
@@ -146,6 +153,10 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
         warnings.push("No se pudo resolver ninguna línea: no hay nada que facturar.")
     }
 
+    const numberTemplate = clientId != null
+        ? await resolveNumberTemplate((order.customer_name as string) ?? null)
+        : undefined
+
     return {
         orderId,
         clientId,
@@ -153,6 +164,9 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
         lines,
         warnings,
         total: lines.reduce((s, l) => s + l.price * l.quantity, 0),
+        numberTemplate: numberTemplate ?? null,
+        terms: (order.invoice_terms as string | null) ?? null,
+        notes: (order.invoice_notes as string | null) ?? null,
     }
 }
 
@@ -176,6 +190,34 @@ function describeLine(
     return colorSuelto ? `${base} (color ${colorSuelto})` : base
 }
 
+function normalizeName(s: string): string {
+    return s
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim()
+}
+
+// Elige la numeración de factura en Alegra. Si el cliente tiene una numeración
+// propia cuyo nombre coincide con su nombre, la usa; si no, usa la numeración
+// "Principal"; si tampoco existe, cae en la primera disponible.
+export async function resolveNumberTemplate(clientName: string | null): Promise<NumberTemplate | undefined> {
+    const templates = await listNumberTemplates()
+    if (templates.length === 0) return undefined
+
+    if (clientName) {
+        const target = normalizeName(clientName)
+        const byClient = templates.find((t) => normalizeName(t.name) === target)
+        if (byClient) return byClient
+    }
+
+    const principal = templates.find((t) => normalizeName(t.name) === "principal")
+    if (principal) return principal
+
+    return templates[0]
+}
+
 export interface InvoiceResult extends InvoicePreview {
     invoiceId: number | null
     invoiceNumber: string | null
@@ -189,8 +231,13 @@ export interface InvoiceResult extends InvoicePreview {
 // contabilidad.
 //
 // IDEMPOTENTE: si el pedido ya tiene factura, no crea otra.
-export async function invoiceOrder(orderId: number, opts: { dryRun?: boolean } = {}): Promise<InvoiceResult> {
+export async function invoiceOrder(
+    orderId: number,
+    opts: { dryRun?: boolean; terms?: string; notes?: string } = {},
+): Promise<InvoiceResult> {
     const dryRun = opts.dryRun ?? false
+    const terms = opts.terms?.trim() || null
+    const notes = opts.notes?.trim() || null
 
     const [existing] = await sql`
         SELECT alegra_invoice_id, alegra_invoice_number FROM orders WHERE id = ${orderId}
@@ -221,10 +268,15 @@ export async function invoiceOrder(orderId: number, opts: { dryRun?: boolean } =
         quantity: l.quantity,
     }))
 
+    const numberTemplate = await resolveNumberTemplate(preview.clientName)
+
     const creada = await createInvoice({
         clientId: preview.clientId,
         lines: lineas,
         observations: `Pedido #${orderId}`,
+        numberTemplateId: numberTemplate?.id,
+        terms,
+        invoiceNotes: notes,
     })
 
     await sql`
@@ -232,7 +284,9 @@ export async function invoiceOrder(orderId: number, opts: { dryRun?: boolean } =
             alegra_invoice_id = ${creada.id},
             alegra_invoice_number = ${creada.number},
             alegra_invoiced_at = NOW(),
-            invoice_warnings = ${JSON.stringify(preview.warnings)}::jsonb
+            invoice_warnings = ${JSON.stringify(preview.warnings)}::jsonb,
+            invoice_terms = ${terms},
+            invoice_notes = ${notes}
         WHERE id = ${orderId}
     `
 

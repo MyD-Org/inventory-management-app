@@ -261,6 +261,30 @@ export async function createEstimate(args: {
     }
 }
 
+// ── Numeraciones de facturación ──────────────────────────────────────────────
+
+export interface NumberTemplate {
+    id: number
+    name: string
+    fullNumber?: string | null
+}
+
+export async function listNumberTemplates(): Promise<NumberTemplate[]> {
+    try {
+        const data = await alegraFetch<unknown>("/number-templates")
+        // Alegra devuelve un array directo; si algún día envuelve, tomamos data.
+        const rows = Array.isArray(data) ? data : (data as any)?.data
+        if (!Array.isArray(rows)) return []
+        return rows.map((r) => ({
+            id: Number(r.id),
+            name: String(r.name ?? ""),
+            fullNumber: r.fullNumber != null ? String(r.fullNumber) : null,
+        }))
+    } catch {
+        return []
+    }
+}
+
 // ── Facturas ─────────────────────────────────────────────────────────────────
 
 export interface CreatedInvoice {
@@ -275,18 +299,26 @@ export async function createInvoice(args: {
     clientId: number
     lines: EstimateLine[]
     observations?: string
+    numberTemplateId?: number
+    terms?: string | null
+    invoiceNotes?: string | null
 }): Promise<CreatedInvoice> {
     const today = new Date().toISOString().slice(0, 10)
 
+    const body: Record<string, unknown> = {
+        client: args.clientId,
+        date: today,
+        dueDate: today,
+        items: args.lines,
+    }
+    if (args.observations) body.observations = args.observations
+    if (args.numberTemplateId != null) body.numberTemplate = { id: args.numberTemplateId }
+    if (args.terms) body.paymentTerms = args.terms
+    if (args.invoiceNotes) body.invoiceNotes = args.invoiceNotes
+
     const inv = await alegraFetch<{ id: number; numberTemplate?: { fullNumber?: string; number?: string | number } }>(`/invoices`, {
         method: "POST",
-        body: JSON.stringify({
-            client: args.clientId,
-            date: today,
-            dueDate: today,
-            items: args.lines,
-            ...(args.observations ? { observations: args.observations } : {}),
-        }),
+        body: JSON.stringify(body),
     })
 
     const number = inv.numberTemplate?.fullNumber ?? inv.numberTemplate?.number ?? null

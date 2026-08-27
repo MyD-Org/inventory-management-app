@@ -40,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 }
 
-export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
     const session = await auth()
     if (session?.user?.role !== "admin") {
         return NextResponse.json({ error: "Solo un admin puede facturar" }, { status: 403 })
@@ -52,8 +52,18 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     const orderId = Number.parseInt(params.id, 10)
     if (!Number.isFinite(orderId)) return NextResponse.json({ error: "Pedido inválido" }, { status: 400 })
 
+    let body: Record<string, unknown> = {}
     try {
-        return NextResponse.json(await invoiceOrder(orderId))
+        body = await request.json()
+    } catch {
+        // body vacío es válido: se usan los valores guardados en el pedido.
+    }
+
+    try {
+        return NextResponse.json(await invoiceOrder(orderId, {
+            terms: typeof body.terms === "string" ? body.terms : undefined,
+            notes: typeof body.notes === "string" ? body.notes : undefined,
+        }))
     } catch (error) {
         console.error("Error facturando:", error)
         return NextResponse.json({ error: error instanceof Error ? error.message : "Error" }, { status: 502 })

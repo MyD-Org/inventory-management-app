@@ -109,6 +109,8 @@ CREATE TABLE IF NOT EXISTS orders (
     delivery_date_estimate DATE,
     source_conversation VARCHAR(300),
     notes TEXT,
+    invoice_terms TEXT,
+    invoice_notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

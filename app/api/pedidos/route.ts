@@ -157,6 +157,29 @@ export async function GET(request: NextRequest) {
             ORDER BY created_at DESC LIMIT 50
         `
 
+        // Cargamos los ítems de todos los pedidos encontrados en una sola query.
+        const orderIds = (rows as any[]).map((r) => r.id)
+        const itemRows = orderIds.length
+            ? await sql`
+                SELECT id, order_id, line_no, product, product_external_id, specs, quantity
+                FROM order_items
+                WHERE order_id = ANY(${orderIds})
+                ORDER BY order_id ASC, line_no ASC
+            `
+            : []
+        const itemsByOrder = new Map<number, any[]>()
+        for (const i of itemRows as any[]) {
+            const list = itemsByOrder.get(i.order_id) ?? []
+            list.push({
+                line_no: i.line_no,
+                product: i.product,
+                product_external_id: i.product_external_id,
+                quantity: Number(i.quantity),
+                specs: i.specs,
+            })
+            itemsByOrder.set(i.order_id, list)
+        }
+
         // Solo lo que el cliente puede ver: nada de materiales ni jerga interna.
         const orders = (rows as any[]).map((r) => ({
             order_id: r.id,
@@ -166,6 +189,7 @@ export async function GET(request: NextRequest) {
             customer_status: customerStatus(r.status, overrides),
             eta: r.delivery_date_estimate,
             updated_at: r.updated_at,
+            items: itemsByOrder.get(r.id) ?? [],
         }))
 
         return NextResponse.json({ count: orders.length, orders })

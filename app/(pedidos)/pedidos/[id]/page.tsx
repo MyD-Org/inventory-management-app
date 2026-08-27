@@ -10,6 +10,7 @@ import { OrderItemsEditor } from "@/components/order-items-editor"
 import { InvoiceButton } from "@/components/invoice-button"
 import { OrderMaterials } from "@/components/order-materials"
 import { DateField, NotesField, PriorityField, TextField } from "@/components/order-props-editor"
+import { OrderCustomerField } from "@/components/order-customer-field"
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,13 @@ function formatDate(d: string | null): string {
     if (!d) return "—"
     const [y, m, day] = d.split("-").map(Number)
     return new Date(y, m - 1, day).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" })
+}
+
+function customerSourceLabel(externalId: string | null): string | null {
+    if (!externalId) return null
+    if (externalId.startsWith("alegra:")) return `Alegra · #${externalId.slice(7)}`
+    if (externalId.startsWith("manual:")) return "Cliente manual"
+    return externalId
 }
 
 function Prop({ label, children }: { label: string; children: React.ReactNode }) {
@@ -187,11 +195,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                                         {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
                                     </span>
                                 </>
-                            ) : (
+                            ) : order.status === "facturado" ? (
                                 <div className="-ml-1.5">
                                     <InvoiceButton orderId={order.id} />
                                 </div>
-                            )}
+                            ) : null}
                             {order.invoice_warnings?.length > 0 && (
                                 <p className="no-print mt-1 text-xs text-amber-600">
                                     {order.alegra_invoice_id ? "Salió incompleta: " : ""}
@@ -223,17 +231,15 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
                     <Prop label="Cliente">
                         <span className="no-print block">
-                            <TextField
-                                id={order.id}
-                                value={order.customer_name}
-                                field="customer_name"
-                                placeholder="Sin nombre"
-                                label="Cliente"
+                            <OrderCustomerField
+                                orderId={order.id}
+                                customerName={order.customer_name}
+                                customerExternalId={order.customer_external_id}
                             />
                         </span>
                         <span className="hidden print:inline">{order.customer_name ?? "—"}</span>
                         <span className="block text-sm text-muted-foreground truncate px-1.5 -ml-1.5">
-                            {order.customer_external_id}
+                            {customerSourceLabel(order.customer_external_id)}
                         </span>
                     </Prop>
 

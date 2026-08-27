@@ -67,6 +67,15 @@ export async function updateOrderStatus(id: number, status: string) {
     if (!ORDER_STATUSES.includes(status as any)) return { error: 'Estado inválido' };
 
     try {
+        // No se puede pasar a listo para retirar sin haber facturado: la factura
+        // es el paso previo obligatorio en el flujo.
+        if (status === 'listo_para_retirar') {
+            const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${id}`;
+            if (!order?.alegra_invoice_id) {
+                return { error: 'Falta emitir la factura antes de pasar a listo para retirar' };
+            }
+        }
+
         await sql`UPDATE orders SET status = ${status} WHERE id = ${id}`;
 
         // Mover la tarjeta a 'facturado' NO emite nada. Emitir es irreversible del
@@ -227,10 +236,13 @@ export async function updateOrderFields(
     id: number,
     patch: {
         customer_name?: string | null;
+        customer_external_id?: string | null;
         customer_phone?: string | null;
         priority?: string;
         delivery_date_estimate?: string | null;
         notes?: string | null;
+        invoice_terms?: string | null;
+        invoice_notes?: string | null;
     },
 ) {
     const session = await auth();
@@ -244,7 +256,16 @@ export async function updateOrderFields(
         // Para los campos que sí se pueden vaciar mandamos '' y lo pasamos a NULL.
         await sql`
             UPDATE orders SET
-                customer_name = COALESCE(${patch.customer_name ?? null}, customer_name),
+                customer_name = CASE
+                    WHEN ${patch.customer_name === undefined} THEN customer_name
+                    WHEN ${patch.customer_name ?? ''} = '' THEN NULL
+                    ELSE ${patch.customer_name ?? null}
+                END,
+                customer_external_id = CASE
+                    WHEN ${patch.customer_external_id === undefined} THEN customer_external_id
+                    WHEN ${patch.customer_external_id ?? ''} = '' THEN NULL
+                    ELSE ${patch.customer_external_id ?? null}
+                END,
                 customer_phone = COALESCE(${patch.customer_phone ?? null}, customer_phone),
                 priority = COALESCE(${patch.priority ?? null}, priority),
                 delivery_date_estimate = CASE
@@ -256,6 +277,16 @@ export async function updateOrderFields(
                     WHEN ${patch.notes === undefined} THEN notes
                     WHEN ${patch.notes ?? ''} = '' THEN NULL
                     ELSE ${patch.notes ?? null}
+                END,
+                invoice_terms = CASE
+                    WHEN ${patch.invoice_terms === undefined} THEN invoice_terms
+                    WHEN ${patch.invoice_terms ?? ''} = '' THEN NULL
+                    ELSE ${patch.invoice_terms ?? null}
+                END,
+                invoice_notes = CASE
+                    WHEN ${patch.invoice_notes === undefined} THEN invoice_notes
+                    WHEN ${patch.invoice_notes ?? ''} = '' THEN NULL
+                    ELSE ${patch.invoice_notes ?? null}
                 END
             WHERE id = ${id}
         `;
