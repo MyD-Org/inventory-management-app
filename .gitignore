@@ -31,3 +31,6 @@ next-env.d.ts
 
 # Configuración local de Claude Code
 .claude/
+
+# Brainstorming visual companion
+.superpowers/
