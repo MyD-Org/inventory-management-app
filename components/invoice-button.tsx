@@ -158,14 +158,6 @@ export function InvoiceButton({ orderId }: { orderId: number }) {
                                             <p className="font-medium break-words">{l.name}</p>
                                             <p className="text-xs text-muted-foreground break-words">{l.description}</p>
                                         </div>
-                                        {/* Cómo se resolvió. 'base' quiere decir que el color
-                                            pedido no existe como producto y se facturó el
-                                            genérico de la familia: mismo precio, menos detalle. */}
-                                        {l.match === "base" && (
-                                            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                                                sin color
-                                            </span>
-                                        )}
                                         <span className="tabular-nums shrink-0 text-right w-24">
                                             {formatArs(l.price * l.quantity)}
                                         </span>
