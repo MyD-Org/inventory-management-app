@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { unstable_noStore } from "next/cache"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { getSpecs, listSellableProducts, materialNeeds, readOrder } from "@/lib/orders"
@@ -55,6 +56,11 @@ export default async function OrderDetailPage({
     params: { id: string }
     searchParams: { highlight?: string }
 }) {
+    // El detalle se abre muchas veces desde el tablero justo después de que el
+    // bot o el CRM mutaron el pedido. Evitamos que el Router Cache de Next.js
+    // sirva una versión stale sin los ítems recién agregados.
+    unstable_noStore()
+
     const id = Number.parseInt(params.id, 10)
     if (!Number.isFinite(id)) notFound()
 
