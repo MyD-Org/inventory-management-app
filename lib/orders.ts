@@ -4,6 +4,7 @@ import { customerStatus as toCustomerStatus, type OrderStatus as Status } from "
 import {
     validateOrderPayloadWith,
     validateSpecs,
+    type OrderItemPayload,
     type OrderPayload,
     type SpecField,
     type SpecKind,

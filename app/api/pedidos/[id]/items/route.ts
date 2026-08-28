@@ -1,9 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
-import { addOrderItemInternal, readOrder } from "@/lib/orders"
+import { addOrderItemInternal, missingMaterials, readOrder } from "@/lib/orders"
 import { isApiEditable } from "@/lib/order-statuses"
 
+// Agrega una línea a un pedido existente. Usa la misma lógica interna que la
+// vista manual (lib/order-actions.ts) para que el resultado sea idéntico.
 export async function POST(
     request: NextRequest,
     { params }: { params: { id: string } },
@@ -35,10 +37,20 @@ export async function POST(
             )
         }
 
+        let specs = body?.specs ?? {}
+        if (typeof body?.specs_json === "string" && body.specs_json.trim()) {
+            try {
+                const parsed = JSON.parse(body.specs_json)
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) specs = parsed
+            } catch {
+                return NextResponse.json({ error: "specs_json no es JSON válido" }, { status: 400 })
+            }
+        }
+
         const result = await addOrderItemInternal(id, {
             product: body.product,
             quantity: Number(body.quantity ?? 1),
-            specs: body.specs ?? {},
+            specs,
         })
 
         if (!result.ok) {
@@ -52,12 +64,16 @@ export async function POST(
         `
 
         return NextResponse.json({
+            ok: true,
+            order_id: id,
+            order_number: order.order_number,
             item_id: result.itemId,
             product: body.product,
             quantity: body.quantity,
             needs_review: result.needs_review,
             unmapped_specs: result.unmapped,
             sin_alegra: result.sin_alegra,
+            missing_materials: await missingMaterials(id),
         }, { status: 201 })
     } catch (error) {
         console.error("Error in POST /api/pedidos/[id]/items:", error)
