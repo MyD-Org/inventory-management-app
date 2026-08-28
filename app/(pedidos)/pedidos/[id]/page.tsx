@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { auth } from "@/auth"
 import { getSpecs, listSellableProducts, materialNeeds, readOrder } from "@/lib/orders"
+import { orderNeedsReview } from "@/lib/order-statuses"
 import { STATUS_LABELS } from "@/lib/order-statuses"
 import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
 import { PrintIconButton } from "@/components/print-icon-button"
@@ -46,9 +47,17 @@ function Prop({ label, children }: { label: string; children: React.ReactNode })
     )
 }
 
-export default async function OrderDetailPage({ params }: { params: { id: string } }) {
+export default async function OrderDetailPage({
+    params,
+    searchParams,
+}: {
+    params: { id: string }
+    searchParams: { highlight?: string }
+}) {
     const id = Number.parseInt(params.id, 10)
     if (!Number.isFinite(id)) notFound()
+
+    const highlightedItemId = Number(searchParams.highlight)
 
     const order = await readOrder(id)
     if (!order) notFound()
@@ -106,6 +115,14 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 {/* ---------- El trabajo ---------- */}
                 <div className="min-w-0 space-y-7">
                     {/* 1. Qué armar */}
+                    {orderNeedsReview({
+                        modified_at: order.modified_at,
+                        delivery_date_verified_at: order.delivery_date_verified_at,
+                    }) && (
+                        <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                            Pedido modificado desde el CRM. Revisá la fecha de entrega.
+                        </div>
+                    )}
                     <section>
                         <OrderItemsEditor
                             orderId={order.id}
@@ -119,6 +136,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                             }))}
                             vocab={vocab}
                             products={products}
+                            readOnly={Boolean(order.alegra_invoice_id)}
+                            readOnlyMessage={order.alegra_invoice_id ? "Pedido facturado: no se pueden editar ítems" : undefined}
+                            needsReview={orderNeedsReview({
+                                modified_at: order.modified_at,
+                                delivery_date_verified_at: order.delivery_date_verified_at,
+                            })}
+                            highlightedItemId={Number.isFinite(highlightedItemId) ? highlightedItemId : undefined}
                         />
                     </section>
 

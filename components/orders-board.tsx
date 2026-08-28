@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { CalendarClock, Search, TriangleAlert } from "lucide-react"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
-import { BOARD_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
+import { BOARD_STATUSES, orderNeedsReview, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
 import { PriorityIcon, StatusIcon } from "@/components/order-glyphs"
 
 export interface BoardCard {
@@ -37,6 +37,8 @@ export interface BoardCard {
     // null = aún no se emitió. Se usa para marcar tarjetas en la columna
     // "facturado" que todavía necesitan la factura antes de salir.
     alegra_invoice_id: string | null
+    modified_at: string | null
+    delivery_date_verified_at: string | null
 }
 
 const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
@@ -216,6 +218,16 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                             <div className="text-base font-medium leading-snug truncate mb-1.5">
                                                 {card.customer_name ?? card.customer_external_id}
                                             </div>
+
+                                            {orderNeedsReview({
+                                                modified_at: card.modified_at,
+                                                delivery_date_verified_at: card.delivery_date_verified_at,
+                                            }) && (
+                                                <div className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                                                    <TriangleAlert className="h-3 w-3" />
+                                                    Modificado — revisar fecha
+                                                </div>
+                                            )}
 
                                             {/* Siempre los primeros tres, así la tarjeta
                                                 dice algo del trabajo aunque el pedido sea

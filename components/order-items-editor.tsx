@@ -4,7 +4,7 @@
 // y se guarda solo. Cambiar la cantidad REESCALA el BOM ya congelado (mantiene
 // el por-unidad del pedido), no vuelve a leer la receta, que pudo cambiar.
 
-import { Fragment, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,11 +35,19 @@ export function OrderItemsEditor({
     items,
     vocab,
     products,
+    readOnly = false,
+    readOnlyMessage,
+    needsReview = false,
+    highlightedItemId,
 }: {
     orderId: number
     items: Item[]
     vocab: Record<string, SpecField>
     products: string[]
+    readOnly?: boolean
+    readOnlyMessage?: string
+    needsReview?: boolean
+    highlightedItemId?: number
 }) {
     const router = useRouter()
     const { toast } = useToast()
@@ -67,10 +75,21 @@ export function OrderItemsEditor({
         specs: Record<string, string>
     } | null>(null)
     const [addingSave, setAddingSave] = useState(false)
+    const [highlightedId, setHighlightedId] = useState<number | undefined>(highlightedItemId)
 
-    async function run(fn: () => Promise<{ error?: string; warning?: string }>, ok: string) {
+    useEffect(() => {
+        if (highlightedItemId === undefined) return
+        setHighlightedId(highlightedItemId)
+        const timer = setTimeout(() => setHighlightedId(undefined), 3000)
+        return () => clearTimeout(timer)
+    }, [highlightedItemId])
+
+    async function run(
+        fn: () => Promise<{ ok: true; warning?: string } | { ok: false; error: string }>,
+        ok: string,
+    ) {
         const result = await fn()
-        if (result.error) {
+        if (!result.ok) {
             toast.error("No se pudo guardar", { description: result.error })
             return false
         }
@@ -112,6 +131,12 @@ export function OrderItemsEditor({
 
     return (
         <>
+            {readOnly && readOnlyMessage && (
+                <p className="mb-3 text-sm text-muted-foreground">{readOnlyMessage}</p>
+            )}
+            {needsReview && !readOnly && (
+                <p className="mb-3 text-sm text-amber-600">Pedido modificado desde el CRM. Revisá la fecha de entrega.</p>
+            )}
             <div className="border rounded-lg">
                 <table className="w-full table-fixed">
                     <thead>
@@ -145,10 +170,14 @@ export function OrderItemsEditor({
                         return (
                             <tr
                                 key={item.id}
-                                onClick={() => abrir(item)}
-                                tabIndex={0}
-                                onKeyDown={(e) => e.key === "Enter" && abrir(item)}
-                                className="border-t hover:bg-muted/40 cursor-pointer outline-none focus-visible:bg-muted/40"
+                                onClick={() => !readOnly && abrir(item)}
+                                tabIndex={readOnly ? -1 : 0}
+                                onKeyDown={(e) => e.key === "Enter" && !readOnly && abrir(item)}
+                                className={`border-t outline-none ${
+                                    readOnly
+                                        ? "hover:bg-transparent"
+                                        : "hover:bg-muted/40 cursor-pointer focus-visible:bg-muted/40"
+                                } ${highlightedId === item.id ? "bg-amber-100/60 animate-pulse" : ""}`}
                             >
                                 <td className="px-3 py-2 text-right align-middle">
                                     <span className="text-lg font-semibold tabular-nums">
@@ -494,13 +523,20 @@ export function OrderItemsEditor({
                                                 size="sm"
                                                 disabled={!nuevo.product || nuevo.quantity <= 0 || addingSave}
                                                 onClick={async () => {
+                                                    if (!nuevo) return
                                                     setAddingSave(true)
-                                                    const ok = await run(
-                                                        () => addOrderItem(orderId, nuevo),
-                                                        `${nuevo.product} agregado`,
-                                                    )
+                                                    const result = await addOrderItem(orderId, nuevo)
+                                                    if (result.ok) {
+                                                        toast.success(`${nuevo.product} agregado`)
+                                                        setNuevo(null)
+                                                        if (result.itemId) {
+                                                            router.push(`/pedidos/${orderId}?highlight=${result.itemId}`)
+                                                        }
+                                                        router.refresh()
+                                                    } else {
+                                                        toast.error("No se pudo agregar", { description: result.error })
+                                                    }
                                                     setAddingSave(false)
-                                                    if (ok) setNuevo(null)
                                                 }}
                                             >
                                                 {addingSave && (
@@ -541,7 +577,7 @@ export function OrderItemsEditor({
                 </p>
             )}
 
-            {!nuevo && (
+            {!nuevo && !readOnly && (
                 <Button
                     variant="ghost"
                     size="sm"

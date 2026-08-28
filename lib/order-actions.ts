@@ -8,18 +8,17 @@
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import { sql } from '@/lib/database';
-import { sameSpecs } from '@/lib/bom';
 import {
     addOrderItemInternal,
     createOrder,
+    deleteOrderItemInternal,
     getSpecs,
     listSellableProducts,
     materialNeeds,
     ORDER_PRIORITIES,
     ORDER_STATUSES,
-    resolveProduct,
+    updateOrderItemInternal,
     validateOrderPayload,
-    validateSpecs,
     type OrderPayload,
 } from '@/lib/orders';
 
@@ -290,6 +289,9 @@ export async function updateOrderFields(
                 END
             WHERE id = ${id}
         `;
+        if (patch.delivery_date_estimate !== undefined) {
+            await sql`UPDATE orders SET delivery_date_verified_at = NOW() WHERE id = ${id}`;
+        }
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${id}`);
         return { ok: true };
@@ -314,117 +316,44 @@ export async function updateOrderFields(
 export async function updateOrderItem(
     itemId: number,
     patch: { quantity?: number; specs?: Record<string, string> },
-) {
+): Promise<import('@/lib/orders').UpdateOrderItemResult> {
     const session = await auth();
-    if (!session?.user) return { error: 'No autenticado' };
+    if (!session?.user) return { ok: false, error: 'No autenticado' };
 
-    try {
-        const [item] = await sql`SELECT order_id, quantity, budget_id, specs FROM order_items WHERE id = ${itemId}`;
-        if (!item) return { error: 'La línea no existe' };
+    const [item] = await sql`SELECT order_id FROM order_items WHERE id = ${itemId}`;
+    if (!item) return { ok: false, error: 'La línea no existe' };
 
-        if (patch.specs) {
-            const errors = validateSpecs(patch.specs, await getSpecs());
-            if (errors.length > 0) return { error: errors.join('. ') };
-        }
+    const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${item.order_id}`;
+    if (order?.alegra_invoice_id) {
+        return { ok: false, error: 'El pedido ya fue facturado: no se pueden modificar ítems' };
+    }
 
-        const quantity = patch.quantity ?? Number(item.quantity);
-        if (!Number.isFinite(quantity) || quantity <= 0) return { error: 'Cantidad inválida' };
-
-        await sql`
-            UPDATE order_items SET
-                quantity = ${quantity},
-                specs = COALESCE(${patch.specs ? JSON.stringify(patch.specs) : null}::jsonb, specs)
-            WHERE id = ${itemId}
-        `;
-
-        // Si cambian las specs puede cambiar el MATERIAL, no solo la cantidad:
-        // pasar de clamp='larga' a 'corta' es otra grampa. Ahí hay que re-explotar
-        // la receta, salvo que ya se haya descontado stock contra este pedido —
-        // ahí el BOM guardado es el registro de lo que efectivamente salió del
-        // depósito y no se toca; el taller ajusta a mano.
-        const specsChanged =
-            patch.specs !== undefined && !sameSpecs(patch.specs, (item.specs ?? {}) as Record<string, unknown>);
-        let consumed = false;
-
-        if (specsChanged && item.budget_id) {
-            const [{ count }] = await sql`
-                SELECT COUNT(*)::int AS count FROM stock_movements
-                WHERE order_id = ${item.order_id} AND movement_type = 'salida'
-            `;
-            consumed = count > 0;
-            if (!consumed) {
-                // El driver HTTP de neon no da transacciones interactivas, así que
-                // el DELETE + INSERT no es atómico: si falla en el medio la línea
-                // se queda sin materiales. Guardamos el BOM viejo en memoria y lo
-                // reponemos en el catch, igual que el DELETE compensatorio de
-                // createOrder. Sin esto, un timeout deja el pedido sin receta y no
-                // hay de dónde recuperarla.
-                const previo = await sql`
-                    SELECT material_id, label, qty_per_unit, qty_total
-                    FROM order_item_materials WHERE order_item_id = ${itemId} ORDER BY id ASC
-                `;
-                await sql`DELETE FROM order_item_materials WHERE order_item_id = ${itemId}`;
-                try {
-                    await explodeBom(itemId, item.budget_id as number, patch.specs ?? {}, quantity);
-                } catch (error) {
-                    await sql`DELETE FROM order_item_materials WHERE order_item_id = ${itemId}`;
-                    for (const m of previo) {
-                        await sql`
-                            INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total)
-                            VALUES (${itemId}, ${m.material_id}, ${m.label}, ${m.qty_per_unit}, ${m.qty_total})
-                        `;
-                    }
-                    throw error;
-                }
-            }
-        }
-
-        // Si no se re-explotó (specs iguales, línea sin receta, o stock ya
-        // descontado) la cantidad igual tiene que reescalar el BOM guardado.
-        const reexploded = specsChanged && Boolean(item.budget_id) && !consumed;
-        if (!reexploded && patch.quantity !== undefined) {
-            await sql`
-                UPDATE order_item_materials
-                SET qty_total = qty_per_unit * ${quantity}
-                WHERE order_item_id = ${itemId}
-            `;
-        }
-
+    const result = await updateOrderItemInternal(itemId, patch);
+    if (result.ok) {
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${item.order_id}`);
-        if (consumed) {
-            return {
-                ok: true,
-                warning:
-                    'Se guardaron los cambios, pero los materiales no se recalcularon porque este pedido ya descontó stock. Revisá el descuento a mano.',
-            };
-        }
-        return { ok: true };
-    } catch (error) {
-        console.error('Error en updateOrderItem:', error);
-        return { error: 'No se pudo guardar la línea' };
     }
+    return result;
 }
 
-export async function deleteOrderItem(itemId: number) {
+export async function deleteOrderItem(itemId: number): Promise<import('@/lib/orders').DeleteOrderItemResult> {
     const session = await auth();
-    if (!session?.user) return { error: 'No autenticado' };
+    if (!session?.user) return { ok: false, error: 'No autenticado' };
 
-    try {
-        const [item] = await sql`SELECT order_id FROM order_items WHERE id = ${itemId}`;
-        if (!item) return { error: 'La línea no existe' };
+    const [item] = await sql`SELECT order_id FROM order_items WHERE id = ${itemId}`;
+    if (!item) return { ok: false, error: 'La línea no existe' };
 
-        const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM order_items WHERE order_id = ${item.order_id}`;
-        if (count <= 1) return { error: 'Un pedido no puede quedar sin líneas' };
+    const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${item.order_id}`;
+    if (order?.alegra_invoice_id) {
+        return { ok: false, error: 'El pedido ya fue facturado: no se pueden quitar ítems' };
+    }
 
-        await sql`DELETE FROM order_items WHERE id = ${itemId}`;
+    const result = await deleteOrderItemInternal(itemId);
+    if (result.ok) {
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${item.order_id}`);
-        return { ok: true };
-    } catch (error) {
-        console.error('Error en deleteOrderItem:', error);
-        return { error: 'No se pudo borrar la línea' };
     }
+    return result;
 }
 
 // Agregar una línea a un pedido existente. Acá SÍ tomamos la receta vigente:
@@ -432,21 +361,21 @@ export async function deleteOrderItem(itemId: number) {
 export async function addOrderItem(
     orderId: number,
     payload: { product: string; quantity: number; specs?: Record<string, string> },
-) {
+): Promise<import('@/lib/orders').AddOrderItemResult> {
     const session = await auth();
-    if (!session?.user) return { error: 'No autenticado' };
+    if (!session?.user) return { ok: false, error: 'No autenticado' };
 
-    try {
-        const result = await addOrderItemInternal(orderId, payload);
-        if ('ok' in result) {
-            revalidatePath('/pedidos');
-            revalidatePath(`/pedidos/${orderId}`);
-        }
-        return result;
-    } catch (error) {
-        console.error('Error en addOrderItem:', error);
-        return { error: 'No se pudo agregar la línea' };
+    const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${orderId}`;
+    if (order?.alegra_invoice_id) {
+        return { ok: false, error: 'El pedido ya fue facturado: no se pueden agregar ítems' };
     }
+
+    const result = await addOrderItemInternal(orderId, payload);
+    if (result.ok) {
+        revalidatePath('/pedidos');
+        revalidatePath(`/pedidos/${orderId}`);
+    }
+    return result;
 }
 
 // Clientes reales para el alta, del espejo de Alegra. Evita que alguien tenga

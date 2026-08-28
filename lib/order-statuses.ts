@@ -50,3 +50,18 @@ export function customerStatus(status: string, overrides?: Record<string, string
 }
 
 export const ORDER_PRIORITIES = ["baja", "normal", "alta"] as const
+
+export const API_EDITABLE_STATUSES: OrderStatus[] = ["por_revisar", "recibido", "en_proceso"]
+
+export function isApiEditable(status: OrderStatus): boolean {
+    return API_EDITABLE_STATUSES.includes(status)
+}
+
+export function orderNeedsReview(order: {
+    modified_at: string | null
+    delivery_date_verified_at: string | null
+}): boolean {
+    if (!order.modified_at) return false
+    if (!order.delivery_date_verified_at) return true
+    return new Date(order.modified_at) > new Date(order.delivery_date_verified_at)
+}
