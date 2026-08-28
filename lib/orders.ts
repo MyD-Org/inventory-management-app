@@ -4,6 +4,7 @@ import { customerStatus as toCustomerStatus, type OrderStatus as Status } from "
 import {
     validateOrderPayloadWith,
     validateSpecs,
+    type OrderItemPayload,
     type OrderPayload,
     type SpecField,
     type SpecKind,
@@ -463,6 +464,58 @@ export async function createOrder(payload: OrderPayload) {
     }
 
     return { created: true, order: await readOrder(orderId) }
+}
+
+// Agrega una línea a un pedido existente. Se usa desde la UI (server action) y
+// desde el endpoint del agente de IA (auth con internal_secret).
+export async function addOrderItemInternal(
+    orderId: number,
+    payload: OrderItemPayload,
+) {
+    const productName = payload.product?.trim()
+    if (!productName) return { error: 'Elegí un producto' }
+    const quantity = Number(payload.quantity ?? 1)
+    if (!Number.isFinite(quantity) || quantity <= 0) return { error: 'Cantidad inválida' }
+
+    const specs = (payload.specs ?? {}) as Record<string, string>
+    const specErrors = validateSpecs(specs, await getSpecs())
+    if (specErrors.length > 0) return { error: specErrors.join('. ') }
+
+    const resolved = await resolveProduct(productName)
+    const [{ next }] = await sql`
+        SELECT COALESCE(MAX(line_no), 0) + 1 AS next FROM order_items WHERE order_id = ${orderId}
+    `
+
+    const [line] = await sql`
+        INSERT INTO order_items (order_id, line_no, budget_id, alegra_item_id, product, product_external_id, specs, quantity, needs_review)
+        VALUES (
+            ${orderId}, ${next}, ${resolved?.budgetId ?? null},
+            ${resolved?.alegraItemId ?? null},
+            ${resolved?.label ?? productName},
+            ${payload.product_external_id ?? null},
+            ${JSON.stringify(specs)}::jsonb,
+            ${quantity}, ${!resolved?.budgetId}
+        )
+        RETURNING id
+    `
+
+    let unmapped: string[] = []
+    if (resolved?.budgetId) {
+        ({ unmapped } = await explodeBom(
+            line.id as number,
+            resolved.budgetId,
+            specs,
+            quantity,
+        ))
+    }
+
+    return {
+        ok: true,
+        line_id: line.id,
+        needs_review: !resolved?.budgetId,
+        unmapped,
+        sin_alegra: !resolved?.alegraItemId,
+    }
 }
 
 // ---------- Consumo de materiales ----------

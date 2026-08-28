@@ -10,8 +10,8 @@ import { auth } from '@/auth';
 import { sql } from '@/lib/database';
 import { sameSpecs } from '@/lib/bom';
 import {
+    addOrderItemInternal,
     createOrder,
-    explodeBom,
     getSpecs,
     listSellableProducts,
     materialNeeds,
@@ -436,52 +436,13 @@ export async function addOrderItem(
     const session = await auth();
     if (!session?.user) return { error: 'No autenticado' };
 
-    if (!payload.product?.trim()) return { error: 'Elegí un producto' };
-    if (!Number.isFinite(payload.quantity) || payload.quantity <= 0) return { error: 'Cantidad inválida' };
-
-    const errors = validateSpecs(payload.specs ?? {}, await getSpecs());
-    if (errors.length > 0) return { error: errors.join('. ') };
-
     try {
-        const resolved = await resolveProduct(payload.product.trim());
-        const [{ next }] = await sql`
-            SELECT COALESCE(MAX(line_no), 0) + 1 AS next FROM order_items WHERE order_id = ${orderId}
-        `;
-
-        const [line] = await sql`
-            INSERT INTO order_items (order_id, line_no, budget_id, alegra_item_id, product, specs, quantity, needs_review)
-            VALUES (
-                ${orderId}, ${next}, ${resolved?.budgetId ?? null},
-                ${resolved?.alegraItemId ?? null},
-                ${resolved?.label ?? payload.product.trim()},
-                ${JSON.stringify(payload.specs ?? {})}::jsonb,
-                ${payload.quantity}, ${!resolved?.budgetId}
-            )
-            RETURNING id
-        `;
-
-        let unmapped: string[] = [];
-        if (resolved?.budgetId) {
-            ({ unmapped } = await explodeBom(
-                line.id as number,
-                resolved.budgetId,
-                payload.specs ?? {},
-                payload.quantity,
-            ));
+        const result = await addOrderItemInternal(orderId, payload);
+        if ('ok' in result) {
+            revalidatePath('/pedidos');
+            revalidatePath(`/pedidos/${orderId}`);
         }
-
-        revalidatePath('/pedidos');
-        revalidatePath(`/pedidos/${orderId}`);
-        // Tres señales distintas, cada una con su dueño:
-        //   needs_review -> sin hoja de costo: no hay lista de materiales.
-        //   unmapped     -> hay BOM pero un valor pedido no está mapeado.
-        //   sin_alegra   -> el producto no está en el catálogo: no se puede facturar.
-        return {
-            ok: true,
-            needs_review: !resolved?.budgetId,
-            unmapped,
-            sin_alegra: !resolved?.alegraItemId,
-        };
+        return result;
     } catch (error) {
         console.error('Error en addOrderItem:', error);
         return { error: 'No se pudo agregar la línea' };
