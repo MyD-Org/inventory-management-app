@@ -143,7 +143,7 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
             price: Number(elegido.price) || 0,
             // Las specs que ya tienen su propio renglón (la estaca) no se repiten
             // acá: en la factura del cliente quedaría dicho dos veces.
-            description: describeLine(item.product as string, specs, match === "base" ? color : null, specsConLineaPropia),
+            description: describeLine(specs, match === "base" ? color : null, specsConLineaPropia),
             match,
         })
         lines.push(...agregados)
@@ -170,24 +170,33 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
     }
 }
 
-// Qué dice el renglón de la factura. Lleva las specs para que el cliente entienda
-// qué compró, y el color explícito cuando se facturó el producto base porque la
-// variante no existía.
+// Qué dice el renglón de la factura. No repite el nombre del ítem ni el color de
+// LED (que ya figura en el nombre cuando se encontró la variante). Solo aclara
+// el color suelto cuando no existía la variante en Alegra.
 function describeLine(
-    product: string,
     specs: Record<string, string>,
     colorSuelto: string | null,
     excluir: string[] = [],
 ): string {
-    // Si el color se factura como producto base, se aclara aparte al final: sacarlo
-    // de la lista evita que quede "— RGBW (color RGBW)".
-    const fuera = colorSuelto ? [...excluir, "led_color"] : excluir
+    const fuera = new Set([...excluir, "led_color"])
     const partes = Object.entries(specs)
-        .filter(([k, v]) => v && v !== "sin" && !fuera.includes(k))
-        .map(([, v]) => v)
+        .filter(([k, v]) => v && v !== "sin" && !fuera.has(k))
+        .map(([k, v]) => formatSpec(k, v))
     const detalle = partes.join(" · ")
-    const base = detalle ? `${product} — ${detalle}` : product
-    return colorSuelto ? `${base} (color ${colorSuelto})` : base
+    return colorSuelto ? `${detalle} (color ${colorSuelto})` : detalle
+}
+
+function formatSpec(key: string, value: string): string {
+    switch (key) {
+        case "clamp":
+            return `grampa ${value}`
+        case "body_color":
+            return `equipo color ${value}`
+        case "optic":
+            return `óptica ${value}°`
+        default:
+            return value
+    }
 }
 
 function normalizeName(s: string): string {
