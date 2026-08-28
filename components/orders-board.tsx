@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { CalendarClock, Search, TriangleAlert } from "lucide-react"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
-import { BOARD_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
+import { BOARD_STATUSES, orderNeedsReview, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
 import { PriorityIcon, StatusIcon } from "@/components/order-glyphs"
 
 export interface BoardCard {
@@ -37,14 +37,18 @@ export interface BoardCard {
     // null = aún no se emitió. Se usa para marcar tarjetas en la columna
     // "facturado" que todavía necesitan la factura antes de salir.
     alegra_invoice_id: string | null
+    modified_at: string | null
+    delivery_date_verified_at: string | null
 }
+
+const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
 
 export function formatDate(d: string | null): string | null {
     if (!d) return null
     // Viene como "2026-09-05": lo parseamos a mano porque new Date("2026-09-05")
     // es medianoche UTC y en Argentina mostraría el día anterior.
-    const [y, m, day] = d.split("-").map(Number)
-    return new Date(y, m - 1, day).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })
+    const [, m, day] = d.split("-").map(Number)
+    return `${String(day).padStart(2, "0")} ${MONTHS_SHORT[m - 1]}`
 }
 
 // Entrega vencida: la fecha ya pasó y el pedido todavía no salió.
@@ -150,7 +154,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                 if (dragging !== null) move(dragging, status)
                                 setDragging(null)
                             }}
-                            className={`w-[272px] shrink-0 h-full flex flex-col rounded-lg p-1 -m-1 transition-colors ${
+                            className={`w-[300px] shrink-0 h-full flex flex-col rounded-lg p-1 -m-1 transition-colors ${
                                 over === status && dragging !== null
                                     ? "bg-primary/10 ring-2 ring-primary/60"
                                     : ""
@@ -215,6 +219,16 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                 {card.customer_name ?? card.customer_external_id}
                                             </div>
 
+                                            {orderNeedsReview({
+                                                modified_at: card.modified_at,
+                                                delivery_date_verified_at: card.delivery_date_verified_at,
+                                            }) && (
+                                                <div className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                                                    <TriangleAlert className="h-3 w-3" />
+                                                    Modificado — revisar fecha
+                                                </div>
+                                            )}
+
                                             {/* Siempre los primeros tres, así la tarjeta
                                                 dice algo del trabajo aunque el pedido sea
                                                 largo. El resto se cuenta y se ve al abrir. */}
@@ -237,36 +251,30 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                 </div>
                                             )}
 
-                                            <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
-                                                <span className="tabular-nums">
-                                                    {card.units} {card.units === 1 ? "unidad" : "unidades"}
+                                            <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                                                <span className="tabular-nums shrink-0">
+                                                    {card.units} u.
                                                 </span>
-                                                <span className="tabular-nums">
-                                                    {card.line_count}{" "}
-                                                    {card.line_count === 1 ? "producto" : "productos"}
-                                                </span>
-                                                {card.status === "facturado" && !card.alegra_invoice_id && (
-                                                    <span
-                                                        className="ml-auto flex items-center gap-1 text-xs font-medium text-destructive"
-                                                        title="El pedido está en facturado pero falta emitir la factura"
-                                                    >
-                                                        <TriangleAlert className="h-3 w-3" />
-                                                        Falta factura
-                                                    </span>
-                                                )}
-                                                {card.delivery_date_estimate && (
-                                                    <span
-                                                        className={`flex items-center gap-1 ${
-                                                            card.status === "facturado" && !card.alegra_invoice_id
-                                                                ? ""
-                                                                : "ml-auto"
-                                                        } ${overdue ? "text-destructive font-medium" : ""}`}
-                                                        title={overdue ? "La entrega ya venció" : "Entrega estimada"}
-                                                    >
-                                                        <CalendarClock className="h-3 w-3" />
-                                                        {formatDate(card.delivery_date_estimate)}
-                                                    </span>
-                                                )}
+                                                <div className="flex items-center gap-2 min-w-0 justify-end">
+                                                    {card.status === "facturado" && !card.alegra_invoice_id && (
+                                                        <span
+                                                            className="inline-flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive shrink-0"
+                                                            title="El pedido está en facturado pero falta emitir la factura"
+                                                        >
+                                                            <TriangleAlert className="h-3 w-3" />
+                                                            Falta factura
+                                                        </span>
+                                                    )}
+                                                    {card.delivery_date_estimate && (
+                                                        <span
+                                                            className={`inline-flex items-center gap-1 shrink-0 ${overdue ? "text-destructive font-medium" : ""}`}
+                                                            title={overdue ? "La entrega ya venció" : "Entrega estimada"}
+                                                        >
+                                                            <CalendarClock className="h-3 w-3" />
+                                                            {formatDate(card.delivery_date_estimate)}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     )

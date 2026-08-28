@@ -1,4 +1,4 @@
-import { resolveBom, type BomLine, type BomOption } from "@/lib/bom"
+import { resolveBom, sameSpecs, type BomLine, type BomOption } from "@/lib/bom"
 import { sql } from "@/lib/database"
 import { customerStatus as toCustomerStatus, type OrderStatus as Status } from "@/lib/order-statuses"
 import {
@@ -214,6 +214,8 @@ export interface Order {
     /** Qué no se pudo facturar, si la factura salió incompleta. */
     invoice_warnings: string[]
     items: OrderItem[]
+    modified_at: string | null
+    delivery_date_verified_at: string | null
 }
 
 export async function readOrder(orderId: number): Promise<Order | null> {
@@ -224,7 +226,9 @@ export async function readOrder(orderId: number): Promise<Order | null> {
                -- ::text para no arrastrar corrimiento de zona: es una fecha, no un instante
                delivery_date_estimate::text AS delivery_date_estimate,
                source_conversation, notes, invoice_terms, invoice_notes, created_at, updated_at,
-               alegra_invoice_id, alegra_invoice_number, invoice_warnings
+               alegra_invoice_id, alegra_invoice_number, invoice_warnings,
+               modified_at::text AS modified_at,
+               delivery_date_verified_at::text AS delivery_date_verified_at
         FROM orders WHERE id = ${orderId}
     `
     if (!order) return null
@@ -517,4 +521,166 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
             available: r.en_inventario ? Number(r.available) : null,
         }
     })
+}
+
+// ---------- Edición interna de ítems ----------
+// Funciones sin auth ni revalidación. Las usan los endpoints de la API
+// (autenticación server-to-server) y las server actions de la web (auth de
+// sesión + revalidación + bloqueo por factura).
+
+export type AddOrderItemResult =
+    | { ok: false; error: string }
+    | { ok: true; itemId: number; needs_review: boolean; unmapped: string[]; sin_alegra: boolean }
+
+export type UpdateOrderItemResult =
+    | { ok: false; error: string }
+    | { ok: true; itemId: number; warning?: string }
+
+export type DeleteOrderItemResult =
+    | { ok: false; error: string }
+    | { ok: true; itemId: number }
+
+export async function addOrderItemInternal(
+    orderId: number,
+    payload: { product: string; quantity: number; specs?: Record<string, string> },
+): Promise<AddOrderItemResult> {
+    if (!payload.product?.trim()) return { ok: false, error: "Elegí un producto" }
+    if (!Number.isFinite(payload.quantity) || payload.quantity <= 0) return { ok: false, error: "Cantidad inválida" }
+
+    const errors = validateSpecs(payload.specs ?? {}, await getSpecs())
+    if (errors.length > 0) return { ok: false, error: errors.join(". ") }
+
+    try {
+        const resolved = await resolveProduct(payload.product.trim())
+        const [{ next }] = await sql`
+            SELECT COALESCE(MAX(line_no), 0) + 1 AS next FROM order_items WHERE order_id = ${orderId}
+        `
+
+        const [line] = await sql`
+            INSERT INTO order_items (order_id, line_no, budget_id, alegra_item_id, product, specs, quantity, needs_review)
+            VALUES (
+                ${orderId}, ${next}, ${resolved?.budgetId ?? null},
+                ${resolved?.alegraItemId ?? null},
+                ${resolved?.label ?? payload.product.trim()},
+                ${JSON.stringify(payload.specs ?? {})}::jsonb,
+                ${payload.quantity}, ${!resolved?.budgetId}
+            )
+            RETURNING id
+        `
+
+        let unmapped: string[] = []
+        if (resolved?.budgetId) {
+            ({ unmapped } = await explodeBom(
+                line.id as number,
+                resolved.budgetId,
+                payload.specs ?? {},
+                payload.quantity,
+            ))
+        }
+
+        return {
+            ok: true,
+            itemId: line.id as number,
+            needs_review: !resolved?.budgetId,
+            unmapped,
+            sin_alegra: !resolved?.alegraItemId,
+        }
+    } catch (error) {
+        console.error("Error en addOrderItemInternal:", error)
+        return { ok: false, error: "No se pudo agregar la línea" }
+    }
+}
+
+export async function updateOrderItemInternal(
+    itemId: number,
+    patch: { quantity?: number; specs?: Record<string, string> },
+): Promise<UpdateOrderItemResult> {
+    try {
+        const [item] = await sql`SELECT order_id, quantity, budget_id, specs FROM order_items WHERE id = ${itemId}`
+        if (!item) return { ok: false, error: "La línea no existe" }
+
+        if (patch.specs) {
+            const errors = validateSpecs(patch.specs, await getSpecs())
+            if (errors.length > 0) return { ok: false, error: errors.join(". ") }
+        }
+
+        const quantity = patch.quantity ?? Number(item.quantity)
+        if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, error: "Cantidad inválida" }
+
+        await sql`
+            UPDATE order_items SET
+                quantity = ${quantity},
+                specs = COALESCE(${patch.specs ? JSON.stringify(patch.specs) : null}::jsonb, specs)
+            WHERE id = ${itemId}
+        `
+
+        const specsChanged =
+            patch.specs !== undefined && !sameSpecs(patch.specs, (item.specs ?? {}) as Record<string, unknown>)
+        let consumed = false
+
+        if (specsChanged && item.budget_id) {
+            const [{ count }] = await sql`
+                SELECT COUNT(*)::int AS count FROM stock_movements
+                WHERE order_id = ${item.order_id} AND movement_type = 'salida'
+            `
+            consumed = count > 0
+            if (!consumed) {
+                const previo = await sql`
+                    SELECT material_id, label, qty_per_unit, qty_total
+                    FROM order_item_materials WHERE order_item_id = ${itemId} ORDER BY id ASC
+                `
+                await sql`DELETE FROM order_item_materials WHERE order_item_id = ${itemId}`
+                try {
+                    await explodeBom(itemId, item.budget_id as number, patch.specs ?? {}, quantity)
+                } catch (error) {
+                    await sql`DELETE FROM order_item_materials WHERE order_item_id = ${itemId}`
+                    for (const m of previo) {
+                        await sql`
+                            INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total)
+                            VALUES (${itemId}, ${m.material_id}, ${m.label}, ${m.qty_per_unit}, ${m.qty_total})
+                        `
+                    }
+                    throw error
+                }
+            }
+        }
+
+        const reexploded = specsChanged && Boolean(item.budget_id) && !consumed
+        if (!reexploded && patch.quantity !== undefined) {
+            await sql`
+                UPDATE order_item_materials
+                SET qty_total = qty_per_unit * ${quantity}
+                WHERE order_item_id = ${itemId}
+            `
+        }
+
+        if (consumed) {
+            return {
+                ok: true,
+                itemId,
+                warning:
+                    "Se guardaron los cambios, pero los materiales no se recalcularon porque este pedido ya descontó stock. Revisá el descuento a mano.",
+            }
+        }
+        return { ok: true, itemId }
+    } catch (error) {
+        console.error("Error en updateOrderItemInternal:", error)
+        return { ok: false, error: "No se pudo guardar la línea" }
+    }
+}
+
+export async function deleteOrderItemInternal(itemId: number): Promise<DeleteOrderItemResult> {
+    try {
+        const [item] = await sql`SELECT order_id FROM order_items WHERE id = ${itemId}`
+        if (!item) return { ok: false, error: "La línea no existe" }
+
+        const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM order_items WHERE order_id = ${item.order_id}`
+        if (count <= 1) return { ok: false, error: "Un pedido no puede quedar sin líneas" }
+
+        await sql`DELETE FROM order_items WHERE id = ${itemId}`
+        return { ok: true, itemId }
+    } catch (error) {
+        console.error("Error en deleteOrderItemInternal:", error)
+        return { ok: false, error: "No se pudo borrar la línea" }
+    }
 }
