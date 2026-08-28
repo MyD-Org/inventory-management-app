@@ -35,7 +35,7 @@ export interface BoardCard {
     // por defecto. Son problemas distintos y se resuelven distinto.
     has_unmapped: boolean
     // null = aún no se emitió. Se usa para marcar tarjetas en la columna
-    // "facturado" que todavía necesitan la factura antes de salir.
+    // "por_facturar" que todavía necesitan la factura antes de salir.
     alegra_invoice_id: string | null
     modified_at: string | null
     delivery_date_verified_at: string | null
@@ -114,6 +114,11 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
             })
             toast.error("No se pudo mover", { description: result.error })
             return
+        }
+        if (result.warning) {
+            toast.warning(`Pasó a ${STATUS_LABELS[status]}`, { description: result.warning })
+        } else {
+            toast.success(`Pasó a ${STATUS_LABELS[status]}`)
         }
         router.refresh()
     }
@@ -256,10 +261,10 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                     {card.units} u.
                                                 </span>
                                                 <div className="flex items-center gap-2 min-w-0 justify-end">
-                                                    {card.status === "facturado" && !card.alegra_invoice_id && (
+                                                    {card.status === "por_facturar" && !card.alegra_invoice_id && (
                                                         <span
                                                             className="inline-flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive shrink-0"
-                                                            title="El pedido está en facturado pero falta emitir la factura"
+                                                            title="El pedido está por facturar pero falta emitir la factura"
                                                         >
                                                             <TriangleAlert className="h-3 w-3" />
                                                             Falta factura

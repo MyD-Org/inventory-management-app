@@ -29,7 +29,11 @@ export function OrderStatusSelect({ id, status }: { id: number; status: OrderSta
             toast.error("No se pudo cambiar el estado", { description: result.error })
             return
         }
-        toast.success(`Pasó a ${STATUS_LABELS[next as OrderStatus]}`)
+        if (result.warning) {
+            toast.warning(`Pasó a ${STATUS_LABELS[next as OrderStatus]}`, { description: result.warning })
+        } else {
+            toast.success(`Pasó a ${STATUS_LABELS[next as OrderStatus]}`)
+        }
         router.refresh()
     }
 

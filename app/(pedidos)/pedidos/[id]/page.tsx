@@ -214,8 +214,9 @@ export default async function OrderDetailPage({
 
                     {/* La factura es información contable: la ve el admin, no el
                         operador del taller, que trabaja con la misma pantalla.
-                        Cualquiera puede mover la tarjeta a "facturado" y la factura
-                        se emite igual; lo que no ve el operador es el resultado. */}
+                        Cualquiera puede mover la tarjeta a "Por facturar" y el
+                        borrador se genera automáticamente; lo que no ve el operador
+                        es el resultado. */}
                     {isAdmin && (
                         <Prop label="Factura">
                             {order.alegra_invoice_id ? (
@@ -233,7 +234,7 @@ export default async function OrderDetailPage({
                                         {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
                                     </span>
                                 </>
-                            ) : order.status === "facturado" ? (
+                            ) : order.status === "por_facturar" ? (
                                 <div className="-ml-1.5">
                                     <InvoiceButton orderId={order.id} />
                                 </div>

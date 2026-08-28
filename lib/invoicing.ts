@@ -108,6 +108,16 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
                 elegido = variante
                 match = "variante"
             } else {
+                const [{ count }] = await sql`
+                    SELECT COUNT(*)::int AS count FROM alegra_items
+                    WHERE base_normalized = ${base.base_normalized}
+                      AND variant_label IS NOT NULL
+                      AND status = 'active'
+                `
+                if (Number(count) > 0) {
+                    warnings.push(`"${base.base_name}" en ${color} no existe como variante en Alegra: creá la variante para poder facturar esta línea.`)
+                    continue
+                }
                 warnings.push(`"${base.base_name}" en ${color} no existe como producto en Alegra: se facturó el producto base y el color quedó aclarado en el renglón.`)
             }
         }

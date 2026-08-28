@@ -8,6 +8,7 @@
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import { sql } from '@/lib/database';
+import { invoiceOrder } from '@/lib/invoicing';
 import {
     addOrderItemInternal,
     createOrder,
@@ -77,15 +78,42 @@ export async function updateOrderStatus(id: number, status: string) {
 
         await sql`UPDATE orders SET status = ${status} WHERE id = ${id}`;
 
-        // Mover la tarjeta a 'facturado' NO emite nada. Emitir es irreversible del
-        // lado de Alegra —una factura se anula, no se borra— y cualquiera puede
-        // mover una tarjeta, incluso sin querer. La emisión es un acto explícito:
-        // el botón del detalle del pedido, que además muestra antes qué se va a
-        // facturar. 'facturado' vuelve a ser lo que era: un estado del tablero.
+        // Al pasar a 'por_facturar' intentamos emitir el borrador en Alegra de
+        // forma automática. Si falla, el estado cambia igual y queda visible el
+        // botón manual para reintentar.
+        let warning: string | null = null;
+        if (status === 'por_facturar') {
+            const [order] = await sql`
+                SELECT alegra_invoice_id, invoice_terms, invoice_notes
+                FROM orders WHERE id = ${id}
+            `;
+            if (!order?.alegra_invoice_id) {
+                try {
+                    const result = await invoiceOrder(id, {
+                        terms: order.invoice_terms ?? undefined,
+                        notes: order.invoice_notes ?? undefined,
+                    });
+                    if (result.invoiceId == null) {
+                        warning = result.warnings?.[0] ?? 'No se pudo generar la factura automáticamente.';
+                        if (result.warnings && result.warnings.length > 0) {
+                            await sql`
+                                UPDATE orders
+                                SET invoice_warnings = ${JSON.stringify(result.warnings)}::jsonb
+                                WHERE id = ${id}
+                            `;
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error facturando automáticamente:', err);
+                    warning = err instanceof Error ? err.message : 'Error al facturar automáticamente.';
+                }
+            }
+        }
+
         revalidatePath('/pedidos');
         revalidatePath('/pedidos/lista');
         revalidatePath(`/pedidos/${id}`);
-        return { ok: true };
+        return { ok: true, warning };
     } catch (error) {
         console.error('Error en updateOrderStatus:', error);
         return { error: 'No se pudo cambiar el estado' };

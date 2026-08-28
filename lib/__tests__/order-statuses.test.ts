@@ -24,10 +24,10 @@ describe("estados del pedido", () => {
     })
 
     it("no filtra la jerga interna al cliente", () => {
-        // 'por_revisar' y 'embalado' son del taller: el cliente no tiene por qué
-        // enterarse de que su pedido está siendo revisado.
+        // 'por_revisar' y 'por_facturar' son del taller: el cliente no tiene por qué
+        // enterarse de la jerga interna.
         expect(customerStatus("por_revisar")).toBe("Recibido")
-        expect(customerStatus("embalado")).toBe("En preparación")
+        expect(customerStatus("por_facturar")).toBe("En preparación")
         expect(customerStatus("retirado")).toBe("Entregado")
     })
 
