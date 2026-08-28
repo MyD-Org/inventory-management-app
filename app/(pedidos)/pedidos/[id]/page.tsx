@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { auth } from "@/auth"
+import { sql } from "@/lib/database"
 import { getSpecs, listSellableProducts, materialNeeds, readOrder } from "@/lib/orders"
 import { orderNeedsReview } from "@/lib/order-statuses"
 import { STATUS_LABELS } from "@/lib/order-statuses"
@@ -58,6 +59,17 @@ export default async function OrderDetailPage({
     if (!Number.isFinite(id)) notFound()
 
     const highlightedItemId = Number(searchParams.highlight)
+
+    // Si el pedido fue modificado desde el CRM y todavía no se verificó,
+    // marcamos la revisión al abrir el detalle. El banner desaparece de la
+    // vista y del tablero a partir de este momento.
+    await sql`
+        UPDATE orders
+        SET delivery_date_verified_at = NOW()
+        WHERE id = ${id}
+          AND modified_at IS NOT NULL
+          AND (delivery_date_verified_at IS NULL OR delivery_date_verified_at < modified_at)
+    `
 
     const order = await readOrder(id)
     if (!order) notFound()
