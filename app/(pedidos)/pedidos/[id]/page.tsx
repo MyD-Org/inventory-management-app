@@ -138,10 +138,6 @@ export default async function OrderDetailPage({
                             products={products}
                             readOnly={Boolean(order.alegra_invoice_id)}
                             readOnlyMessage={order.alegra_invoice_id ? "Pedido facturado: no se pueden editar ítems" : undefined}
-                            needsReview={orderNeedsReview({
-                                modified_at: order.modified_at,
-                                delivery_date_verified_at: order.delivery_date_verified_at,
-                            })}
                             highlightedItemId={Number.isFinite(highlightedItemId) ? highlightedItemId : undefined}
                         />
                     </section>

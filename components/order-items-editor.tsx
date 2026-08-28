@@ -37,7 +37,6 @@ export function OrderItemsEditor({
     products,
     readOnly = false,
     readOnlyMessage,
-    needsReview = false,
     highlightedItemId,
 }: {
     orderId: number
@@ -46,7 +45,6 @@ export function OrderItemsEditor({
     products: string[]
     readOnly?: boolean
     readOnlyMessage?: string
-    needsReview?: boolean
     highlightedItemId?: number
 }) {
     const router = useRouter()
@@ -133,9 +131,6 @@ export function OrderItemsEditor({
         <>
             {readOnly && readOnlyMessage && (
                 <p className="mb-3 text-sm text-muted-foreground">{readOnlyMessage}</p>
-            )}
-            {needsReview && !readOnly && (
-                <p className="mb-3 text-sm text-amber-600">Pedido modificado desde el CRM. Revisá la fecha de entrega.</p>
             )}
             <div className="border rounded-lg">
                 <table className="w-full table-fixed">
