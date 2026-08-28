@@ -28,11 +28,21 @@ export async function POST(
         return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 })
     }
 
+    let specs = body?.specs ?? {}
+    if (typeof body?.specs_json === "string" && body.specs_json.trim()) {
+        try {
+            const parsed = JSON.parse(body.specs_json)
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) specs = parsed
+        } catch {
+            return NextResponse.json({ error: "specs_json no es JSON válido" }, { status: 400 })
+        }
+    }
+
     const payload = {
         product: String(body?.product ?? ""),
         product_external_id: body?.product_external_id ?? null,
         quantity: Number(body?.quantity ?? 1),
-        specs: body?.specs ?? {},
+        specs,
     }
 
     try {
