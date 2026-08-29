@@ -33,11 +33,16 @@ function formatDate(d: string | null): string {
     return new Date(y, m - 1, day).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" })
 }
 
-function customerSourceLabel(externalId: string | null): string | null {
-    if (!externalId) return null
-    if (externalId.startsWith("alegra:")) return `Alegra · #${externalId.slice(7)}`
-    if (externalId.startsWith("manual:")) return "Cliente manual"
-    return externalId
+// Celda de la fila de datos del encabezado.
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="flex-1 min-w-[9.5rem] border-r last:border-r-0 px-4 py-2.5 flex flex-col gap-1">
+            <dt className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
+                {label}
+            </dt>
+            <dd className="text-sm min-w-0">{children}</dd>
+        </div>
+    )
 }
 
 function Prop({ label, children }: { label: string; children: React.ReactNode }) {
@@ -103,6 +108,19 @@ export default async function OrderDetailPage({
     const unanswered = (specs: Record<string, string>) =>
         Object.entries(vocab).filter(([k, f]) => f.kind === "list" && !specs[k])
 
+    const units = order.items.reduce((sum, i) => sum + Number(i.quantity), 0)
+    // Vencido: la fecha ya pasó y el pedido todavía no salió. Mismo criterio que
+    // el tablero, para que un pedido no aparezca vencido en un lado y no en el otro.
+    const overdue = (() => {
+        const d = order.delivery_date_estimate
+        if (!d || order.status === "retirado" || order.status === "cancelado") return false
+        const [y, m, day] = d.split("-").map(Number)
+        const eta = new Date(y, m - 1, day)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        return eta < today
+    })()
+
 
     return (
         <div className="w-full px-8 py-6">
@@ -118,16 +136,78 @@ export default async function OrderDetailPage({
                 </span>
             </div>
 
-            <div className="flex items-center justify-between gap-4 mb-5 no-print">
-                <div className="flex items-center gap-1.5 text-base text-muted-foreground min-w-0">
+            {/* En pantalla el cliente es el título: es la primera pregunta al abrir
+                un pedido, y hasta ahora vivía perdido en la columna de la derecha. */}
+            <header className="no-print mb-6 border-b pb-5">
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-0 mb-3">
                     <Link href="/pedidos" className="hover:text-foreground">
                         Pedidos
                     </Link>
                     <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                    <span className="text-foreground tabular-nums">#{order.order_number}</span>
+                    <span className="font-mono text-foreground tabular-nums">#{order.order_number}</span>
                 </div>
-                <PrintIconButton />
-            </div>
+
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="min-w-0">
+                        <h1 className="font-display text-3xl font-bold tracking-tight leading-tight truncate">
+                            {order.customer_name ?? order.customer_external_id}
+                        </h1>
+                        {/* Debajo del cliente va solo cuándo entró el pedido. El
+                            teléfono, el cliente de Alegra y la referencia viven en la
+                            columna de la derecha: se consultan, no se leen de corrido. */}
+                        <p className="mt-1.5 text-sm text-muted-foreground">
+                            Creado{" "}
+                            {new Date(order.created_at).toLocaleDateString("es-AR", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                            })}
+                        </p>
+                    </div>
+                    <PrintIconButton />
+                </div>
+
+                {/* Los cinco datos que se preguntan al abrir el pedido, en fila y
+                    siempre visibles, en lugar de perdidos en una columna larga. */}
+                <dl className="mt-5 flex flex-wrap rounded-lg border bg-muted/40 overflow-hidden">
+                    <Fact label="Estado">
+                        <OrderStatusSelect id={order.id} status={order.status} />
+                    </Fact>
+                    <Fact label="Entrega">
+                        <span className={overdue ? "text-destructive font-semibold" : "font-medium"}>
+                            {formatDate(order.delivery_date_estimate)}
+                            {overdue && " · vencida"}
+                        </span>
+                    </Fact>
+                    <Fact label="Prioridad">
+                        <span className="font-medium">
+                            {PRIORITY_LABELS[order.priority] ?? order.priority}
+                        </span>
+                    </Fact>
+                    <Fact label="Trabajo">
+                        <span className="font-mono tabular-nums font-medium">{units} u.</span>
+                    </Fact>
+                    {isAdmin && (
+                        <Fact label="Factura">
+                            {order.alegra_invoice_id ? (
+                                <a
+                                    href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                                >
+                                    {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
+                                    <ExternalLink className="h-3 w-3" />
+                                </a>
+                            ) : order.status === "por_facturar" ? (
+                                <InvoiceButton orderId={order.id} />
+                            ) : (
+                                <span className="text-muted-foreground">Sin emitir</span>
+                            )}
+                        </Fact>
+                    )}
+                </dl>
+            </header>
 
             <div className="orden-trabajo grid gap-8 lg:grid-cols-[1fr_250px] items-start">
                 {/* ---------- El trabajo ---------- */}
@@ -167,8 +247,14 @@ export default async function OrderDetailPage({
                     {/* En papel las propiedades van en una línea al pie, no en
                         una columna larga: el cliente ya está en el encabezado y
                         el resto son datos de referencia. */}
+                    {order.notes && (
+                        <div className="hidden print:block rounded-md bg-muted/50 p-2.5 text-base mb-3">
+                            {order.notes}
+                        </div>
+                    )}
                     <div className="hidden print:block border-t pt-2 text-sm text-muted-foreground">
-                        Prioridad {PRIORITY_LABELS[order.priority] ?? order.priority}
+                        Estado {STATUS_LABELS[order.status]}
+                        {" · "}Prioridad {PRIORITY_LABELS[order.priority] ?? order.priority}
                         {" · "}Creado{" "}
                         {new Date(order.created_at).toLocaleDateString("es-AR", {
                             day: "2-digit",
@@ -181,109 +267,43 @@ export default async function OrderDetailPage({
                     </div>
                 </div>
 
-                {/* ---------- Propiedades ---------- */}
-                <aside className="no-print lg:border-l lg:pl-5 lg:sticky lg:top-4">
-                    {order.source_conversation && (
-                        <a
-                            href={order.source_conversation}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 rounded-md border px-2.5 py-2 mb-3 text-base hover:bg-muted/50 transition-colors no-print"
-                        >
-                            <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="flex-1 min-w-0 truncate">Ver la conversación</span>
-                            <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
-                        </a>
-                    )}
-
-                    <div className="mb-3 no-print">
+                {/* ---------- Propiedades ----------
+                    Tres grupos con título en vez de doce propiedades sueltas:
+                    lo que se sigue, quién es el cliente y lo administrativo.
+                    Estado, entrega, prioridad y factura ya viven en el
+                    encabezado; acá queda lo que se consulta, no lo que se opera. */}
+                <aside className="no-print lg:border-l lg:pl-5 lg:sticky lg:top-4 flex flex-col gap-6">
+                    <div className="flex flex-col gap-2.5">
+                        <h2 className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground border-b pb-2">
+                            Seguimiento
+                        </h2>
+                        {order.source_conversation && (
+                            <a
+                                href={order.source_conversation}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 rounded-md border px-2.5 py-2 text-sm hover:bg-muted/50 transition-colors"
+                            >
+                                <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span className="flex-1 min-w-0 truncate">Ver la conversación</span>
+                                <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                            </a>
+                        )}
                         <NotesField id={order.id} value={order.notes} />
                     </div>
-                    {order.notes && (
-                        <div className="hidden print:block rounded-md bg-muted/50 p-2.5 text-base mb-3">
-                            {order.notes}
-                        </div>
-                    )}
 
-                    <Prop label="Estado">
-                        <div className="-ml-1.5 no-print">
-                            <OrderStatusSelect id={order.id} status={order.status} />
-                        </div>
-                        <span className="hidden print:inline">{STATUS_LABELS[order.status]}</span>
-                    </Prop>
-
-                    {/* La factura es información contable: la ve el admin, no el
-                        operador del taller, que trabaja con la misma pantalla.
-                        Cualquiera puede mover la tarjeta a "Por facturar" y el
-                        borrador se genera automáticamente; lo que no ve el operador
-                        es el resultado. */}
-                    {isAdmin && (
-                        <Prop label="Factura">
-                            {order.alegra_invoice_id ? (
-                                <>
-                                    <a
-                                        href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="no-print inline-flex items-center gap-1 text-primary hover:underline"
-                                    >
-                                        {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
-                                        <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                    <span className="hidden print:inline">
-                                        {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
-                                    </span>
-                                </>
-                            ) : order.status === "por_facturar" ? (
-                                <div className="-ml-1.5">
-                                    <InvoiceButton orderId={order.id} />
-                                </div>
-                            ) : null}
-                            {order.invoice_warnings?.length > 0 && (
-                                <p className="no-print mt-1 text-xs text-amber-600">
-                                    {order.alegra_invoice_id ? "Salió incompleta: " : ""}
-                                    {order.invoice_warnings.join(" ")}
-                                </p>
-                            )}
-                        </Prop>
-                    )}
-
-                    <Prop label="Prioridad">
-                        <span className="no-print block">
-                            <PriorityField id={order.id} value={order.priority} />
-                        </span>
-                        <span className="hidden print:inline">
-                            {PRIORITY_LABELS[order.priority] ?? order.priority}
-                        </span>
-                    </Prop>
-
-                    <Prop label="Entrega">
-                        <span className="no-print block">
-                            <DateField id={order.id} value={order.delivery_date_estimate} />
-                        </span>
-                        <span className="hidden print:inline">
-                            {formatDate(order.delivery_date_estimate)}
-                        </span>
-                    </Prop>
-
-                    <div className="h-px bg-border my-2.5" />
-
-                    <Prop label="Cliente">
-                        <span className="no-print block">
+                    <div className="flex flex-col gap-1">
+                        <h2 className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground border-b pb-2 mb-1.5">
+                            Cliente
+                        </h2>
+                        <Prop label="Nombre">
                             <OrderCustomerField
                                 orderId={order.id}
                                 customerName={order.customer_name}
                                 customerExternalId={order.customer_external_id}
                             />
-                        </span>
-                        <span className="hidden print:inline">{order.customer_name ?? "—"}</span>
-                        <span className="block text-sm text-muted-foreground truncate px-1.5 -ml-1.5">
-                            {customerSourceLabel(order.customer_external_id)}
-                        </span>
-                    </Prop>
-
-                    <Prop label="Teléfono">
-                        <span className="no-print block">
+                        </Prop>
+                        <Prop label="Teléfono">
                             <TextField
                                 id={order.id}
                                 value={order.customer_phone}
@@ -291,23 +311,29 @@ export default async function OrderDetailPage({
                                 placeholder="Sin teléfono"
                                 label="Teléfono"
                             />
-                        </span>
-                        <span className="hidden print:inline">{order.customer_phone ?? "—"}</span>
-                    </Prop>
+                        </Prop>
+                    </div>
 
-                    <div className="h-px bg-border my-2.5" />
-
-                    <Prop label="Origen">{order.origin}</Prop>
-                    <Prop label="Referencia">
-                        <code className="text-sm text-muted-foreground break-all">{order.external_id}</code>
-                    </Prop>
-                    <Prop label="Creado">
-                        {new Date(order.created_at).toLocaleDateString("es-AR", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                        })}
-                    </Prop>
+                    <div className="flex flex-col gap-1">
+                        <h2 className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground border-b pb-2 mb-1.5">
+                            Administración
+                        </h2>
+                        <Prop label="Prioridad">
+                            <PriorityField id={order.id} value={order.priority} />
+                        </Prop>
+                        <Prop label="Entrega">
+                            <DateField id={order.id} value={order.delivery_date_estimate} />
+                        </Prop>
+                        {isAdmin && order.invoice_warnings?.length > 0 && (
+                            <Prop label="Factura">
+                                <p className="text-xs text-amber-600">
+                                    {order.alegra_invoice_id ? "Salió incompleta: " : ""}
+                                    {order.invoice_warnings.join(" ")}
+                                </p>
+                            </Prop>
+                        )}
+                        <Prop label="Origen">{order.origin}</Prop>
+                    </div>
                 </aside>
             </div>
         </div>

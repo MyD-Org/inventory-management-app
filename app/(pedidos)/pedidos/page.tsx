@@ -26,7 +26,6 @@ export default async function OrdersPage({
                o.alegra_invoice_id,
                o.modified_at::text AS modified_at,
                o.delivery_date_verified_at::text AS delivery_date_verified_at,
-               COUNT(i.id) AS line_count,
                COALESCE(SUM(i.quantity), 0) AS units,
                BOOL_OR(i.needs_review) AS needs_review,
                -- Alguna línea pidió una opción que su hoja de costo no mapea: hay
@@ -61,7 +60,6 @@ export default async function OrdersPage({
         delivery_date_estimate: r.delivery_date_estimate,
         modified_at: r.modified_at,
         delivery_date_verified_at: r.delivery_date_verified_at,
-        line_count: Number(r.line_count),
         units: Number(r.units),
         items: (r.items as any[]).map((i) => ({
             quantity: Number(i.quantity),
