@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
+import { useListNavigation } from "@/hooks/use-list-navigation"
 import { Loader2, Check } from "lucide-react"
 import { useDebouncedCallback } from "use-debounce"
 import { searchAlegraItems } from "@/lib/alegra-actions"
@@ -79,6 +80,13 @@ export function ProductNameAutocomplete({
         setOpen(false)
     }
 
+    const nav = useListNavigation({
+        count: searching ? 0 : results.length,
+        open: enabled && open && Boolean(value.trim()),
+        onSelect: (i) => results[i] && pick(results[i]),
+        onClose: () => setOpen(false),
+    })
+
     return (
         <div className="relative" ref={boxRef}>
             <Input
@@ -90,6 +98,10 @@ export function ProductNameAutocomplete({
                 value={value}
                 onChange={(e) => handleChange(e.target.value)}
                 onFocus={() => { if (enabled && results.length) setOpen(true) }}
+                onKeyDown={nav.onKeyDown}
+                role="combobox"
+                aria-expanded={enabled && open && Boolean(value.trim())}
+                aria-autocomplete="list"
                 placeholder='Ej: "Optic 1"'
                 aria-invalid={invalid}
                 className={invalid ? "border-destructive focus-visible:ring-destructive" : undefined}
@@ -100,20 +112,30 @@ export function ProductNameAutocomplete({
                 </span>
             )}
             {enabled && open && value.trim() && (
-                <div className="absolute z-20 mt-1 w-full rounded-md border bg-popover shadow-md max-h-56 overflow-auto">
+                <div
+                    ref={nav.listRef}
+                    role="listbox"
+                    className="absolute z-20 mt-1 w-full rounded-md border bg-popover shadow-md max-h-56 overflow-auto"
+                >
                     {searching && (
                         <div className="p-3 text-sm text-muted-foreground flex items-center gap-2">
                             <Loader2 className="w-4 h-4 animate-spin" /> Buscando en Alegra…
                         </div>
                     )}
-                    {!searching && results.map((it) => (
+                    {!searching && results.map((it, i) => (
                         <button
                             key={it.id}
                             type="button"
+                            data-index={i}
+                            role="option"
+                            aria-selected={nav.active === i}
+                            onMouseEnter={() => nav.setActive(i)}
                             onClick={() => pick(it)}
                             // truncate + title: hay nombres del catálogo con el
                             // detalle entero adentro, que ocupaban diez renglones.
-                            className="w-full truncate text-left p-2.5 hover:bg-muted text-sm"
+                            className={`w-full truncate text-left p-2.5 text-sm ${
+                                nav.active === i ? "bg-muted" : ""
+                            }`}
                             title={it.name}
                         >
                             {it.name}
