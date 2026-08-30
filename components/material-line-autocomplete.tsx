@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { Input } from "@/components/ui/input"
+import { useListNavigation } from "@/hooks/use-list-navigation"
 import { Plus } from "lucide-react"
 import { formatArs } from "@/lib/format"
 import { fuzzyFilter } from "@/lib/fuzzy"
@@ -50,6 +51,17 @@ export function MaterialLineAutocomplete({
     const matches = fuzzyFilter(catalog, value, ["name", "barcode"], 12)
     const invalid = value.trim() !== "" && !linked
 
+    const nav = useListNavigation({
+        count: matches.length,
+        open,
+        onSelect: (i) => {
+            if (!matches[i]) return
+            onPick(matches[i])
+            setOpen(false)
+        },
+        onClose: () => setOpen(false),
+    })
+
     return (
         <div className="relative" ref={boxRef}>
             <Input
@@ -61,21 +73,35 @@ export function MaterialLineAutocomplete({
                     setOpen(true)
                 }}
                 onFocus={() => setOpen(true)}
+                onKeyDown={nav.onKeyDown}
+                role="combobox"
+                aria-expanded={open}
+                aria-autocomplete="list"
                 placeholder="Buscar material (nombre o código)…"
                 aria-invalid={invalid}
                 className={invalid ? "border-destructive focus-visible:ring-destructive" : undefined}
             />
             {open && (
-                <div className="absolute z-30 mt-1 w-full min-w-[280px] rounded-md border bg-popover shadow-md max-h-60 overflow-auto">
-                    {matches.map((r) => (
+                <div
+                    ref={nav.listRef}
+                    role="listbox"
+                    className="absolute z-30 mt-1 w-full min-w-[280px] rounded-md border bg-popover shadow-md max-h-60 overflow-auto"
+                >
+                    {matches.map((r, i) => (
                         <button
                             key={r.id}
                             type="button"
+                            data-index={i}
+                            role="option"
+                            aria-selected={nav.active === i}
+                            onMouseEnter={() => nav.setActive(i)}
                             onClick={() => {
                                 onPick(r)
                                 setOpen(false)
                             }}
-                            className="flex w-full items-center justify-between gap-2 p-2.5 text-left text-sm hover:bg-muted"
+                            className={`flex w-full items-center justify-between gap-2 p-2.5 text-left text-sm ${
+                                nav.active === i ? "bg-muted" : ""
+                            }`}
                         >
                             <span className="min-w-0 truncate">
                                 <span className="font-medium">{r.name}</span>

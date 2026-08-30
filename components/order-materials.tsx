@@ -19,16 +19,17 @@ function Estado({ n }: { n: MaterialNeed }) {
         return <span className="text-sm text-muted-foreground">fuera del inventario</span>
     }
     if (n.pending === 0) {
-        return <span className="text-sm text-emerald-600">descontado</span>
+        return <span className="font-mono text-sm tabular-nums text-emerald-600">descontado</span>
     }
     if (n.available < n.pending) {
+        // Cuánto falta, no solo que falta: es el número que se anota para comprar.
         return (
-            <span className="text-sm text-destructive">
-                faltan {n.pending - n.available} · hay {n.available}
+            <span className="font-mono text-sm tabular-nums font-medium text-destructive">
+                {n.available} · faltan {n.pending - n.available}
             </span>
         )
     }
-    return <span className="text-sm text-muted-foreground">hay {n.available}</span>
+    return <span className="font-mono text-sm tabular-nums text-muted-foreground">{n.available}</span>
 }
 
 export function OrderMaterials({ orderId, needs }: { orderId: number; needs: MaterialNeed[] }) {
@@ -56,13 +57,17 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                     <ChevronRight
                         className={`h-3.5 w-3.5 transition-transform ${abierto ? "rotate-90" : ""}`}
                     />
-                    Materiales que necesitás
-                    <span className="text-muted-foreground/60">({needs.length})</span>
+                    <span className="font-display text-base font-semibold text-foreground">
+                        Qué buscar al depósito
+                    </span>
+                    <span className="font-mono text-xs text-muted-foreground/80">({needs.length})</span>
                 </button>
 
                 {conFaltante.length > 0 && (
-                    <span className="text-sm text-destructive">
-                        {conFaltante.length} sin stock suficiente
+                    <span className="text-sm font-medium text-destructive">
+                        {conFaltante.length === 1
+                            ? "1 material faltante"
+                            : `${conFaltante.length} materiales faltantes`}
                     </span>
                 )}
 
@@ -79,19 +84,29 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
             </div>
 
             {abierto && (
-                <div className="border rounded-lg divide-y">
+                <div className="border rounded-lg divide-y overflow-hidden">
+                    {/* Necesita contra hay: las dos cifras alineadas a la derecha se
+                        comparan de un vistazo, que es la pregunta real del depósito. */}
+                    <div className="grid grid-cols-[minmax(0,1fr)_5rem_11rem] gap-3 bg-muted/60 px-4 py-2 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
+                        <span>Material</span>
+                        <span className="text-right">Necesita</span>
+                        <span className="text-right">En stock</span>
+                    </div>
                     {needs.map((n) => (
-                        <div key={n.material_id ?? n.label} className="flex items-center gap-4 px-4 py-2">
-                            <span className="text-base font-semibold tabular-nums w-14 shrink-0">
-                                {n.required}
+                        <div
+                            key={n.material_id ?? n.label}
+                            className="grid grid-cols-[minmax(0,1fr)_5rem_11rem] items-center gap-3 px-4 py-2.5"
+                        >
+                            <span className="min-w-0 truncate">
+                                {n.label}
+                                {n.consumed > 0 && n.pending > 0 && (
+                                    <span className="block text-xs text-muted-foreground">
+                                        {n.consumed} ya descontados
+                                    </span>
+                                )}
                             </span>
-                            <span className="text-base min-w-0 flex-1 truncate">{n.label}</span>
-                            {n.consumed > 0 && n.pending > 0 && (
-                                <span className="text-sm text-muted-foreground shrink-0">
-                                    {n.consumed} ya descontados
-                                </span>
-                            )}
-                            <span className="shrink-0 text-right w-40">
+                            <span className="text-right font-mono text-sm tabular-nums">{n.required}</span>
+                            <span className="text-right">
                                 <Estado n={n} />
                             </span>
                         </div>

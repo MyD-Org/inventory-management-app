@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { Plus } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { useListNavigation } from "@/hooks/use-list-navigation"
 import { fuzzyFilter } from "@/lib/fuzzy"
 
 export interface ResourceOption {
@@ -44,6 +45,17 @@ export function ResourceLineAutocomplete({
     const matches = fuzzyFilter(options, value, ["name"], 8)
     const invalid = value.trim() !== "" && !linked
 
+    const nav = useListNavigation({
+        count: matches.length,
+        open,
+        onSelect: (i) => {
+            if (!matches[i]) return
+            onPick(matches[i].id)
+            setOpen(false)
+        },
+        onClose: () => setOpen(false),
+    })
+
     return (
         <div className="relative" ref={boxRef}>
             <Input
@@ -55,21 +67,35 @@ export function ResourceLineAutocomplete({
                     setOpen(true)
                 }}
                 onFocus={() => setOpen(true)}
+                onKeyDown={nav.onKeyDown}
+                role="combobox"
+                aria-expanded={open}
+                aria-autocomplete="list"
                 placeholder="Buscar recurso de mano de obra…"
                 aria-invalid={invalid}
                 className={invalid ? "border-destructive focus-visible:ring-destructive" : undefined}
             />
             {open && (
-                <div className="absolute z-30 mt-1 w-full min-w-[240px] rounded-md border bg-popover shadow-md max-h-60 overflow-auto">
-                    {matches.map((o) => (
+                <div
+                    ref={nav.listRef}
+                    role="listbox"
+                    className="absolute z-30 mt-1 w-full min-w-[240px] rounded-md border bg-popover shadow-md max-h-60 overflow-auto"
+                >
+                    {matches.map((o, i) => (
                         <button
                             key={o.id}
                             type="button"
+                            data-index={i}
+                            role="option"
+                            aria-selected={nav.active === i}
+                            onMouseEnter={() => nav.setActive(i)}
                             onClick={() => {
                                 onPick(o.id)
                                 setOpen(false)
                             }}
-                            className="flex w-full items-center justify-between gap-3 p-2.5 text-left text-sm hover:bg-muted"
+                            className={`flex w-full items-center justify-between gap-3 p-2.5 text-left text-sm ${
+                                nav.active === i ? "bg-muted" : ""
+                            }`}
                         >
                             <span className="truncate">{o.name}</span>
                             {o.hint && <span className="shrink-0 text-xs text-muted-foreground">{o.hint}</span>}

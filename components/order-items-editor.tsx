@@ -175,13 +175,16 @@ export function OrderItemsEditor({
                                 } ${highlightedId === item.id ? "bg-amber-100/60 animate-pulse" : ""}`}
                             >
                                 <td className="px-3 py-2 text-right align-middle">
-                                    <span className="text-lg font-semibold tabular-nums">
+                                    <span className="font-mono text-base font-medium tabular-nums">
                                         {item.quantity}
                                     </span>
                                 </td>
-                                <td className="px-3 py-2 text-base font-medium">
+                                <td className="px-3 py-2">
                                     <span className="flex items-center gap-1.5 min-w-0">
-                                        <span className="truncate" title={item.product}>
+                                        <span
+                                            className="truncate font-display text-[0.97rem] font-semibold"
+                                            title={item.product}
+                                        >
                                             {item.product}
                                         </span>
                                         {/* Este producto no aporta materiales a la lista de

@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useListNavigation } from "@/hooks/use-list-navigation"
 import { Loader2, Plus, X } from "lucide-react"
 import { consumeOrderMaterials, searchInventoryMaterials } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
@@ -52,6 +53,24 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
         return () => document.removeEventListener("mousedown", fuera)
     }, [])
 
+    // La lista se arma acá y no dentro del JSX: el teclado necesita el mismo
+    // arreglo que se dibuja para saber qué está eligiendo.
+    const opciones = results.filter((r) => !yaEstan.includes(r.material_id))
+    const listaAbierta = abierto && opciones.length > 0
+
+    const nav = useListNavigation({
+        count: opciones.length,
+        open: listaAbierta,
+        onSelect: (i) => {
+            const r = opciones[i]
+            if (!r) return
+            onPick({ ...r, qty: "1", pending: null })
+            setQuery("")
+            setAbierto(false)
+        },
+        onClose: () => setAbierto(false),
+    })
+
     return (
         <div ref={boxRef} className="relative">
             <Input
@@ -60,6 +79,10 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
                 placeholder="Agregar otro material del inventario"
                 className="h-9 text-base"
                 onFocus={() => setAbierto(true)}
+                onKeyDown={nav.onKeyDown}
+                role="combobox"
+                aria-expanded={listaAbierta}
+                aria-autocomplete="list"
                 onChange={(e) => {
                     setQuery(e.target.value)
                     setAbierto(true)
@@ -69,15 +92,23 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
                 <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
             )}
 
-            {abierto && results.length > 0 && (
-                <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-md overflow-hidden">
-                    {results
-                        .filter((r) => !yaEstan.includes(r.material_id))
-                        .map((r) => (
+            {listaAbierta && (
+                <div
+                    ref={nav.listRef}
+                    role="listbox"
+                    className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-md overflow-hidden"
+                >
+                    {opciones.map((r, i) => (
                             <button
                                 key={r.material_id}
                                 type="button"
-                                className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted"
+                                data-index={i}
+                                role="option"
+                                aria-selected={nav.active === i}
+                                onMouseEnter={() => nav.setActive(i)}
+                                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left ${
+                                    nav.active === i ? "bg-muted" : ""
+                                }`}
                                 onClick={() => {
                                     onPick({ ...r, qty: "1", pending: null })
                                     setQuery("")

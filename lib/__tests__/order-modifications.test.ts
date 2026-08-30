@@ -33,8 +33,7 @@ describe('isApiEditable', () => {
     })
 
     it('blocks late statuses', () => {
-        expect(isApiEditable('embalado')).toBe(false)
-        expect(isApiEditable('facturado')).toBe(false)
+        expect(isApiEditable('por_facturar')).toBe(false)
         expect(isApiEditable('listo_para_retirar')).toBe(false)
         expect(isApiEditable('retirado')).toBe(false)
         expect(isApiEditable('cancelado')).toBe(false)

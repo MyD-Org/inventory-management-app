@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
+import { useListNavigation } from "@/hooks/use-list-navigation"
 import { Label } from "@/components/ui/label"
 import { Check, Loader2, User } from "lucide-react"
 import { searchCustomers } from "@/lib/order-actions"
@@ -50,6 +51,24 @@ export function CustomerPicker({
         return () => document.removeEventListener("mousedown", onClickOutside)
     }, [])
 
+    const listaAbierta = open && query.trim().length >= 2
+    // results + 1: la última opción de la lista es "usar lo escrito como cliente
+    // nuevo", y con el teclado tiene que poder elegirse igual que las demás.
+    //
+    // Va acá arriba y no al lado del return final a propósito: abajo hay un
+    // return temprano (cuando ya hay cliente elegido) y un hook después de un
+    // return se saltea en ese render. React cuenta los hooks y explota.
+    const nav = useListNavigation({
+        count: results.length + 1,
+        open: listaAbierta,
+        onSelect: (i) => {
+            if (i < results.length) onChange(results[i])
+            else onChange({ external_id: "", name: query.trim(), phone: null })
+            setOpen(false)
+        },
+        onClose: () => setOpen(false),
+    })
+
     if (value) {
         return (
             <div>
@@ -92,18 +111,32 @@ export function CustomerPicker({
                     setOpen(true)
                 }}
                 onFocus={() => setOpen(true)}
+                onKeyDown={nav.onKeyDown}
+                role="combobox"
+                aria-expanded={listaAbierta}
+                aria-autocomplete="list"
             />
             {loading && (
                 <Loader2 className="absolute right-3 top-[38px] h-4 w-4 animate-spin text-muted-foreground" />
             )}
 
-            {open && query.trim().length >= 2 && (
-                <div className="absolute z-20 mt-1 w-full rounded-md border bg-popover shadow-md overflow-hidden">
-                    {results.map((c) => (
+            {listaAbierta && (
+                <div
+                    ref={nav.listRef}
+                    role="listbox"
+                    className="absolute z-20 mt-1 w-full rounded-md border bg-popover shadow-md overflow-hidden"
+                >
+                    {results.map((c, i) => (
                         <button
                             key={c.external_id}
                             type="button"
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted"
+                            data-index={i}
+                            role="option"
+                            aria-selected={nav.active === i}
+                            onMouseEnter={() => nav.setActive(i)}
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-left ${
+                                nav.active === i ? "bg-muted" : ""
+                            }`}
                             onClick={() => {
                                 onChange(c)
                                 setOpen(false)
@@ -122,7 +155,13 @@ export function CustomerPicker({
                     {/* Cliente que todavía no está en Alegra */}
                     <button
                         type="button"
-                        className="flex w-full items-center gap-2 border-t px-3 py-2 text-left hover:bg-muted"
+                        data-index={results.length}
+                        role="option"
+                        aria-selected={nav.active === results.length}
+                        onMouseEnter={() => nav.setActive(results.length)}
+                        className={`flex w-full items-center gap-2 border-t px-3 py-2 text-left ${
+                            nav.active === results.length ? "bg-muted" : ""
+                        }`}
                         onClick={() => {
                             onChange({ external_id: "", name: query.trim(), phone: null })
                             setOpen(false)
