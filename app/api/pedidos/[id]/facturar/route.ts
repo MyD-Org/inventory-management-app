@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
+import { logOrderEvent } from "@/lib/order-events"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
 import { isAlegraConfigured } from "@/lib/alegra"
 import { invoiceOrder, previewInvoice } from "@/lib/invoicing"
@@ -18,22 +19,35 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-    // ADMIN o INTERNAL_SECRET. La simulación no escribe nada, pero devuelve
-    // PRECIOS, y el módulo de pedidos es deliberadamente sin plata: el operador
-    // del taller no ve importes en ninguna pantalla. Sin este chequeo, alcanzaba
-    // con pedir la URL a mano para saltear eso.
+    // Facturar lo puede hacer cualquiera del taller, pero los IMPORTES son solo
+    // del admin: el módulo de pedidos es deliberadamente sin plata. Entonces la
+    // simulación se abre a todos y los precios se recortan más abajo, en vez de
+    // negar la pantalla entera.
     // El secreto queda para poder verificar desde un script.
     const session = await auth()
     const conSecreto = requireInternalSecret(request) === null
-    if (session?.user?.role !== "admin" && !conSecreto) {
-        return NextResponse.json({ error: "Solo un admin puede ver la factura" }, { status: 403 })
+    if (!session?.user && !conSecreto) {
+        return NextResponse.json({ error: "No autenticado" }, { status: 401 })
     }
+    const veImportes = session?.user?.role === "admin" || conSecreto
 
     const orderId = Number.parseInt(params.id, 10)
     if (!Number.isFinite(orderId)) return NextResponse.json({ error: "Pedido inválido" }, { status: 400 })
 
     try {
-        return NextResponse.json({ dry_run: true, ...(await previewInvoice(orderId)) })
+        const preview = await previewInvoice(orderId)
+        if (!veImportes) {
+            // Los importes se sacan ACÁ y no se ocultan en el front: si viajan al
+            // navegador, alcanza con abrir la consola para verlos.
+            return NextResponse.json({
+                dry_run: true,
+                ...preview,
+                sin_importes: true,
+                total: null,
+                lines: preview.lines.map(({ price, ...resto }) => resto),
+            })
+        }
+        return NextResponse.json({ dry_run: true, ...preview })
     } catch (error) {
         console.error("Error simulando factura:", error)
         return NextResponse.json({ error: error instanceof Error ? error.message : "Error" }, { status: 500 })
@@ -41,9 +55,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+    // Emitir lo puede hacer cualquiera del taller: mover el pedido a "Por facturar"
+    // ya dispara la factura automática, así que restringir el botón manual solo
+    // dejaba trabado el reintento cuando esa falla.
     const session = await auth()
-    if (session?.user?.role !== "admin") {
-        return NextResponse.json({ error: "Solo un admin puede facturar" }, { status: 403 })
+    if (!session?.user) {
+        return NextResponse.json({ error: "No autenticado" }, { status: 401 })
     }
     if (!isAlegraConfigured()) {
         return NextResponse.json({ error: "Alegra no está configurado" }, { status: 503 })
@@ -60,10 +77,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     try {
-        return NextResponse.json(await invoiceOrder(orderId, {
+        const resultado = await invoiceOrder(orderId, {
             terms: typeof body.terms === "string" ? body.terms : undefined,
             notes: typeof body.notes === "string" ? body.notes : undefined,
-        }))
+        })
+        // Emitir es irreversible del lado de Alegra: es de lo primero que se va a
+        // buscar en la historia cuando algo salga mal.
+        if (resultado.invoiceId != null) {
+            await logOrderEvent(orderId, {
+                kind: "invoice",
+                newValue: resultado.invoiceNumber ?? String(resultado.invoiceId),
+            })
+        }
+        return NextResponse.json(resultado)
     } catch (error) {
         console.error("Error facturando:", error)
         return NextResponse.json({ error: error instanceof Error ? error.message : "Error" }, { status: 502 })
