@@ -280,12 +280,25 @@ export function BudgetEditor({
         if (uid !== undefined) setOpenVariants((prev) => ({ ...prev, [uid]: false }))
     }
 
-    // Soltar la familia: la línea se queda con las variantes que tenía y pasa a
-    // editarse a mano. No se borra nada, así desvincular nunca pierde el mapeo.
+    // Quitar la familia deja un MATERIAL FIJO: el que calculaba el costo, sin
+    // variantes. No queda un estado intermedio de "variantes sueltas" porque las
+    // variantes ya no se editan en la hoja —se editan en la familia—, y una línea
+    // con sustituciones que nadie puede tocar acá sería una trampa.
+    // Es la salida para el producto que lleva un solo color: se quita la familia y
+    // se elige el material como cualquier otra línea.
     const unlinkFamily = (i: number) => {
-        updateMaterial(i, { familyId: null })
-        const uid = materials[i]?.uid
-        if (uid !== undefined) setOpenVariants((prev) => ({ ...prev, [uid]: true }))
+        const line = materials[i]
+        const family = line?.familyId === null ? undefined : familyById.get(line?.familyId ?? -1)
+        const def = family ? defaultOption(family) : undefined
+        updateMaterial(i, {
+            familyId: null,
+            specFieldKey: null,
+            options: [],
+            // El nombre pasa a ser el del material real: "Optica individual Darkoo"
+            // es el nombre de la familia, no de algo que exista en el depósito.
+            label: def?.label ?? line?.label ?? "",
+            materialId: def?.materialId ?? line?.materialId ?? null,
+        })
     }
 
     // Familias ofrecidas por el buscador. Una familia sin variantes o sin
@@ -309,56 +322,13 @@ export function BudgetEditor({
         setMaterials((prev) => [...prev, { uid: newUid(), materialId: null, label: "", qty: 1, unitCost: 0, specFieldKey: null, options: [], familyId: null }])
     }
 
-    // ── Variantes de una línea ───────────────────────────────────────────────
-    // Arranca VACÍO y se agregan solo los valores que de verdad cambian de
-    // material. Prellenar las nueve ópticas apuntando todas al material de
-    // referencia sería peor que no mapearlas: diría "cualquier grado usa la
-    // óptica de 8°" y el pedido saldría en silencio con el material equivocado.
-    // Sin mapear, cae al de referencia igual pero marca la línea para revisión.
-    const setVariantField = (i: number, key: string | null) => {
-        setMaterials((prev) =>
-            prev.map((m, idx) => (idx === i ? { ...m, specFieldKey: key, options: [] } : m)),
-        )
-        const uid = materials[i]?.uid
-        if (uid !== undefined) setOpenVariants((prev) => ({ ...prev, [uid]: key !== null }))
-    }
-
     // Etiqueta linda de un valor de spec ("calido" → "Cálido", "8" → "8°").
     const variantLabel = (fieldKey: string | null, specValue: string) =>
         specFields.find((f) => f.key === fieldKey)?.options.find((o) => o.value === specValue)?.label ?? specValue
 
-    // Agregar/quitar filas a mano: el prellenado trae todas las opciones del
-    // vocabulario, pero casi nunca varían todas (de las nueve ópticas suelen
-    // usarse dos o tres). Las que no están mapeadas caen al material de
-    // referencia y marcan el pedido para revisión.
-    // La fila nueva arranca VACÍA, no con el material de referencia: precargarla
-    // dejaría afirmado que ese valor usa el material de la línea sin que nadie lo
-    // haya decidido. Una fila que quede vacía no se guarda.
-    const addVariant = (i: number, specValue: string) => {
-        setMaterials((prev) =>
-            prev.map((m, idx) =>
-                idx === i ? { ...m, options: [...m.options, { specValue, materialId: null, label: "" }] } : m,
-            ),
-        )
-    }
-
-    const removeVariant = (i: number, specValue: string) => {
-        setMaterials((prev) =>
-            prev.map((m, idx) =>
-                idx === i ? { ...m, options: m.options.filter((o) => o.specValue !== specValue) } : m,
-            ),
-        )
-    }
-
-    const updateVariant = (i: number, specValue: string, patch: Partial<VariantOption>) => {
-        setMaterials((prev) =>
-            prev.map((m, idx) =>
-                idx === i
-                    ? { ...m, options: m.options.map((o) => (o.specValue === specValue ? { ...o, ...patch } : o)) }
-                    : m,
-            ),
-        )
-    }
+    // Las variantes NO se cargan acá: se cargan como familia en Familias de
+    // Materiales y la línea las trae de ahí. Por eso no hay funciones para
+    // agregar, editar ni borrar variantes sueltas en la hoja de costo.
 
     const updateMaterial = (i: number, patch: Partial<MaterialLine>) => {
         setMaterials((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)))
@@ -695,9 +665,9 @@ export function BudgetEditor({
                                                                     size="sm"
                                                                     className="h-7 shrink-0 text-xs text-muted-foreground"
                                                                     onClick={() => unlinkFamily(i)}
-                                                                    title="Editar estas variantes solo en este producto"
+                                                                    title="Dejar esta línea con un material fijo, sin variantes"
                                                                 >
-                                                                    Desvincular
+                                                                    Quitar familia
                                                                 </Button>
                                                             </div>
                                                             {variantsOpen(i) && (
@@ -722,8 +692,8 @@ export function BudgetEditor({
                                                                         <Link href="/materials/familias" className="underline">
                                                                             familias de materiales
                                                                         </Link>{" "}
-                                                                        y valen para todos los productos. Para cambiarlas solo acá,
-                                                                        desvinculá la familia.
+                                                                        y valen para todos los productos. Si este producto lleva
+                                                                        un material fijo, quitá la familia y elegilo a mano.
                                                                     </p>
                                                                 </>
                                                             )}
@@ -731,149 +701,71 @@ export function BudgetEditor({
                                                     </div>
                                                 )
                                             })()
-                                        ) : specFields.length > 0 ? (
+                                        ) : m.specFieldKey !== null ? (
+                                            // Variantes cargadas a mano, antes de que existieran las familias.
+                                            // Se muestran —el pedido las usa para descontar, borrarlas en silencio
+                                            // cambiaría lo que sale del depósito— pero ya no se editan acá: lo que
+                                            // corresponde es rehacerlas como familia, que vale para todos los
+                                            // productos. Lo único que se puede hacer desde la hoja es quitarlas.
                                             <div className="mt-1 md:pl-1">
-                                                {!m.specFieldKey ? (
-                                                    <Select value="" onValueChange={(v) => setVariantField(i, v)}>
-                                                        <SelectTrigger className="h-7 w-auto gap-1 border-none px-1 text-xs text-muted-foreground shadow-none hover:text-foreground focus:ring-0">
-                                                            <Layers className="h-3 w-3" />
-                                                            Varía según…
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {specFields.map((f) => (
-                                                                <SelectItem key={f.key} value={f.key}>
-                                                                    {f.label}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                ) : (
-                                                    <div className="rounded-md border border-dashed bg-muted/30 p-2 space-y-2">
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            {/* El encabezado siempre se ve: plegado, resume qué varía y
-                                                                cuántas variantes hay, para no perder de vista que la
-                                                                línea tiene sustituciones cargadas. */}
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => toggleVariants(i)}
-                                                                aria-expanded={variantsOpen(i)}
-                                                                className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
-                                                            >
-                                                                <ChevronRight
-                                                                    className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
-                                                                        variantsOpen(i) ? "rotate-90" : ""
-                                                                    }`}
-                                                                />
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    Varía según{" "}
-                                                                    <span className="font-medium text-foreground">
-                                                                        {specFields.find((f) => f.key === m.specFieldKey)?.label ?? m.specFieldKey}
-                                                                    </span>
-                                                                    {variantsOpen(i) ? (
-                                                                        <>
-                                                                            . El costo lo define el material de arriba; estas
-                                                                            variantes solo deciden qué sale del depósito.
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
-                                                                            {" · "}
-                                                                            {m.options.length === 0
-                                                                                ? "sin variantes cargadas"
-                                                                                : `${m.options.length} ${m.options.length === 1 ? "variante" : "variantes"}`}
-                                                                        </>
-                                                                    )}
-                                                                </p>
-                                                            </button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="h-7 shrink-0 text-xs text-muted-foreground"
-                                                                onClick={() => setVariantField(i, null)}
-                                                            >
-                                                                Quitar variantes
-                                                            </Button>
-                                                        </div>
-                                                        {variantsOpen(i) && (
-                                                        <>
-                                                        {m.options.map((o) => (
-                                                            <div
-                                                                key={o.specValue}
-                                                                className="grid grid-cols-[110px_1fr_36px] gap-2 items-center"
-                                                            >
-                                                                <span className="truncate text-xs text-muted-foreground">
-                                                                    {variantLabel(m.specFieldKey, o.specValue)}
+                                                <div className="space-y-2 rounded-md border border-dashed bg-muted/30 p-2">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleVariants(i)}
+                                                            aria-expanded={variantsOpen(i)}
+                                                            className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
+                                                        >
+                                                            <ChevronRight
+                                                                className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+                                                                    variantsOpen(i) ? "rotate-90" : ""
+                                                                }`}
+                                                            />
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Variantes cargadas a mano · varía según{" "}
+                                                                <span className="font-medium text-foreground">
+                                                                    {specFields.find((f) => f.key === m.specFieldKey)?.label ?? m.specFieldKey}
                                                                 </span>
-                                                                <MaterialLineAutocomplete
-                                                                    value={o.label}
-                                                                    catalog={materialsCatalog}
-                                                                    linked={o.materialId !== null}
-                                                                    onPick={(r) =>
-                                                                        updateVariant(i, o.specValue, { materialId: r.id, label: r.name })
-                                                                    }
-                                                                    onText={(t) =>
-                                                                        updateVariant(i, o.specValue, { materialId: null, label: t })
-                                                                    }
-                                                                />
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8"
-                                                                    title={`Quitar ${variantLabel(m.specFieldKey, o.specValue)}`}
-                                                                    onClick={() => removeVariant(i, o.specValue)}
-                                                                >
-                                                                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                                                </Button>
-                                                            </div>
-                                                        ))}
-
-                                                        {/* Solo los valores que todavía no están en la lista. */}
-                                                        {(() => {
-                                                            const field = specFields.find((f) => f.key === m.specFieldKey)
-                                                            const usados = new Set(m.options.map((o) => o.specValue))
-                                                            const libres = (field?.options ?? []).filter((op) => !usados.has(op.value))
-
-                                                            if (!field || field.options.length === 0) {
-                                                                return (
-                                                                    <p className="text-xs text-muted-foreground">
-                                                                        Ese campo todavía no tiene opciones cargadas. Agregalas en{" "}
-                                                                        <Link href="/pedidos/opciones" className="underline">
-                                                                            opciones de pedidos
-                                                                        </Link>
-                                                                        .
-                                                                    </p>
-                                                                )
-                                                            }
-                                                            if (libres.length === 0) {
-                                                                return (
-                                                                    <p className="text-xs text-muted-foreground">
-                                                                        Están todas las opciones de {field.label}. Para agregar otra, cargala en{" "}
-                                                                        <Link href="/pedidos/opciones" className="underline">
-                                                                            opciones de pedidos
-                                                                        </Link>
-                                                                        .
-                                                                    </p>
-                                                                )
-                                                            }
-                                                            return (
-                                                                <Select value="" onValueChange={(v) => addVariant(i, v)}>
-                                                                    <SelectTrigger className="h-7 w-auto gap-1 border-none px-1 text-xs text-primary shadow-none hover:underline focus:ring-0">
-                                                                        <Plus className="h-3 w-3" />
-                                                                        Agregar variante
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {libres.map((op) => (
-                                                                            <SelectItem key={op.value} value={op.value}>
-                                                                                {op.label}
-                                                                            </SelectItem>
-                                                                        ))}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            )
-                                                        })()}
-                                                        </>
-                                                        )}
+                                                                {" · "}
+                                                                {m.options.length}{" "}
+                                                                {m.options.length === 1 ? "variante" : "variantes"}
+                                                            </p>
+                                                        </button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-7 shrink-0 text-xs text-muted-foreground"
+                                                            onClick={() => updateMaterial(i, { specFieldKey: null, options: [] })}
+                                                            title="Dejar esta línea con un material fijo"
+                                                        >
+                                                            Quitar variantes
+                                                        </Button>
                                                     </div>
-                                                )}
+                                                    {variantsOpen(i) && (
+                                                        <>
+                                                            {m.options.map((o) => (
+                                                                <div
+                                                                    key={o.specValue}
+                                                                    className="grid grid-cols-[110px_1fr] items-center gap-2 text-xs"
+                                                                >
+                                                                    <span className="truncate text-muted-foreground">
+                                                                        {variantLabel(m.specFieldKey, o.specValue)}
+                                                                    </span>
+                                                                    <span className="truncate">{o.label}</span>
+                                                                </div>
+                                                            ))}
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Estas variantes son de antes y no se editan desde acá. Cargá la
+                                                                materia prima en{" "}
+                                                                <Link href="/materials/familias" className="underline">
+                                                                    familias de materiales
+                                                                </Link>{" "}
+                                                                y elegila en esta línea: queda cargada una sola vez y vale para todos
+                                                                los productos.
+                                                            </p>
+                                                        </>
+                                                    )}
+                                                </div>
                                             </div>
                                         ) : null}
                                     </div>
