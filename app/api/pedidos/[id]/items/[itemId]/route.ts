@@ -3,6 +3,7 @@ import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
 import { deleteOrderItemInternal, readOrder, updateOrderItemInternal } from "@/lib/orders"
 import { isApiEditable } from "@/lib/order-statuses"
+import { apiActor, logOrderEvent } from "@/lib/order-events"
 
 async function checkOrder(id: number) {
     const order = await readOrder(id)
@@ -47,6 +48,8 @@ export async function PATCH(
     }
 
     try {
+        // El producto se lee ANTES de tocarlo, para poder nombrarlo en la historia.
+        const [previo] = await sql`SELECT product, quantity FROM order_items WHERE id = ${itemId}`
         const result = await updateOrderItemInternal(itemId, {
             quantity: body.quantity !== undefined ? Number(body.quantity) : undefined,
             specs: body.specs,
@@ -55,6 +58,15 @@ export async function PATCH(
             return NextResponse.json({ error: result.error }, { status: 400 })
         }
         await markModified(orderId)
+        const cambioCantidad =
+            body.quantity !== undefined && Number(body.quantity) !== Number(previo?.quantity)
+        await logOrderEvent(orderId, {
+            kind: "item_updated",
+            field: cambioCantidad ? "quantity" : "specs",
+            oldValue: cambioCantidad ? `${previo?.quantity} × ${previo?.product}` : previo?.product ?? null,
+            newValue: cambioCantidad ? `${Number(body.quantity)} × ${previo?.product}` : previo?.product ?? null,
+            actor: await apiActor(request),
+        })
         return NextResponse.json({ ok: true, itemId: result.itemId, warning: result.warning })
     } catch (error) {
         console.error("Error in PATCH /api/pedidos/[id]/items/[itemId]:", error)
@@ -81,11 +93,17 @@ export async function DELETE(
     }
 
     try {
+        const [previo] = await sql`SELECT product, quantity FROM order_items WHERE id = ${itemId}`
         const result = await deleteOrderItemInternal(itemId)
         if (!result.ok) {
             return NextResponse.json({ error: result.error }, { status: 400 })
         }
         await markModified(orderId)
+        await logOrderEvent(orderId, {
+            kind: "item_removed",
+            oldValue: previo ? `${previo.quantity} × ${previo.product}` : null,
+            actor: await apiActor(request),
+        })
         return NextResponse.json({ ok: true })
     } catch (error) {
         console.error("Error in DELETE /api/pedidos/[id]/items/[itemId]:", error)

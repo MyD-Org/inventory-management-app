@@ -3,8 +3,10 @@ import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
 import { normalizePhone } from "@/lib/order-validation"
 import {
+    ORDER_ORIGINS,
     createOrder,
     customerStatus,
+    isOrderOrigin,
     getCustomerStatusMap,
     missingMaterials,
     readOrder,
@@ -12,6 +14,7 @@ import {
     type OrderPayload,
 } from "@/lib/orders"
 import { orderNeedsReview } from "@/lib/order-statuses"
+import { apiActor, logOrderEvent } from "@/lib/order-events"
 
 // Pedidos del agente del CRM (§3 de docs/pedidos-avantec.md). Auth
 // server-to-server con el mismo Bearer que los endpoints de ai-tools
@@ -57,9 +60,25 @@ export async function POST(request: NextRequest) {
         }
     }
 
+    // El origen se valida contra la lista y NO se acepta cualquier string: es lo
+    // que después dice la historia del pedido ("creado desde WhatsApp"). Se
+    // normaliza a minúscula para no rechazar un "WhatsApp" del bot.
+    const origenPedido = typeof body?.origin === "string" ? body.origin.trim().toLowerCase() : ""
+    if (origenPedido && !isOrderOrigin(origenPedido)) {
+        return NextResponse.json(
+            { error: `origin inválido: se espera uno de ${ORDER_ORIGINS.join(", ")}` },
+            { status: 400 },
+        )
+    }
+    // Sin origen declarado queda "api": entró por acá, no por la app.
+    const origen = origenPedido || "api"
+
     const payload: OrderPayload = {
         external_id: String(body?.external_id ?? ""),
-        origin: body?.origin,
+        // Si el que llama no declara origen, el default NO puede ser el de la app:
+        // createOrder cae en "manual" y el pedido termina diciendo que se creó
+        // desde la web cuando entró por la API. Acá sabemos que es la API.
+        origin: origen,
         customer: {
             external_id: String(body?.customer?.external_id ?? body?.customer_external_id ?? ""),
             name: vacioEsNull(body?.customer?.name ?? body?.customer_name),
@@ -85,6 +104,16 @@ export async function POST(request: NextRequest) {
         }
 
         const { created, incomplete, order } = await createOrder(payload)
+
+        // Solo si se creó de verdad: con external_id repetido devuelve el pedido
+        // original y no hubo alta que registrar.
+        if (created && order?.id) {
+            const actor = await apiActor(request)
+            await logOrderEvent(order.id, { kind: "created", newValue: origen, actor })
+            if (payload.notes?.trim()) {
+                await logOrderEvent(order.id, { kind: "note", body: payload.notes.trim(), actor })
+            }
+        }
         if (!order) return NextResponse.json({ error: "Error interno" }, { status: 500 })
 
         // El pedido existe pero quedó a medio escribir (ver createOrder). 409
