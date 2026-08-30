@@ -323,20 +323,38 @@ export async function explodeBom(
     specs: Record<string, unknown>,
     quantity: number,
 ): Promise<{ unmapped: string[] }> {
+    // Las variantes salen de la FAMILIA cuando la línea está vinculada a una
+    // (material_families, ver scripts/19-material-families.sql) y de la foto
+    // propia de la línea cuando no. El vínculo con la familia es vivo a
+    // propósito: cambiar el material de un color en el inventario tiene que
+    // valer para todos los productos sin reeditar hoja por hoja.
+    // Si la familia quedó sin variantes, cae a la foto: es lo último que
+    // alguien vio y revisó, mejor que explotar el BOM sin sustituciones.
     const rows = await sql`
         SELECT
-            bm.id, bm.material_id, bm.label, bm.qty, bm.spec_field_key,
-            COALESCE(
-                json_agg(
-                    json_build_object('specValue', o.spec_value, 'materialId', o.material_id, 'label', o.label)
-                    ORDER BY o.id
-                ) FILTER (WHERE o.id IS NOT NULL),
-                '[]'
-            ) AS options
+            bm.id, bm.material_id, bm.label, bm.qty,
+            COALESCE(f.spec_field_key, bm.spec_field_key) AS spec_field_key,
+            COALESCE(fam.options, own.options, '[]') AS options
         FROM budget_materials bm
-        LEFT JOIN budget_material_options o ON o.budget_material_id = bm.id
+        LEFT JOIN material_families f ON f.id = bm.family_id
+        LEFT JOIN LATERAL (
+            SELECT json_agg(
+                json_build_object('specValue', fo.spec_value, 'materialId', fo.material_id, 'label', m.name)
+                ORDER BY fo.id
+            ) AS options
+            FROM material_family_options fo
+            JOIN materials m ON m.id = fo.material_id
+            WHERE fo.family_id = bm.family_id
+        ) fam ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT json_agg(
+                json_build_object('specValue', o.spec_value, 'materialId', o.material_id, 'label', o.label)
+                ORDER BY o.id
+            ) AS options
+            FROM budget_material_options o
+            WHERE o.budget_material_id = bm.id
+        ) own ON TRUE
         WHERE bm.budget_id = ${budgetId}
-        GROUP BY bm.id
         ORDER BY bm.id ASC
     `
 

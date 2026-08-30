@@ -41,20 +41,34 @@ export async function GET(request: NextRequest) {
                 -- Variantes: qué material sale del depósito según lo que pida el
                 -- cliente (led_color='calido' -> otra tira). El COSTO es siempre
                 -- el de arriba: el color no cambia el precio de venta.
-                bm.spec_field_key,
-                COALESCE(
-                    json_agg(
-                        json_build_object('spec_value', o.spec_value, 'material_id', o.material_id, 'label', o.label)
-                        ORDER BY o.id
-                    ) FILTER (WHERE o.id IS NOT NULL),
-                    '[]'
-                ) AS options
+                -- Si la línea usa una familia de materiales, las variantes salen
+                -- de ahí (en vivo) y no de la foto guardada en la hoja: es la
+                -- misma regla que aplica explodeBom al descontar stock, así el
+                -- bot no describe una receta que el taller no va a ejecutar.
+                COALESCE(f.spec_field_key, bm.spec_field_key) AS spec_field_key,
+                COALESCE(fam.options, own.options, '[]') AS options
             FROM budget_materials bm
             LEFT JOIN materials m ON m.id = bm.material_id
             LEFT JOIN inventory i ON i.material_id = bm.material_id
-            LEFT JOIN budget_material_options o ON o.budget_material_id = bm.id
+            LEFT JOIN material_families f ON f.id = bm.family_id
+            LEFT JOIN LATERAL (
+                SELECT json_agg(
+                    json_build_object('spec_value', fo.spec_value, 'material_id', fo.material_id, 'label', fm.name)
+                    ORDER BY fo.id
+                ) AS options
+                FROM material_family_options fo
+                JOIN materials fm ON fm.id = fo.material_id
+                WHERE fo.family_id = bm.family_id
+            ) fam ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT json_agg(
+                    json_build_object('spec_value', o.spec_value, 'material_id', o.material_id, 'label', o.label)
+                    ORDER BY o.id
+                ) AS options
+                FROM budget_material_options o
+                WHERE o.budget_material_id = bm.id
+            ) own ON TRUE
             WHERE bm.budget_id = ${budgetId}
-            GROUP BY bm.id, m.unit_cost, i.current_stock, m.min_stock
             ORDER BY bm.id ASC
         `
         const labor = await sql`SELECT label, hours, hourly_rate FROM budget_labor WHERE budget_id = ${budgetId} ORDER BY id ASC`

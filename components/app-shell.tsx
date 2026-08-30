@@ -15,6 +15,7 @@ import {
   BarChart3,
   ArrowLeftRight,
   HardHat,
+  Layers,
   Settings,
   Menu,
   X,
@@ -84,6 +85,9 @@ const sections: NavSection[] = [
     items: [
       { label: "Inventario", href: "/inventory", icon: Package, activePrefixes: ["/materials/"] },
       { label: "Nuevo Material", href: "/materials/nuevo", icon: PlusCircle },
+      // Materias primas que vienen en variantes (tira LED por color, grampa por
+      // largo): el mapeo variante -> material que usan las hojas de costo.
+      { label: "Familias de Materiales", href: "/materials/familias", icon: Layers, adminOnly: true },
       { label: "Calcular Costos", href: "/costos", icon: Calculator, activePrefixes: ["/costos/"] },
       { label: "Mano de Obra", href: "/settings/recursos", icon: HardHat, adminOnly: true },
       // Presupuestos oculto temporalmente (del menú y de la IA). Para reactivar, descomentar

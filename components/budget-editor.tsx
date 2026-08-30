@@ -28,10 +28,17 @@ import {
 } from "@/lib/budget-actions"
 import { BUDGET_DRAFT_KEY } from "@/components/ai-assistant"
 import { ProductNameAutocomplete } from "@/components/product-name-autocomplete"
-import { MaterialLineAutocomplete, type MaterialSearchResult } from "@/components/material-line-autocomplete"
+import {
+    MaterialLineAutocomplete,
+    type FamilySearchResult,
+    type MaterialSearchResult,
+} from "@/components/material-line-autocomplete"
 import { ResourceLineAutocomplete } from "@/components/resource-line-autocomplete"
 // Vocabulario de specs disponible para variar líneas (solo campos de lista).
 import type { SpecFieldChoice } from "@/lib/spec-choices"
+// Familias de materiales: el mapeo variante -> material declarado una vez en el
+// inventario. Elegir una arma la línea entera.
+import { defaultOption, lineFromFamily, syncLineWithFamily, type MaterialFamily } from "@/lib/material-family"
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +65,10 @@ interface MaterialLine {
     // Campo del vocabulario de specs que hace variar este material. null = fijo.
     specFieldKey: string | null
     options: VariantOption[]
+    // Familia que arma la línea. null = mapeo propio, cargado a mano acá.
+    // Vinculada, las variantes NO se editan en la hoja: se editan en el
+    // inventario y valen para todos los productos a la vez.
+    familyId: number | null
     isNew?: boolean // solo UI: línea recién agregada por el asistente (no se guarda)
 }
 
@@ -108,6 +119,7 @@ export function BudgetEditor({
     workHoursPerMonth,
     alegraEnabled = false,
     specFields = [],
+    families = [],
 }: {
     budget: BudgetEditorData | null // null = nuevo
     resources: LaborResource[]
@@ -115,6 +127,7 @@ export function BudgetEditor({
     workHoursPerMonth: number
     alegraEnabled?: boolean
     specFields?: SpecFieldChoice[]
+    families?: MaterialFamily[]
 }) {
     const router = useRouter()
     const { toast } = useToast()
@@ -125,8 +138,19 @@ export function BudgetEditor({
     const [description, setDescription] = useState(budget?.description ?? "")
     const [status, setStatus] = useState<"draft" | "final">(budget?.status ?? "draft")
     const [marginPct, setMarginPct] = useState<number>(budget?.marginPct ?? defaultMargin)
+    // Familias por id. No es un hook: son pocas (una por materia prima que varía)
+    // y hace falta antes del useState de materiales, que ya las usa al montar.
+    const familyById = new Map(families.map((f) => [f.id, f] as const))
+
+    // Una línea vinculada a una familia muestra lo que la familia dice HOY, no la
+    // foto que guardó la hoja de costo: ese es todo el punto del vínculo. Si la
+    // familia ya no existe, la línea se queda con su foto y pasa a ser una línea
+    // cargada a mano, que es exactamente lo que hace la base (ON DELETE SET NULL).
+    const applyFamily = (m: MaterialLine): MaterialLine =>
+        syncLineWithFamily(m, m.familyId === null ? undefined : familyById.get(m.familyId))
+
     const [materials, setMaterials] = useState<MaterialLine[]>(
-        () => (budget?.materials ?? []).map((m) => ({ ...m, uid: newUid() })),
+        () => (budget?.materials ?? []).map((m) => applyFamily({ ...m, uid: newUid() })),
     )
     const [labor, setLabor] = useState<LaborLine[]>(budget?.labor ?? [])
     const [extras, setExtras] = useState<ExtraLine[]>(budget?.extras ?? [])
@@ -195,9 +219,10 @@ export function BudgetEditor({
                     label: String(l.label ?? ""),
                     qty: Number.isFinite(l.qty) && l.qty > 0 ? l.qty : 1,
                     unitCost: Number.isFinite(l.unitPrice) && l.unitPrice >= 0 ? l.unitPrice : 0,
-                    // El asistente no propone variantes: se agregan a mano después.
+                    // El asistente no propone variantes ni familias: se agregan a mano después.
                     specFieldKey: null,
                     options: [],
+                    familyId: null,
                 }))
                 if (!lines.length) return
                 setFromAi(true)
@@ -244,13 +269,44 @@ export function BudgetEditor({
         updateMaterial(i, { materialId: r.id, label: r.name, unitCost: Number(r.unit_cost) })
     }
 
+    // Elegir una FAMILIA en la línea i: arma la línea entera de una. El costo lo
+    // pone la variante predeterminada de la familia —es la que responde "con qué
+    // color se costea"— y sigue siendo editable a mano como cualquier línea.
+    const pickFamily = (i: number, familyId: number) => {
+        const f = familyById.get(familyId)
+        if (!f) return
+        updateMaterial(i, lineFromFamily(f))
+        const uid = materials[i]?.uid
+        if (uid !== undefined) setOpenVariants((prev) => ({ ...prev, [uid]: false }))
+    }
+
+    // Soltar la familia: la línea se queda con las variantes que tenía y pasa a
+    // editarse a mano. No se borra nada, así desvincular nunca pierde el mapeo.
+    const unlinkFamily = (i: number) => {
+        updateMaterial(i, { familyId: null })
+        const uid = materials[i]?.uid
+        if (uid !== undefined) setOpenVariants((prev) => ({ ...prev, [uid]: true }))
+    }
+
+    // Familias ofrecidas por el buscador. Una familia sin variantes o sin
+    // predeterminada no se puede usar todavía: no habría con qué costear la línea.
+    const familyChoices: FamilySearchResult[] = families
+        .filter((f) => f.options.length > 0 && f.defaultSpecValue !== null)
+        .map((f) => ({
+            id: f.id,
+            name: f.name,
+            fieldLabel: specFields.find((sf) => sf.key === f.specFieldKey)?.label ?? f.specFieldKey,
+            variantCount: f.options.length,
+            unitCost: defaultOption(f)?.unitCost ?? 0,
+        }))
+
     // Escribir libre en la línea i → material manual (fuera del inventario).
     const setMaterialText = (i: number, text: string) => {
         updateMaterial(i, { materialId: null, label: text })
     }
 
     const addMaterialLine = () => {
-        setMaterials((prev) => [...prev, { uid: newUid(), materialId: null, label: "", qty: 1, unitCost: 0, specFieldKey: null, options: [] }])
+        setMaterials((prev) => [...prev, { uid: newUid(), materialId: null, label: "", qty: 1, unitCost: 0, specFieldKey: null, options: [], familyId: null }])
     }
 
     // ── Variantes de una línea ───────────────────────────────────────────────
@@ -435,6 +491,7 @@ export function BudgetEditor({
                 qty: m.qty,
                 unit_cost: m.unitCost,
                 spec_field_key: m.specFieldKey,
+                family_id: m.familyId,
                 // Se guardan TODAS las variantes con material, incluso las que
                 // apuntan al mismo material de referencia: eso es un mapeo válido
                 // ("el blanco es el de la hoja"). Si se omitieran, un pedido de
@@ -553,13 +610,28 @@ export function BudgetEditor({
                                                         Nuevo
                                                     </span>
                                                 )}
-                                                <MaterialLineAutocomplete
-                                                    value={m.label}
-                                                    catalog={materialsCatalog}
-                                                    linked={m.materialId !== null}
-                                                    onPick={(r) => pickMaterial(i, r)}
-                                                    onText={(t) => setMaterialText(i, t)}
-                                                />
+                                                {m.familyId !== null ? (
+                                                    // Línea armada por una familia: el nombre es el general
+                                                    // ("Tira LED"), no un material del inventario, así que no
+                                                    // hay nada que buscar acá. Se cambia desvinculando.
+                                                    <div className="flex h-10 items-center gap-1.5 rounded-md border bg-muted/40 px-3 text-sm">
+                                                        <Layers className="h-3.5 w-3.5 shrink-0 text-primary" />
+                                                        <span className="truncate font-medium">{m.label}</span>
+                                                        <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                                            familia
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <MaterialLineAutocomplete
+                                                        value={m.label}
+                                                        catalog={materialsCatalog}
+                                                        families={familyChoices}
+                                                        linked={m.materialId !== null}
+                                                        onPick={(r) => pickMaterial(i, r)}
+                                                        onPickFamily={(f) => pickFamily(i, f.id)}
+                                                        onText={(t) => setMaterialText(i, t)}
+                                                    />
+                                                )}
                                             </div>
                                             <NumericInput
                                                 value={m.qty}
@@ -577,8 +649,81 @@ export function BudgetEditor({
                                         </div>
 
                                         {/* Variantes: mismo precio de venta, distinto material según lo que
-                                            pida el cliente. Solo se ofrece si hay vocabulario de specs cargado. */}
-                                        {specFields.length > 0 && (
+                                            pida el cliente. Si la línea viene de una familia, el mapeo se
+                                            muestra pero no se edita acá: se edita en el inventario, una vez
+                                            para todos los productos. Solo se ofrece si hay vocabulario de
+                                            specs cargado. */}
+                                        {m.familyId !== null ? (
+                                            (() => {
+                                                const f = familyById.get(m.familyId)
+                                                if (!f) return null
+                                                const fieldLabel =
+                                                    specFields.find((sf) => sf.key === f.specFieldKey)?.label ?? f.specFieldKey
+                                                return (
+                                                    <div className="mt-1 md:pl-1">
+                                                        <div className="space-y-2 rounded-md border border-dashed bg-muted/30 p-2">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => toggleVariants(i)}
+                                                                    aria-expanded={variantsOpen(i)}
+                                                                    className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
+                                                                >
+                                                                    <ChevronRight
+                                                                        className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+                                                                            variantsOpen(i) ? "rotate-90" : ""
+                                                                        }`}
+                                                                    />
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        Varía según{" "}
+                                                                        <span className="font-medium text-foreground">{fieldLabel}</span>
+                                                                        {" · "}
+                                                                        {f.options.length}{" "}
+                                                                        {f.options.length === 1 ? "variante" : "variantes"} de la familia
+                                                                    </p>
+                                                                </button>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-7 shrink-0 text-xs text-muted-foreground"
+                                                                    onClick={() => unlinkFamily(i)}
+                                                                    title="Editar estas variantes solo en este producto"
+                                                                >
+                                                                    Desvincular
+                                                                </Button>
+                                                            </div>
+                                                            {variantsOpen(i) && (
+                                                                <>
+                                                                    {f.options.map((o) => (
+                                                                        <div
+                                                                            key={o.specValue}
+                                                                            className="grid grid-cols-[110px_1fr_auto] items-center gap-2 text-xs"
+                                                                        >
+                                                                            <span className="truncate text-muted-foreground">
+                                                                                {variantLabel(f.specFieldKey, o.specValue)}
+                                                                            </span>
+                                                                            <span className="truncate">{o.label}</span>
+                                                                            <span className="whitespace-nowrap text-muted-foreground">
+                                                                                {formatArs(o.unitCost)}
+                                                                                {o.specValue === f.defaultSpecValue && " · se costea con esta"}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        Se editan en{" "}
+                                                                        <Link href="/materials/familias" className="underline">
+                                                                            familias de materiales
+                                                                        </Link>{" "}
+                                                                        y valen para todos los productos. Para cambiarlas solo acá,
+                                                                        desvinculá la familia.
+                                                                    </p>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })()
+                                        ) : specFields.length > 0 ? (
                                             <div className="mt-1 md:pl-1">
                                                 {!m.specFieldKey ? (
                                                     <Select value="" onValueChange={(v) => setVariantField(i, v)}>
@@ -722,7 +867,7 @@ export function BudgetEditor({
                                                     </div>
                                                 )}
                                             </div>
-                                        )}
+                                        ) : null}
                                     </div>
                                 ))}
                             </div>
