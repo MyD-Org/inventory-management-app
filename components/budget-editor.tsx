@@ -614,12 +614,15 @@ export function BudgetEditor({
                                                     // Línea armada por una familia: el nombre es el general
                                                     // ("Tira LED"), no un material del inventario, así que no
                                                     // hay nada que buscar acá. Se cambia desvinculando.
-                                                    <div className="flex h-10 items-center gap-1.5 rounded-md border bg-muted/40 px-3 text-sm">
+                                                    // El nombre manda: la columna es angosta y la etiqueta
+                                                    // "familia" ya la dice el panel de abajo. El ícono alcanza
+                                                    // para distinguirla de un material suelto.
+                                                    <div
+                                                        className="flex h-10 items-center gap-1.5 rounded-md border bg-muted/40 px-3 text-sm"
+                                                        title={`${m.label} · familia de materiales`}
+                                                    >
                                                         <Layers className="h-3.5 w-3.5 shrink-0 text-primary" />
-                                                        <span className="truncate font-medium">{m.label}</span>
-                                                        <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                                                            familia
-                                                        </span>
+                                                        <span className="min-w-0 truncate font-medium">{m.label}</span>
                                                     </div>
                                                 ) : (
                                                     <MaterialLineAutocomplete
@@ -674,12 +677,17 @@ export function BudgetEditor({
                                                                             variantsOpen(i) ? "rotate-90" : ""
                                                                         }`}
                                                                     />
+                                                                    {/* El nombre de la familia se repite acá a propósito:
+                                                                        en la columna de material entra truncado y este
+                                                                        panel es el que se lee. */}
                                                                     <p className="text-xs text-muted-foreground">
-                                                                        Varía según{" "}
+                                                                        Familia{" "}
+                                                                        <span className="font-medium text-foreground">{f.name}</span>
+                                                                        {" · varía según "}
                                                                         <span className="font-medium text-foreground">{fieldLabel}</span>
                                                                         {" · "}
                                                                         {f.options.length}{" "}
-                                                                        {f.options.length === 1 ? "variante" : "variantes"} de la familia
+                                                                        {f.options.length === 1 ? "variante" : "variantes"}
                                                                     </p>
                                                                 </button>
                                                                 <Button

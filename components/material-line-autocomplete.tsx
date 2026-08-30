@@ -126,20 +126,24 @@ export function MaterialLineAutocomplete({
                                 onPickFamily?.(f)
                                 setOpen(false)
                             }}
-                            className={`flex w-full items-center justify-between gap-2 border-b p-2.5 text-left text-sm ${
+                            className={`flex w-full items-start justify-between gap-2 border-b p-2.5 text-left text-sm ${
                                 nav.active === i ? "bg-muted" : ""
                             }`}
                         >
-                            <span className="flex min-w-0 items-center gap-1.5">
-                                <Layers className="h-3.5 w-3.5 shrink-0 text-primary" />
-                                <span className="truncate font-medium">{f.name}</span>
-                                <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                                    familia
+                            {/* En dos renglones: el desplegable es angosto y el nombre de
+                                la familia no puede pelear el ancho con el "varía según". */}
+                            <span className="flex min-w-0 flex-col gap-0.5">
+                                <span className="flex min-w-0 items-center gap-1.5">
+                                    <Layers className="h-3.5 w-3.5 shrink-0 text-primary" />
+                                    <span className="min-w-0 truncate font-medium">{f.name}</span>
+                                    <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                        familia
+                                    </span>
                                 </span>
-                            </span>
-                            <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                                varía según {f.fieldLabel} · {f.variantCount}{" "}
-                                {f.variantCount === 1 ? "variante" : "variantes"}
+                                <span className="pl-5 text-xs text-muted-foreground">
+                                    varía según {f.fieldLabel} · {f.variantCount}{" "}
+                                    {f.variantCount === 1 ? "variante" : "variantes"}
+                                </span>
                             </span>
                         </button>
                     ))}
