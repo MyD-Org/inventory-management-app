@@ -6,6 +6,7 @@ import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { getDefaultMargin, getWorkHoursPerMonth } from "@/lib/budget-actions"
 import { listSpecChoices } from "@/lib/spec-choices"
+import { listMaterialFamilies } from "@/lib/material-families"
 import { isAlegraConfigured } from "@/lib/alegra"
 
 export const dynamic = 'force-dynamic';
@@ -41,7 +42,7 @@ export default async function EditCostPage({ params }: { params: { id: string } 
         getDefaultMargin(),
         getWorkHoursPerMonth(),
     ])
-    const specFields = await listSpecChoices()
+    const [specFields, families] = await Promise.all([listSpecChoices(), listMaterialFamilies()])
 
     const row = budgetRows[0]
     if (!row) notFound()
@@ -66,6 +67,7 @@ export default async function EditCostPage({ params }: { params: { id: string } 
             qty: Number(m.qty),
             unitCost: Number(m.unit_cost),
             specFieldKey: m.spec_field_key ?? null,
+            familyId: m.family_id ?? null,
             options: (m.options as Array<{ specValue: string; materialId: number | null; label: string }>).map((o) => ({
                 specValue: String(o.specValue),
                 materialId: o.materialId == null ? null : Number(o.materialId),
@@ -119,6 +121,7 @@ export default async function EditCostPage({ params }: { params: { id: string } 
                     // cotizaciones es otro permiso (alegraEstimatesEnabled) y no se usa acá.
                     alegraEnabled={isAlegraConfigured()}
                     specFields={specFields}
+                    families={families}
                 />
             </main>
         </div>

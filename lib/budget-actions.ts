@@ -157,6 +157,10 @@ export interface BudgetPayload {
         unit_cost: number;
         spec_field_key?: string | null;
         options?: Array<{ spec_value: string; material_id: number | null; label: string }>;
+        // Familia de materiales que arma esta línea (ver lib/material-families.ts).
+        // null = mapeo propio de la línea. Vinculada, las variantes se leen de la
+        // familia al explotar el BOM; las de acá quedan igual como foto.
+        family_id?: number | null;
     }>;
     labor: Array<{ resource_id: number | null; label: string; hours: number; hourly_rate: number }>;
     extras: Array<{ label: string; amount: number }>;
@@ -171,6 +175,9 @@ function validBudgetPayload(p: BudgetPayload): string | null {
             return 'Hay líneas de materiales inválidas';
         }
         const options = m.options ?? [];
+        if (m.family_id != null && !m.spec_field_key?.trim()) {
+            return `La línea "${m.label.trim()}" usa una familia pero no dice según qué campo varía`;
+        }
         if (options.length > 0 && !m.spec_field_key?.trim()) {
             return `La línea "${m.label.trim()}" tiene variantes pero no dice según qué campo varía`;
         }
@@ -233,8 +240,8 @@ export async function saveBudget(id: number | null, payload: BudgetPayload) {
         // silencio en la primera edición.
         for (const m of payload.materials) {
             const [line] = await sql`
-                INSERT INTO budget_materials (budget_id, material_id, label, qty, unit_cost, spec_field_key)
-                VALUES (${budgetId}, ${m.material_id}, ${m.label.trim()}, ${m.qty}, ${m.unit_cost}, ${m.spec_field_key?.trim() || null})
+                INSERT INTO budget_materials (budget_id, material_id, label, qty, unit_cost, spec_field_key, family_id)
+                VALUES (${budgetId}, ${m.material_id}, ${m.label.trim()}, ${m.qty}, ${m.unit_cost}, ${m.spec_field_key?.trim() || null}, ${m.family_id ?? null})
                 RETURNING id
             `;
             for (const o of m.options ?? []) {
