@@ -7,6 +7,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
+import { logOrderEvent, logOrderEvents } from '@/lib/order-events';
 import { sql } from '@/lib/database';
 import { invoiceOrder } from '@/lib/invoicing';
 import {
@@ -51,6 +52,14 @@ export async function createOrderManual(payload: OrderPayload) {
         if (errors.length > 0) return { error: errors.join('. ') };
 
         const { created, order } = await createOrder(payload);
+        // Solo si se creó de verdad: si el external_id ya existía, createOrder
+        // devuelve el pedido original y no hubo alta que registrar.
+        if (created && order?.id) {
+            await logOrderEvent(order.id, { kind: 'created', newValue: payload.origin ?? 'manual' });
+            if (payload.notes?.trim()) {
+                await logOrderEvent(order.id, { kind: 'note', body: payload.notes.trim() });
+            }
+        }
         revalidatePath('/pedidos');
         revalidatePath('/pedidos/lista');
         // No es un error: el external_id ya existía y devolvemos el pedido original.
@@ -76,7 +85,16 @@ export async function updateOrderStatus(id: number, status: string) {
             }
         }
 
+        const [previo] = await sql`SELECT status FROM orders WHERE id = ${id}`;
         await sql`UPDATE orders SET status = ${status} WHERE id = ${id}`;
+        if (previo?.status !== status) {
+            await logOrderEvent(id, {
+                kind: 'status',
+                field: 'status',
+                oldValue: previo?.status ?? null,
+                newValue: status,
+            });
+        }
 
         // Al pasar a 'por_facturar' intentamos emitir el borrador en Alegra de
         // forma automática. Si falla, el estado cambia igual y queda visible el
@@ -93,6 +111,13 @@ export async function updateOrderStatus(id: number, status: string) {
                         terms: order.invoice_terms ?? undefined,
                         notes: order.invoice_notes ?? undefined,
                     });
+                    if (result.invoiceId != null) {
+                        await logOrderEvent(id, {
+                            kind: 'invoice',
+                            newValue: result.invoiceNumber ?? String(result.invoiceId),
+                            actor: { name: 'Sistema' },
+                        });
+                    }
                     if (result.invoiceId == null) {
                         warning = result.warnings?.[0] ?? 'No se pudo generar la factura automáticamente.';
                         if (result.warnings && result.warnings.length > 0) {
@@ -278,6 +303,15 @@ export async function updateOrderFields(
         return { error: 'Prioridad inválida' };
     }
 
+    // Se lee el pedido ANTES de tocarlo: el UPDATE es uno solo con CASE, así que
+    // sin esta foto no hay forma de decir "de 04/09 a 11/09", solo "cambió".
+    const [antes] = await sql`
+        SELECT customer_name, customer_external_id, customer_phone, priority,
+               delivery_date_estimate::text AS delivery_date_estimate,
+               notes, invoice_terms, invoice_notes
+        FROM orders WHERE id = ${id}
+    `;
+
     try {
         // COALESCE con el valor actual: así un patch parcial no pisa lo demás.
         // Para los campos que sí se pueden vaciar mandamos '' y lo pasamos a NULL.
@@ -320,6 +354,31 @@ export async function updateOrderFields(
         if (patch.delivery_date_estimate !== undefined) {
             await sql`UPDATE orders SET delivery_date_verified_at = NOW() WHERE id = ${id}`;
         }
+
+        // Un evento por campo que REALMENTE cambió. Guardar un evento por cada
+        // campo del patch llenaría la historia de "cambió el teléfono" cuando
+        // alguien entró al campo y salió sin tocar nada.
+        const normalizar = (v: unknown) => {
+            const t = v == null ? '' : String(v).trim();
+            return t === '' ? null : t;
+        };
+        await logOrderEvents(
+            id,
+            (Object.keys(patch) as (keyof typeof patch)[])
+                .map((campo) => ({
+                    campo,
+                    viejo: normalizar(antes?.[campo]),
+                    nuevo: normalizar(patch[campo]),
+                }))
+                .filter(({ viejo, nuevo }) => viejo !== nuevo)
+                .map(({ campo, viejo, nuevo }) => ({
+                    kind: 'field' as const,
+                    field: campo,
+                    oldValue: viejo,
+                    newValue: nuevo,
+                })),
+        );
+
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${id}`);
         return { ok: true };
@@ -348,7 +407,7 @@ export async function updateOrderItem(
     const session = await auth();
     if (!session?.user) return { ok: false, error: 'No autenticado' };
 
-    const [item] = await sql`SELECT order_id FROM order_items WHERE id = ${itemId}`;
+    const [item] = await sql`SELECT order_id, product, quantity FROM order_items WHERE id = ${itemId}`;
     if (!item) return { ok: false, error: 'La línea no existe' };
 
     const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${item.order_id}`;
@@ -358,6 +417,16 @@ export async function updateOrderItem(
 
     const result = await updateOrderItemInternal(itemId, patch);
     if (result.ok) {
+        // La cantidad se dice con el antes y el después; las specs no, que son un
+        // objeto y en el hilo ocuparían tres renglones sin que se entienda mejor.
+        const cambioCantidad =
+            patch.quantity !== undefined && Number(patch.quantity) !== Number(item.quantity);
+        await logOrderEvent(item.order_id, {
+            kind: 'item_updated',
+            field: cambioCantidad ? 'quantity' : 'specs',
+            oldValue: cambioCantidad ? `${item.quantity} × ${item.product}` : item.product,
+            newValue: cambioCantidad ? `${patch.quantity} × ${item.product}` : item.product,
+        });
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${item.order_id}`);
     }
@@ -368,7 +437,8 @@ export async function deleteOrderItem(itemId: number): Promise<import('@/lib/ord
     const session = await auth();
     if (!session?.user) return { ok: false, error: 'No autenticado' };
 
-    const [item] = await sql`SELECT order_id FROM order_items WHERE id = ${itemId}`;
+    // Se lee el producto ANTES de borrarlo: después ya no hay qué nombrar.
+    const [item] = await sql`SELECT order_id, product, quantity FROM order_items WHERE id = ${itemId}`;
     if (!item) return { ok: false, error: 'La línea no existe' };
 
     const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${item.order_id}`;
@@ -378,6 +448,10 @@ export async function deleteOrderItem(itemId: number): Promise<import('@/lib/ord
 
     const result = await deleteOrderItemInternal(itemId);
     if (result.ok) {
+        await logOrderEvent(item.order_id, {
+            kind: 'item_removed',
+            oldValue: `${item.quantity} × ${item.product}`,
+        });
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${item.order_id}`);
     }
@@ -400,6 +474,10 @@ export async function addOrderItem(
 
     const result = await addOrderItemInternal(orderId, payload);
     if (result.ok) {
+        await logOrderEvent(orderId, {
+            kind: 'item_added',
+            newValue: `${payload.quantity} × ${payload.product}`,
+        });
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${orderId}`);
     }
@@ -572,6 +650,11 @@ export async function consumeOrderMaterials(
             `;
         }
 
+        await logOrderEvent(orderId, {
+            kind: 'materials_consumed',
+            newValue: String(aDescontar.length),
+        });
+
         revalidatePath(`/pedidos/${orderId}`);
         revalidatePath('/inventory');
         revalidatePath('/movimientos');
@@ -653,4 +736,22 @@ export async function searchInventoryMaterials(q: string) {
         console.error('Error en searchInventoryMaterials:', error);
         return [];
     }
+}
+
+// Dejar una nota en el pedido. No se edita ni se borra: si se pudiera cambiar
+// después, la historia dejaría de servir justo cuando hace falta.
+export async function addOrderNote(orderId: number, body: string) {
+    const session = await auth();
+    if (!session?.user) return { error: 'No autenticado' };
+
+    const texto = body.trim();
+    if (!texto) return { error: 'La nota está vacía' };
+    if (texto.length > 2000) return { error: 'La nota es demasiado larga' };
+
+    const [order] = await sql`SELECT id FROM orders WHERE id = ${orderId}`;
+    if (!order) return { error: 'El pedido no existe' };
+
+    await logOrderEvent(orderId, { kind: 'note', body: texto });
+    revalidatePath(`/pedidos/${orderId}`);
+    return { ok: true };
 }
