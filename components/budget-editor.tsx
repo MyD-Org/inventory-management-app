@@ -713,7 +713,7 @@ export function BudgetEditor({
                                                                             <span className="truncate">{o.label}</span>
                                                                             <span className="whitespace-nowrap text-muted-foreground">
                                                                                 {formatArs(o.unitCost)}
-                                                                                {o.specValue === f.defaultSpecValue && " · se costea con esta"}
+                                                                                {o.specValue === f.defaultSpecValue && " · con esta se calcula el costo"}
                                                                             </span>
                                                                         </div>
                                                                     ))}

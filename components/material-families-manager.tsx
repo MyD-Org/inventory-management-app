@@ -266,7 +266,7 @@ export function MaterialFamiliesManager({
                                     <p className="mt-0.5 text-xs text-muted-foreground">
                                         Varía según {fieldLabel(f.specFieldKey)} · {f.options.length}{" "}
                                         {f.options.length === 1 ? "variante" : "variantes"}
-                                        {f.defaultSpecValue === null && " · falta elegir con cuál se costea"}
+                                        {f.defaultSpecValue === null && " · falta elegir con cuál se calcula el costo"}
                                     </p>
                                 </div>
                                 <div className="flex shrink-0 gap-1">
@@ -288,7 +288,7 @@ export function MaterialFamiliesManager({
                                             <span className="truncate">{o.label}</span>
                                             <span className="whitespace-nowrap text-muted-foreground">
                                                 {formatArs(o.unitCost)}
-                                                {o.specValue === f.defaultSpecValue && " · se costea con esta"}
+                                                {o.specValue === f.defaultSpecValue && " · con esta se calcula el costo"}
                                             </span>
                                         </div>
                                     ))}
@@ -342,8 +342,8 @@ export function MaterialFamiliesManager({
                                 <div className="space-y-2">
                                     <Label>Qué material sale para cada variante</Label>
                                     <p className="text-xs text-muted-foreground">
-                                        Dejá vacías las que no uses. La marcada como predeterminada es la que define el
-                                        costo en las hojas de costo y la que sale cuando el pedido no aclara.
+                                        Dejá vacías las que no uses. A la derecha marcá con cuál de las variantes se
+                                        calcula el costo del producto: es también la que sale si el pedido no aclara.
                                     </p>
                                     {draft.options.length === 0 ? (
                                         <p className="text-xs text-muted-foreground">
@@ -354,7 +354,15 @@ export function MaterialFamiliesManager({
                                             .
                                         </p>
                                     ) : (
-                                        draft.options.map((o) => (
+                                        <>
+                                        {/* La pregunta se hace UNA vez arriba de la columna: repetirla en cada
+                                            fila obliga a una etiqueta corta que no se entiende sola. */}
+                                        <div className="grid grid-cols-[100px_1fr_auto] items-end gap-2 text-xs text-muted-foreground">
+                                            <span />
+                                            <span>Material del inventario</span>
+                                            <span className="w-[104px] leading-tight">Se calcula el costo con</span>
+                                        </div>
+                                        {draft.options.map((o) => (
                                             <div
                                                 key={o.specValue}
                                                 className="grid grid-cols-[100px_1fr_auto] items-center gap-2"
@@ -369,22 +377,21 @@ export function MaterialFamiliesManager({
                                                     onPick={(m) => pickRowMaterial(o.specValue, m)}
                                                     onText={(t) => updateRow(o.specValue, { materialId: null, label: t })}
                                                 />
-                                                <div className="flex items-center gap-1">
-                                                    <label
-                                                        className={`flex items-center gap-1 whitespace-nowrap text-xs ${
-                                                            o.materialId === null ? "text-muted-foreground/50" : "text-muted-foreground"
-                                                        }`}
-                                                        title="Con esta variante se costea"
-                                                    >
-                                                        <input
-                                                            type="radio"
-                                                            name="family-default"
-                                                            disabled={o.materialId === null}
-                                                            checked={draft.defaultSpecValue === o.specValue}
-                                                            onChange={() => setDraft({ ...draft, defaultSpecValue: o.specValue })}
-                                                        />
-                                                        costea
-                                                    </label>
+                                                <div className="flex w-[104px] items-center justify-between gap-1">
+                                                    <input
+                                                        className="ml-6"
+                                                        type="radio"
+                                                        name="family-default"
+                                                        disabled={o.materialId === null}
+                                                        checked={draft.defaultSpecValue === o.specValue}
+                                                        onChange={() => setDraft({ ...draft, defaultSpecValue: o.specValue })}
+                                                        aria-label={`Calcular el costo con ${valueLabel(draft.fieldKey, o.specValue)}`}
+                                                        title={
+                                                            o.materialId === null
+                                                                ? "Cargá primero el material de esta variante"
+                                                                : `Calcular el costo con ${o.label}`
+                                                        }
+                                                    />
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
@@ -397,7 +404,8 @@ export function MaterialFamiliesManager({
                                                     </Button>
                                                 </div>
                                             </div>
-                                        ))
+                                        ))}
+                                        </>
                                     )}
                                 </div>
                             )}
