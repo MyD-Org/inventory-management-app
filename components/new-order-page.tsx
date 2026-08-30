@@ -435,7 +435,7 @@ export function NewOrderPage({
 
                     <Textarea
                         rows={2}
-                        placeholder="Notas para el taller"
+                        placeholder="Notas"
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         className="text-base resize-none bg-muted/50 border-0 focus-visible:ring-1"
