@@ -23,8 +23,8 @@ export default async function MaterialFamiliesPage() {
                 <div className="mx-auto max-w-4xl">
                     <h1 className="mb-1 text-2xl font-bold">Familias de Materiales</h1>
                     <p className="mb-6 text-sm text-muted-foreground">
-                        Una materia prima que viene en variantes: “Tira LED” según el color, “Grampa” según el largo,
-                        “Óptica” según el grado. Se carga una sola vez acá y después se elige como una línea más en
+                        Una materia prima que viene en variantes: “Placa 1 led” según el color, “Óptica individual” según
+                        el grado, “Grampa” según el largo. Se carga una sola vez acá y después se elige como una línea más en
                         cualquier cálculo de costo, con todas sus variantes ya asociadas. Si mañana cambia el material
                         de una variante, se cambia acá y vale para todos los productos.
                     </p>

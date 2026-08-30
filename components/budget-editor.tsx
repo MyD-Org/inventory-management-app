@@ -612,7 +612,7 @@ export function BudgetEditor({
                                                 )}
                                                 {m.familyId !== null ? (
                                                     // Línea armada por una familia: el nombre es el general
-                                                    // ("Tira LED"), no un material del inventario, así que no
+                                                    // ("Placa 1 led"), no un material del inventario, así que no
                                                     // hay nada que buscar acá. Se cambia desvinculando.
                                                     // El nombre manda: la columna es angosta y la etiqueta
                                                     // "familia" ya la dice el panel de abajo. El ícono alcanza

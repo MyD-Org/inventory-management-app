@@ -1,7 +1,7 @@
 "use client"
 
-// Familias de materiales: "Tira LED varía según el color; cálido es este material
-// del inventario y azul este otro". Se declara UNA VEZ acá y las hojas de costo la
+// Familias de materiales: "Placa 1 led varía según el color; 2200k es este material
+// del inventario y 3000k este otro". Se declara UNA VEZ acá y las hojas de costo la
 // eligen como si fuera un material, sin recargar el mapeo producto por producto.
 //
 // El orden de la pantalla es el orden en que se piensa: primero el nombre general
@@ -174,7 +174,7 @@ export function MaterialFamiliesManager({
         // Se avisa acá lo mismo que valida el servidor, para no tener que apretar
         // guardar dos veces para enterarse.
         if (!draft.name.trim()) {
-            toast.error("Falta el nombre", { description: "Poné el nombre general de la materia prima, por ejemplo “Tira LED”." })
+            toast.error("Falta el nombre", { description: "Poné el nombre general de la materia prima, por ejemplo “Placa 1 led”." })
             return
         }
         if (!draft.fieldKey) {
@@ -249,8 +249,9 @@ export function MaterialFamiliesManager({
 
             {families.length === 0 ? (
                 <p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-                    No hay familias todavía. Creá la primera con el nombre general de la materia prima —“Tira LED”,
-                    “Óptica”, “Grampa”— y asociá cada variante al material del inventario que le corresponde.
+                    No hay familias todavía. Creá la primera con el nombre general de la materia prima —“Placa 1 led”,
+                    “Óptica individual”, “Grampa”— y asociá cada variante al material del inventario que le
+                    corresponde.
                 </p>
             ) : (
                 <div className="space-y-2">
@@ -312,7 +313,7 @@ export function MaterialFamiliesManager({
                                     id="family-name"
                                     value={draft.name}
                                     onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                                    placeholder="Tira LED"
+                                    placeholder="Placa 1 led"
                                     autoComplete="off"
                                 />
                                 <p className="mt-1 text-xs text-muted-foreground">
