@@ -518,10 +518,6 @@ export function MaterialFamiliesManager({
                                     <Label className={draft.options.length > 0 ? "pt-2" : undefined}>
                                         Qué material sale para cada variante
                                     </Label>
-                                    <p className="text-xs text-muted-foreground">
-                                        Podés asociar varios materiales a un mismo color. El primero de cada color sale
-                                        por defecto al retirar stock.
-                                    </p>
                                     {draft.options.length === 0 ? (
                                         <p className="text-xs text-muted-foreground">
                                             Ese campo no tiene opciones cargadas. Agregalas en{" "}
