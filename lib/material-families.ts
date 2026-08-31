@@ -17,7 +17,7 @@
 import { neon } from '@neondatabase/serverless';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
-import type { MaterialFamily, MaterialFamilyOption } from '@/lib/material-family';
+import type { CostStrategy, MaterialFamily, MaterialFamilyOption } from '@/lib/material-family';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -25,6 +25,8 @@ export interface MaterialFamilyPayload {
     name: string;
     spec_field_key: string;
     default_spec_value: string | null;
+    cost_strategy: CostStrategy;
+    cost_material_id: number | null;
     options: Array<{ spec_value: string; material_id: number; is_default: boolean }>;
 }
 
@@ -38,6 +40,7 @@ export async function listMaterialFamilies(): Promise<MaterialFamily[]> {
     const rows = await sql`
         SELECT
             f.id, f.name, f.spec_field_key, f.default_spec_value,
+            f.cost_strategy, f.cost_material_id,
             COALESCE(
                 json_agg(
                     json_build_object(
@@ -63,6 +66,8 @@ export async function listMaterialFamilies(): Promise<MaterialFamily[]> {
         name: r.name as string,
         specFieldKey: r.spec_field_key as string,
         defaultSpecValue: (r.default_spec_value as string | null) ?? null,
+        costStrategy: (r.cost_strategy as CostStrategy) ?? 'default',
+        costMaterialId: (r.cost_material_id as number | null) ?? null,
         options: (r.options as MaterialFamilyOption[]).map((o) => ({
             specValue: String(o.specValue),
             materialId: Number(o.materialId),
@@ -74,9 +79,12 @@ export async function listMaterialFamilies(): Promise<MaterialFamily[]> {
     }));
 }
 
+const VALID_COST_STRATEGIES: CostStrategy[] = ['default', 'average', 'highest', 'specific'];
+
 function validFamilyPayload(p: MaterialFamilyPayload): string | null {
     if (!p.name?.trim()) return 'El nombre de la familia es requerido';
     if (!p.spec_field_key?.trim()) return 'Falta indicar según qué campo varía la familia';
+    if (!VALID_COST_STRATEGIES.includes(p.cost_strategy)) return 'Estrategia de costeo inválida';
 
     const byValue = new Map<string, Array<{ material_id: number; is_default: boolean }>>();
     for (const o of p.options) {
@@ -103,6 +111,14 @@ function validFamilyPayload(p: MaterialFamilyPayload): string | null {
         if (!p.default_spec_value?.trim()) return 'Elegí con qué variante se costea (la predeterminada)';
         if (!byValue.has(p.default_spec_value.trim())) return 'La variante predeterminada tiene que ser una de las cargadas';
     }
+
+    if (p.cost_strategy === 'specific') {
+        if (!Number.isFinite(p.cost_material_id)) return 'Elegí qué material se usa para costear';
+        const defaultGroup = byValue.get(p.default_spec_value?.trim() ?? '');
+        if (!defaultGroup?.some((x) => x.material_id === p.cost_material_id)) {
+            return 'El material de costeo tiene que pertenecer a la variante predeterminada';
+        }
+    }
     return null;
 }
 
@@ -118,13 +134,15 @@ export async function insertMaterialFamily(
     const name = payload.name.trim();
     const fieldKey = payload.spec_field_key.trim();
     const defaultValue = payload.options.length > 0 ? payload.default_spec_value!.trim() : null;
+    const costStrategy = payload.cost_strategy;
+    const costMaterialId = payload.cost_strategy === 'specific' ? payload.cost_material_id : null;
 
     try {
         let familyId = id;
         if (familyId == null) {
             const [row] = await sql`
-                INSERT INTO material_families (name, spec_field_key, default_spec_value)
-                VALUES (${name}, ${fieldKey}, ${defaultValue})
+                INSERT INTO material_families (name, spec_field_key, default_spec_value, cost_strategy, cost_material_id)
+                VALUES (${name}, ${fieldKey}, ${defaultValue}, ${costStrategy}, ${costMaterialId})
                 RETURNING id
             `;
             familyId = row.id as number;
@@ -132,7 +150,9 @@ export async function insertMaterialFamily(
             const updated = await sql`
                 UPDATE material_families
                 SET name = ${name}, spec_field_key = ${fieldKey},
-                    default_spec_value = ${defaultValue}, updated_at = NOW()
+                    default_spec_value = ${defaultValue},
+                    cost_strategy = ${costStrategy}, cost_material_id = ${costMaterialId},
+                    updated_at = NOW()
                 WHERE id = ${familyId}
                 RETURNING id
             `;

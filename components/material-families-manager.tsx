@@ -23,7 +23,7 @@ import { useToast } from "@/hooks/use-toast"
 import { formatArs } from "@/lib/format"
 import { getMaterialsCatalog } from "@/lib/budget-actions"
 import { saveMaterialFamily, deleteMaterialFamily } from "@/lib/material-families"
-import type { MaterialFamily } from "@/lib/material-family"
+import type { CostStrategy, MaterialFamily } from "@/lib/material-family"
 import { MaterialLineAutocomplete, type MaterialSearchResult } from "@/components/material-line-autocomplete"
 import type { SpecFieldChoice } from "@/lib/spec-choices"
 
@@ -43,9 +43,19 @@ interface Draft {
     fieldKey: string
     options: DraftOption[]
     defaultSpecValue: string | null
+    costStrategy: CostStrategy
+    costMaterialId: number | null
 }
 
-const emptyDraft: Draft = { id: null, name: "", fieldKey: "", options: [], defaultSpecValue: null }
+const emptyDraft: Draft = {
+    id: null,
+    name: "",
+    fieldKey: "",
+    options: [],
+    defaultSpecValue: null,
+    costStrategy: "default",
+    costMaterialId: null,
+}
 
 let nextKey = 1
 const newKey = () => String(nextKey++)
@@ -78,6 +88,18 @@ export function MaterialFamiliesManager({
     const fieldLabel = (key: string) => fieldOf(key)?.label ?? key
     const valueLabel = (key: string, value: string) =>
         fieldOf(key)?.options.find((o) => o.value === value)?.label ?? value
+    const costStrategyLabel = (strategy: CostStrategy) => {
+        switch (strategy) {
+            case "average":
+                return "promedio"
+            case "highest":
+                return "más caro"
+            case "specific":
+                return "material específico"
+            case "default":
+                return "default"
+        }
+    }
 
     // Agrupa las filas de borrador por specValue, respetando el orden de carga.
     const groupBySpecValue = <T extends { specValue: string }>(options: T[]) => {
@@ -162,6 +184,8 @@ export function MaterialFamiliesManager({
             fieldKey: f.specFieldKey,
             options: rows,
             defaultSpecValue: f.defaultSpecValue,
+            costStrategy: f.costStrategy,
+            costMaterialId: f.costMaterialId,
         })
     }
 
@@ -264,6 +288,8 @@ export function MaterialFamiliesManager({
             name: draft.name,
             spec_field_key: draft.fieldKey,
             default_spec_value: draft.defaultSpecValue,
+            cost_strategy: draft.costStrategy,
+            cost_material_id: draft.costMaterialId,
             options: filled.map((o) => ({
                 spec_value: o.specValue,
                 material_id: o.materialId as number,
@@ -349,6 +375,8 @@ export function MaterialFamiliesManager({
                                                 {specCount === 1 ? "variante" : "variantes"} · {f.options.length}{" "}
                                                 {f.options.length === 1 ? "material" : "materiales"}
                                                 {f.defaultSpecValue === null && " · falta elegir con cuál se calcula el costo"}
+                                                {f.defaultSpecValue !== null &&
+                                                    ` · costo por ${costStrategyLabel(f.costStrategy)}`}
                                             </p>
                                         </div>
                                     </div>
@@ -370,7 +398,12 @@ export function MaterialFamiliesManager({
                                                 </span>
                                                 <span className="truncate">{o.label}</span>
                                                 <span className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
-                                                    {o.isDefault && o.specValue === f.defaultSpecValue && (
+                                                    {((f.costStrategy === "default" &&
+                                                        o.isDefault &&
+                                                        o.specValue === f.defaultSpecValue) ||
+                                                        (f.costStrategy === "specific" &&
+                                                            o.materialId === f.costMaterialId &&
+                                                            o.specValue === f.defaultSpecValue)) && (
                                                         <Badge variant="secondary">Costeo</Badge>
                                                     )}
                                                     {formatArs(o.unitCost)}
@@ -435,8 +468,8 @@ export function MaterialFamiliesManager({
                                 <div className="space-y-2">
                                     <Label>Qué material sale para cada variante</Label>
                                     <p className="text-xs text-muted-foreground">
-                                        Podés asociar varios materiales a un mismo color. El primero de cada color se usa
-                                        para costear y sale por defecto al retirar stock; después podés elegir otro.
+                                        Podés asociar varios materiales a un mismo color. El primero de cada color sale
+                                        por defecto al retirar stock; el costeo se define más abajo.
                                     </p>
                                     {draft.options.length === 0 ? (
                                         <p className="text-xs text-muted-foreground">
@@ -498,7 +531,14 @@ export function MaterialFamiliesManager({
                                             </p>
                                             <Select
                                                 value={draft.defaultSpecValue ?? ""}
-                                                onValueChange={(v) => setDraft({ ...draft, defaultSpecValue: v || null })}
+                                                onValueChange={(v) =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        defaultSpecValue: v || null,
+                                                        costMaterialId:
+                                                            draft.costStrategy === "specific" ? null : draft.costMaterialId,
+                                                    })
+                                                }
                                             >
                                                 <SelectTrigger>
                                                     <SelectValue placeholder="Elegí la variante de costo" />
@@ -514,6 +554,64 @@ export function MaterialFamiliesManager({
                                                         ))}
                                                 </SelectContent>
                                             </Select>
+
+                                            <p className="pt-3 text-xs text-muted-foreground">
+                                                Cómo se calcula el costo de esa variante
+                                            </p>
+                                            <Select
+                                                value={draft.costStrategy}
+                                                onValueChange={(v) =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        costStrategy: v as CostStrategy,
+                                                        costMaterialId: v === "specific" ? draft.costMaterialId : null,
+                                                    })
+                                                }
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Elegí la estrategia de costo" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="default">Material default de la variante</SelectItem>
+                                                    <SelectItem value="average">Promedio de los materiales</SelectItem>
+                                                    <SelectItem value="highest">Material más caro</SelectItem>
+                                                    <SelectItem value="specific">Material específico</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+
+                                            {draft.costStrategy === "specific" && (
+                                                <>
+                                                    <p className="pt-1 text-xs text-muted-foreground">
+                                                        Qué material se usa para costear
+                                                    </p>
+                                                    <Select
+                                                        value={draft.costMaterialId ? String(draft.costMaterialId) : ""}
+                                                        onValueChange={(v) =>
+                                                            setDraft({ ...draft, costMaterialId: Number(v) })
+                                                        }
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Elegí el material" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {draft.options
+                                                                .filter(
+                                                                    (o) =>
+                                                                        o.specValue === draft.defaultSpecValue &&
+                                                                        o.materialId !== null,
+                                                                )
+                                                                .map((o) => (
+                                                                    <SelectItem
+                                                                        key={o.materialId}
+                                                                        value={String(o.materialId)}
+                                                                    >
+                                                                        {o.label}
+                                                                    </SelectItem>
+                                                                ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </>
+                                            )}
                                         </>
                                     )}
                                 </div>

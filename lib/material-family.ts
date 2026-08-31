@@ -17,6 +17,8 @@ export interface MaterialFamilyOption {
     isDefault?: boolean
 }
 
+export type CostStrategy = "default" | "average" | "highest" | "specific"
+
 export interface MaterialFamily {
     id: number
     name: string
@@ -24,6 +26,10 @@ export interface MaterialFamily {
     // Con qué variante se costea la línea que use esta familia. null = familia
     // incompleta: la UI no la deja usar hasta que se elija una.
     defaultSpecValue: string | null
+    // Cómo se calcula el costo dentro de la variante default.
+    costStrategy: CostStrategy
+    // Material usado para costear cuando la estrategia es 'specific'.
+    costMaterialId: number | null
     options: MaterialFamilyOption[]
 }
 
@@ -63,15 +69,38 @@ export function defaultOption(family: MaterialFamily): MaterialFamilyOption | un
     return family.options[0]
 }
 
+// Costo unitario de la familia según la estrategia elegida. Se aplica sobre la
+// variante default; si no existe, cae a todas las opciones para no dejar cero.
+export function familyUnitCost(family: MaterialFamily): number {
+    const bySpec = optionsBySpecValue(family)
+    const candidates = family.defaultSpecValue ? bySpec.get(family.defaultSpecValue) : undefined
+    const options = candidates && candidates.length > 0 ? candidates : family.options
+    if (!options || options.length === 0) return 0
+
+    switch (family.costStrategy) {
+        case "average":
+            return options.reduce((sum, o) => sum + o.unitCost, 0) / options.length
+        case "highest":
+            return Math.max(...options.map((o) => o.unitCost))
+        case "specific": {
+            const specific = options.find((o) => o.materialId === family.costMaterialId)
+            return specific?.unitCost ?? options[0].unitCost
+        }
+        case "default":
+        default:
+            return options.find((o) => o.isDefault)?.unitCost ?? options[0].unitCost
+    }
+}
+
 // Elegir una familia arma la línea entera: nombre general, campo que la hace
-// variar, todas las variantes, y el costo de la predeterminada.
+// variar, todas las variantes, y el costo calculado por la estrategia.
 export function lineFromFamily(family: MaterialFamily): FamilyLineFields {
     const def = defaultOption(family)
     return {
         familyId: family.id,
         label: family.name,
         materialId: def?.materialId ?? null,
-        unitCost: def?.unitCost ?? 0,
+        unitCost: familyUnitCost(family),
         specFieldKey: family.specFieldKey,
         options: family.options.map((o) => ({ specValue: o.specValue, materialId: o.materialId, label: o.label })),
     }

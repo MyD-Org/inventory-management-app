@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
 import { insertMaterialFamily, type MaterialFamilyPayload } from "@/lib/material-families"
+import type { CostStrategy } from "@/lib/material-family"
 
 // Tool de IA: crea una familia de materiales con sus variantes.
 // El agente debe haber buscado previamente los materiales con search-materials para
@@ -25,6 +26,8 @@ export async function POST(request: NextRequest) {
     const name = typeof b.name === "string" ? b.name.trim() : ""
     const specFieldKey = typeof b.spec_field_key === "string" ? b.spec_field_key.trim() : ""
     const defaultSpecValue = typeof b.default_spec_value === "string" ? b.default_spec_value.trim() : null
+    const costStrategy = (typeof b.cost_strategy === "string" ? b.cost_strategy : "default") as CostStrategy
+    const costMaterialId = Number(b.cost_material_id)
 
     if (!name) {
         return NextResponse.json({ error: "Falta name" }, { status: 400 })
@@ -61,6 +64,8 @@ export async function POST(request: NextRequest) {
         name,
         spec_field_key: specFieldKey,
         default_spec_value: defaultSpecValue,
+        cost_strategy: costStrategy,
+        cost_material_id: Number.isFinite(costMaterialId) ? costMaterialId : null,
         options,
     }
 
