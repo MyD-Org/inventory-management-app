@@ -66,7 +66,7 @@ export async function listMaterialFamilies(): Promise<MaterialFamily[]> {
         name: r.name as string,
         specFieldKey: r.spec_field_key as string,
         defaultSpecValue: (r.default_spec_value as string | null) ?? null,
-        costStrategy: (r.cost_strategy as CostStrategy) ?? 'default',
+        costStrategy: (r.cost_strategy as CostStrategy) ?? 'average',
         costMaterialId: (r.cost_material_id as number | null) ?? null,
         options: (r.options as MaterialFamilyOption[]).map((o) => ({
             specValue: String(o.specValue),
