@@ -23,7 +23,7 @@ import { useToast } from "@/hooks/use-toast"
 import { formatArs } from "@/lib/format"
 import { getMaterialsCatalog } from "@/lib/budget-actions"
 import { saveMaterialFamily, deleteMaterialFamily } from "@/lib/material-families"
-import type { CostStrategy, MaterialFamily } from "@/lib/material-family"
+import { familyUnitCost, type CostStrategy, type MaterialFamily } from "@/lib/material-family"
 import { MaterialLineAutocomplete, type MaterialSearchResult } from "@/components/material-line-autocomplete"
 import type { SpecFieldChoice } from "@/lib/spec-choices"
 
@@ -375,8 +375,7 @@ export function MaterialFamiliesManager({
                                                 {specCount === 1 ? "variante" : "variantes"} · {f.options.length}{" "}
                                                 {f.options.length === 1 ? "material" : "materiales"}
                                                 {f.defaultSpecValue === null && " · falta elegir con cuál se calcula el costo"}
-                                                {f.defaultSpecValue !== null &&
-                                                    ` · costo por ${costStrategyLabel(f.costStrategy)}`}
+                                                {f.defaultSpecValue !== null && ` · ${formatArs(familyUnitCost(f))}`}
                                             </p>
                                         </div>
                                     </div>
@@ -391,6 +390,12 @@ export function MaterialFamiliesManager({
                                 </summary>
                                 {f.options.length > 0 && (
                                     <div className="mt-2 space-y-1 border-t pt-2">
+                                        {f.defaultSpecValue !== null && (
+                                            <p className="mb-2 text-xs font-medium text-muted-foreground">
+                                                Costo por {valueLabel(f.specFieldKey, f.defaultSpecValue)} ·{" "}
+                                                {costStrategyLabel(f.costStrategy)} · {formatArs(familyUnitCost(f))}
+                                            </p>
+                                        )}
                                         {f.options.map((o) => (
                                             <div key={`${o.specValue}-${o.materialId}`} className="grid grid-cols-[110px_1fr_auto] items-center gap-2 text-xs">
                                                 <span className="truncate text-muted-foreground">
