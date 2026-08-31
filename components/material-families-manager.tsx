@@ -497,7 +497,7 @@ export function MaterialFamiliesManager({
                                                         no señalan uno solo. */}
                                                     {f.costStrategy === "specific" &&
                                                         o.materialId === f.costMaterialId && (
-                                                        <Badge variant="secondary">Costeo</Badge>
+                                                        <Badge variant="secondary">Costea la familia</Badge>
                                                     )}
                                                     {formatArs(o.unitCost)}
                                                 </span>

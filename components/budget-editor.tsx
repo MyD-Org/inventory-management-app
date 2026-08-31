@@ -38,7 +38,7 @@ import { ResourceLineAutocomplete } from "@/components/resource-line-autocomplet
 import type { SpecFieldChoice } from "@/lib/spec-choices"
 // Familias de materiales: el mapeo variante -> material declarado una vez en el
 // inventario. Elegir una arma la línea entera.
-import { defaultOption, lineFromFamily, optionsBySpecValue, syncLineWithFamily, type MaterialFamily } from "@/lib/material-family"
+import { costStrategySummary, defaultOption, familyUnitCost, lineFromFamily, optionsBySpecValue, syncLineWithFamily, type MaterialFamily } from "@/lib/material-family"
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -269,9 +269,9 @@ export function BudgetEditor({
         updateMaterial(i, { materialId: r.id, label: r.name, unitCost: Number(r.unit_cost) })
     }
 
-    // Elegir una FAMILIA en la línea i: arma la línea entera de una. El costo lo
-    // pone la variante predeterminada de la familia —es la que responde "con qué
-    // color se costea"— y sigue siendo editable a mano como cualquier línea.
+    // Elegir una FAMILIA en la línea i: arma la línea entera de una. El costo sale de
+    // la estrategia de costeo de la familia (promedio, más caro o material elegido),
+    // no de una variante, y sigue siendo editable a mano como cualquier línea.
     const pickFamily = (i: number, familyId: number) => {
         const f = familyById.get(familyId)
         if (!f) return
@@ -375,25 +375,48 @@ export function BudgetEditor({
     const removeExtra = (i: number) => setExtras((prev) => prev.filter((_, idx) => idx !== i))
 
     // ── Actualizar precios vigentes ──────────────────────────────────────────
+    // Una línea con familia NO se actualiza con el costo de su material: se recalcula
+    // con la estrategia de la familia (promedio, más caro o el material elegido), que
+    // es la misma cuenta que hizo lineFromFamily al elegirla. Antes se le metía el
+    // costo del material de la variante predeterminada, así que un "promedio" se
+    // convertía en el precio de un solo material sin avisar.
     const refreshPrices = async () => {
-        const ids = materials.map((m) => m.materialId).filter((n): n is number => n !== null)
-        if (!ids.length) {
+        // Se piden también los materiales de las familias, no solo el de cada línea:
+        // el promedio necesita los costos frescos de TODAS las variantes.
+        const ids = new Set<number>()
+        for (const m of materials) {
+            if (m.materialId !== null) ids.add(m.materialId)
+            const family = m.familyId !== null ? familyById.get(m.familyId) : undefined
+            for (const o of family?.options ?? []) ids.add(o.materialId)
+        }
+        if (ids.size === 0) {
             toast("Sin materiales del inventario", { description: "No hay líneas vinculadas para actualizar." })
             return
         }
         setRefreshing(true)
-        const { costs, error } = await getCurrentCosts(ids)
+        const { costs, error } = await getCurrentCosts(Array.from(ids))
         setRefreshing(false)
         if (error) {
             toast.error("Error", { description: error })
             return
         }
         setMaterials((prev) =>
-            prev.map((m) =>
-                m.materialId !== null && costs[m.materialId] !== undefined
+            prev.map((m) => {
+                const family = m.familyId !== null ? familyById.get(m.familyId) : undefined
+                if (family) {
+                    const fresh = {
+                        ...family,
+                        options: family.options.map((o) => ({
+                            ...o,
+                            unitCost: costs[o.materialId] ?? o.unitCost,
+                        })),
+                    }
+                    return { ...m, unitCost: familyUnitCost(fresh) }
+                }
+                return m.materialId !== null && costs[m.materialId] !== undefined
                     ? { ...m, unitCost: costs[m.materialId] }
-                    : m,
-            ),
+                    : m
+            }),
         )
         toast.success("Precios actualizados", { description: "Costos tomados del inventario actual." })
     }
@@ -661,6 +684,8 @@ export function BudgetEditor({
                                                                         {" · "}
                                                                         {f.options.length}{" "}
                                                                         {f.options.length === 1 ? "material" : "materiales"}
+                                                                        {" · "}
+                                                                        {costStrategySummary(f)}
                                                                     </p>
                                                                 </button>
                                                                 <Button
@@ -688,8 +713,6 @@ export function BudgetEditor({
                                                                                     <span className="truncate">{o.label}</span>
                                                                                     <span className="whitespace-nowrap text-muted-foreground">
                                                                                         {formatArs(o.unitCost)}
-                                                                                        {o.isDefault && specValue === f.defaultSpecValue && " · con esta se calcula el costo"}
-                                                                                        {o.isDefault && specValue !== f.defaultSpecValue && " · default"}
                                                                                     </span>
                                                                                 </div>
                                                                             ))}
