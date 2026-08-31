@@ -130,3 +130,21 @@ export function syncLineWithFamily<T extends FamilyLineFields>(line: T, family: 
         options: family.options.map((o) => ({ specValue: o.specValue, materialId: o.materialId, label: o.label })),
     }
 }
+
+// Cómo se calcula el costo de la familia, en una frase. Se muestra donde antes se
+// decía "con esta se calcula el costo" sobre la variante predeterminada: eso dejó de
+// ser cierto cuando se quitó la estrategia 'default' (migración 24), porque el costo
+// ya no sale de una variante sino de todos los materiales.
+export function costStrategySummary(family: MaterialFamily): string {
+    switch (family.costStrategy) {
+        case "highest":
+            return "el costo sale del material más caro"
+        case "specific": {
+            const chosen = family.options.find((o) => o.materialId === family.costMaterialId)
+            return chosen ? `el costo sale de ${chosen.label}` : "el costo sale de un material elegido"
+        }
+        case "average":
+        default:
+            return `el costo es el promedio de los ${family.options.length} materiales`
+    }
+}

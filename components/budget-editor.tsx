@@ -38,7 +38,7 @@ import { ResourceLineAutocomplete } from "@/components/resource-line-autocomplet
 import type { SpecFieldChoice } from "@/lib/spec-choices"
 // Familias de materiales: el mapeo variante -> material declarado una vez en el
 // inventario. Elegir una arma la línea entera.
-import { defaultOption, lineFromFamily, optionsBySpecValue, syncLineWithFamily, type MaterialFamily } from "@/lib/material-family"
+import { costStrategySummary, defaultOption, lineFromFamily, optionsBySpecValue, syncLineWithFamily, type MaterialFamily } from "@/lib/material-family"
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -661,6 +661,8 @@ export function BudgetEditor({
                                                                         {" · "}
                                                                         {f.options.length}{" "}
                                                                         {f.options.length === 1 ? "material" : "materiales"}
+                                                                        {" · "}
+                                                                        {costStrategySummary(f)}
                                                                     </p>
                                                                 </button>
                                                                 <Button
@@ -688,8 +690,13 @@ export function BudgetEditor({
                                                                                     <span className="truncate">{o.label}</span>
                                                                                     <span className="whitespace-nowrap text-muted-foreground">
                                                                                         {formatArs(o.unitCost)}
-                                                                                        {o.isDefault && specValue === f.defaultSpecValue && " · con esta se calcula el costo"}
-                                                                                        {o.isDefault && specValue !== f.defaultSpecValue && " · default"}
+                                                                                        {/* isDefault marca, dentro de una variante, con qué
+                                                                                            material se trabaja si se elige esa variante. Y la
+                                                                                            variante predeterminada es la que la línea trae
+                                                                                            puesta. Ninguna de las dos define ya el costo: eso lo
+                                                                                            dice la cabecera. */}
+                                                                                        {o.isDefault && specValue === f.defaultSpecValue && " · el que usa esta línea"}
+                                                                                        {o.isDefault && specValue !== f.defaultSpecValue && " · el principal de la variante"}
                                                                                     </span>
                                                                                 </div>
                                                                             ))}
