@@ -156,7 +156,12 @@ function Cambio({ e }: { e: OrderEvent }) {
                     return <>cargó la lista de materiales de <Val>{nuevo}</Val></>
                 }
                 return viejo && nuevo && viejo !== nuevo ? (
-                    <>cambió <Val tachado>{viejo}</Val> <span aria-hidden>→</span> <Val>{nuevo}</Val></>
+                    <>
+                        cambió <Val tachado>{viejo}</Val> <span aria-hidden>→</span> <Val>{nuevo}</Val>
+                        {/* En un cambio de opciones el antes y el después son los valores,
+                            así que el producto va acá para saber de qué línea habla. */}
+                        {e.body && <> en <Val>{e.body}</Val></>}
+                    </>
                 ) : (
                     <>cambió {campo} de <Val>{nuevo}</Val></>
                 )

@@ -161,6 +161,35 @@ export async function listSellableProducts(): Promise<string[]> {
     return (rows as any[]).map((r) => r.base_name as string)
 }
 
+// Qué opciones cambiaron entre las specs guardadas y las nuevas, con las
+// etiquetas del vocabulario ("Óptica 90° → 30°") en vez de las claves crudas.
+// Un valor que se borra se muestra como "—": el campo sigue existiendo, lo que
+// pasa es que quedó sin especificar.
+//
+// Vive acá y no en la server action porque el hilo de actividad tiene que decir
+// lo mismo lo edite una persona o el bot, y esas son dos entradas distintas.
+export async function diffSpecs(
+    antes: Record<string, string>,
+    despues: Record<string, string>,
+): Promise<Array<{ label: string; antes: string; despues: string }>> {
+    const vocab = await getSpecs()
+    const claves = [...new Set([...Object.keys(antes), ...Object.keys(despues)])]
+    const cambios: Array<{ label: string; antes: string; despues: string }> = []
+
+    for (const key of claves) {
+        const a = String(antes[key] ?? "")
+        const b = String(despues[key] ?? "")
+        if (a === b) continue
+        const field = vocab[key]
+        cambios.push({
+            label: field?.label ?? key,
+            antes: a ? (field?.labels?.[a] ?? a) : "—",
+            despues: b ? (field?.labels?.[b] ?? b) : "—",
+        })
+    }
+    return cambios
+}
+
 // ---------- Lectura ----------
 
 export interface OrderMaterial {
