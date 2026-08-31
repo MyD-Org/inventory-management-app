@@ -38,13 +38,13 @@ export function OrdersShell({
     // El submenú se monta recién al abrirlo, ya en el cliente: para entonces
     // next-themes tiene el tema resuelto y no hay desajuste con el server.
     const { theme, setTheme } = useTheme()
-    // "c" abre el alta desde cualquier pantalla del módulo, como en Linear.
+    // "n" abre el alta desde cualquier pantalla del módulo, como en Linear.
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
             const t = e.target as HTMLElement
             if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return
             if (e.metaKey || e.ctrlKey || e.altKey) return
-            if (e.key === "c") {
+            if (e.key === "n") {
                 e.preventDefault()
                 router.push("/pedidos/nuevo")
             }
@@ -70,11 +70,11 @@ export function OrdersShell({
                             {/* El atajo se anuncia en el botón: si no, nadie lo descubre.
                                 En pantalla angosta el botón es solo el ícono y la tecla
                                 no entra, así que ahí queda en el title. */}
-                            <Button size="sm" title="Nuevo pedido (c)">
+                            <Button size="sm" title="Nuevo pedido (n)">
                                 <Plus className="h-4 w-4 sm:mr-2" />
                                 <span className="hidden sm:inline">Nuevo pedido</span>
                                 <kbd className="hidden sm:inline-flex ml-2 h-5 min-w-5 items-center justify-center rounded border border-primary-foreground/30 px-1 font-mono text-[0.7rem] text-primary-foreground/70">
-                                    c
+                                    n
                                 </kbd>
                             </Button>
                         </Link>
