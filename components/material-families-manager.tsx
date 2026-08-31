@@ -85,6 +85,14 @@ export function MaterialFamiliesManager({
     }, [])
 
     const fieldOf = (key: string) => specFields.find((f) => f.key === key)
+    // El vocabulario guarda las opciones en el orden en que se fueron cargando. En el
+    // modal se listan alfabéticamente: son decenas de colores y encontrarlos de un
+    // vistazo importa más que respetar el orden de carga. `numeric` mantiene juntas
+    // las temperaturas ("Blanco 2700" antes que "Blanco 10000").
+    const sortedOptions = (key: string) =>
+        [...(fieldOf(key)?.options ?? [])].sort((a, b) =>
+            a.label.localeCompare(b.label, "es", { numeric: true, sensitivity: "base" }),
+        )
     const fieldLabel = (key: string) => fieldOf(key)?.label ?? key
     const valueLabel = (key: string, value: string) =>
         fieldOf(key)?.options.find((o) => o.value === value)?.label ?? value
@@ -123,7 +131,7 @@ export function MaterialFamiliesManager({
                       ...d,
                       fieldKey: key,
                       defaultSpecValue: null,
-                      options: (fieldOf(key)?.options ?? []).map((o) => ({
+                      options: sortedOptions(key).map((o) => ({
                           key: newKey(),
                           specValue: o.value,
                           materialId: null,
@@ -141,7 +149,7 @@ export function MaterialFamiliesManager({
         // agregar un color nuevo es escribir en la fila que ya está, no acordarse
         // de que el color existe.
         const mapped = groupBySpecValue(f.options)
-        const all = fieldOf(f.specFieldKey)?.options ?? []
+        const all = sortedOptions(f.specFieldKey)
         const rows: DraftOption[] = []
         for (const opt of all) {
             const hits = mapped.get(opt.value)
@@ -222,7 +230,20 @@ export function MaterialFamiliesManager({
     const removeRow = (key: string) => {
         setDraft((d) => {
             if (d === null) return d
-            return { ...d, options: d.options.filter((o) => o.key !== key) }
+            const target = d.options.find((o) => o.key === key)
+            if (!target) return d
+            const options = d.options.filter((o) => o.key !== key)
+            // Misma corrección que clearRow: si la fila que se va era la que sostenía
+            // a su variante como predeterminada, la predeterminada queda apuntando a
+            // una variante sin material y el servidor rechaza el guardado.
+            const sameSpecWithMaterial = options.filter(
+                (o) => o.specValue === target.specValue && o.materialId !== null,
+            )
+            const next =
+                d.defaultSpecValue === target.specValue
+                    ? sameSpecWithMaterial[0]?.specValue ?? null
+                    : d.defaultSpecValue
+            return { ...d, options, defaultSpecValue: next }
         })
     }
 
@@ -556,9 +577,23 @@ export function MaterialFamiliesManager({
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 className="h-8 w-8"
-                                                                disabled={o.materialId === null && o.label === ""}
-                                                                onClick={() => clearRow(o.key)}
-                                                                title="Vaciar esta opción"
+                                                                // Con varios materiales en la variante el tacho saca la
+                                                                // fila entera. En la última no puede: si se fuera, el
+                                                                // grupo desaparecería y con él el botón para volver a
+                                                                // agregarle un material, así que ahí solo se vacía.
+                                                                disabled={
+                                                                    rows.length === 1 &&
+                                                                    o.materialId === null &&
+                                                                    o.label === ""
+                                                                }
+                                                                onClick={() =>
+                                                                    rows.length > 1 ? removeRow(o.key) : clearRow(o.key)
+                                                                }
+                                                                title={
+                                                                    rows.length > 1
+                                                                        ? "Quitar este material"
+                                                                        : "Vaciar esta opción"
+                                                                }
                                                             >
                                                                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
                                                             </Button>
