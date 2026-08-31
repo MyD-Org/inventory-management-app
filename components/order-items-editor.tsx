@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast"
 import { addOrderItem, deleteOrderItem, updateOrderItem } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { ProductPicker } from "@/components/product-picker"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import type { SpecField } from "@/lib/orders"
 
 interface Item {
@@ -127,8 +128,25 @@ export function OrderItemsEditor({
     const faltantes = (specs: Record<string, string>) =>
         Object.entries(vocab).filter(([k, f]) => f.kind === "list" && !specs[k])
 
+    // unmapped_specs viene crudo de la receta ("optic=30"). En pantalla va con
+    // las etiquetas del vocabulario: "Óptica (grados) 30°", que es como el
+    // taller lo nombra.
+    const specHumano = (raw: string) => {
+        const i = raw.indexOf("=")
+        const key = i === -1 ? raw : raw.slice(0, i)
+        const value = i === -1 ? "" : raw.slice(i + 1)
+        const field = vocab[key]
+        const label = field?.label ?? key
+        const valor = field?.labels?.[value] ?? value
+        return valor ? `${label} ${valor}` : label
+    }
+
     return (
-        <>
+        // El provider envuelve toda la tabla: los dos avisos (sin lista de
+        // materiales y variante sin resolver) viven en el ícono de su fila y no
+        // en carteles al pie, que decían "los productos marcados" y obligaban a
+        // buscar cuáles eran.
+        <TooltipProvider delayDuration={150}>
             {readOnly && readOnlyMessage && (
                 <p className="mb-3 text-sm text-muted-foreground">{readOnlyMessage}</p>
             )}
@@ -191,18 +209,39 @@ export function OrderItemsEditor({
                                             abajo: hay que descontarlos a mano. Se marca acá,
                                             en la fila, que es donde se ve de cuál se trata. */}
                                         {item.needs_review && (
-                                            <PackageX
-                                                className="no-print h-3.5 w-3.5 shrink-0 text-destructive"
-                                                aria-label="Sin lista de materiales"
-                                            />
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span className="no-print inline-flex shrink-0">
+                                                        <PackageX
+                                                            className="h-3.5 w-3.5 text-destructive"
+                                                            aria-label="Sin lista de materiales"
+                                                        />
+                                                    </span>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    Los productos marcados no tienen cargada su lista de materiales
+                                                </TooltipContent>
+                                            </Tooltip>
                                         )}
-                                        {/* Distinto problema que el de arriba: acá SÍ hay
-                                            materiales, pero uno puede ser el equivocado. */}
+                                        {/* Distinto problema que el de arriba: la línea tiene
+                                            hoja de costo, pero para lo que se pidió falta la
+                                            variante, así que ese material no se listó. */}
                                         {!item.needs_review && item.unmapped_specs.length > 0 && (
-                                            <TriangleAlert
-                                                className="no-print h-3.5 w-3.5 shrink-0 text-amber-600"
-                                                aria-label="Variante sin resolver"
-                                            />
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span className="no-print inline-flex shrink-0">
+                                                        <TriangleAlert
+                                                            className="h-3.5 w-3.5 text-amber-600"
+                                                            aria-label="Variante sin resolver"
+                                                        />
+                                                    </span>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    No existe la variante de{" "}
+                                                    {item.unmapped_specs.map(specHumano).join(" y ")} para este
+                                                    producto. Revisá qué descontar del inventario.
+                                                </TooltipContent>
+                                            </Tooltip>
                                         )}
                                     </span>
                                 </td>
@@ -551,30 +590,6 @@ export function OrderItemsEditor({
                 </table>
             </div>
 
-            {/* El icono en la fila dice CUÁL; esta línea dice QUÉ significa, sin
-                volver al cartel grande que ocupaba media pantalla. */}
-            {items.some((i) => !i.needs_review && i.unmapped_specs.length > 0) && (
-                <p className="no-print mt-2 flex items-start gap-1.5 text-sm text-amber-600">
-                    <TriangleAlert className="h-3.5 w-3.5 shrink-0 mt-px" />
-                    <span>
-                        En los productos marcados hay una opción que la hoja de costo no tiene
-                        cargada ({[...new Set(items.flatMap((i) => i.unmapped_specs))].join(", ")}), así
-                        que se listó el material por defecto. Revisá que sea el que va antes de
-                        descontar.
-                    </span>
-                </p>
-            )}
-
-            {items.some((i) => i.needs_review) && (
-                <p className="no-print mt-2 flex items-start gap-1.5 text-sm text-destructive">
-                    <PackageX className="h-3.5 w-3.5 shrink-0 mt-px" />
-                    <span>
-                        Los productos marcados no tienen cargada su lista de materiales, así que no
-                        aparecen abajo. Hay que descontarlos de forma manual.
-                    </span>
-                </p>
-            )}
-
             {!nuevo && !readOnly && (
                 <Button
                     variant="ghost"
@@ -604,6 +619,6 @@ export function OrderItemsEditor({
                     cerrar()
                 }}
             />
-        </>
+        </TooltipProvider>
     )
 }

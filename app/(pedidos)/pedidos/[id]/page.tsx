@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { unstable_noStore } from "next/cache"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
-import { getSpecs, listSellableProducts, materialNeeds, readOrder } from "@/lib/orders"
+import { getSpecs, listSellableProducts, materialNeeds, readOrder, reconcileOrderBoms } from "@/lib/orders"
 import { orderNeedsReview } from "@/lib/order-statuses"
 import { STATUS_LABELS } from "@/lib/order-statuses"
 import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
@@ -83,6 +83,12 @@ export default async function OrderDetailPage({
           AND modified_at IS NOT NULL
           AND (delivery_date_verified_at IS NULL OR delivery_date_verified_at < modified_at)
     `
+
+    // Las líneas que quedaron sin lista de materiales se vuelven a resolver cada
+    // vez que se abre el pedido: si mientras tanto se cargó la hoja de costo del
+    // producto, el BOM se explota ahora y la advertencia desaparece sola. No hace
+    // nada si el pedido ya salió o si ya se descontó stock (ver reconcileOrderBoms).
+    await reconcileOrderBoms(id)
 
     const order = await readOrder(id)
     if (!order) notFound()

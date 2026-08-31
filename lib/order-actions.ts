@@ -14,6 +14,7 @@ import {
     addOrderItemInternal,
     createOrder,
     deleteOrderItemInternal,
+    diffSpecs,
     getSpecs,
     listSellableProducts,
     materialNeeds,
@@ -407,7 +408,7 @@ export async function updateOrderItem(
     const session = await auth();
     if (!session?.user) return { ok: false, error: 'No autenticado' };
 
-    const [item] = await sql`SELECT order_id, product, quantity FROM order_items WHERE id = ${itemId}`;
+    const [item] = await sql`SELECT order_id, product, quantity, specs FROM order_items WHERE id = ${itemId}`;
     if (!item) return { ok: false, error: 'La línea no existe' };
 
     const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${item.order_id}`;
@@ -417,15 +418,26 @@ export async function updateOrderItem(
 
     const result = await updateOrderItemInternal(itemId, patch);
     if (result.ok) {
-        // La cantidad se dice con el antes y el después; las specs no, que son un
-        // objeto y en el hilo ocuparían tres renglones sin que se entienda mejor.
         const cambioCantidad =
             patch.quantity !== undefined && Number(patch.quantity) !== Number(item.quantity);
+
+        // Qué opción cambió y de qué a qué. Antes el evento decía solo "cambió las
+        // opciones de Optic 1": para saber qué se había tocado había que acordarse.
+        // Se nombran con las etiquetas del vocabulario, igual que las columnas.
+        const diff = patch.specs ? await diffSpecs((item.specs ?? {}) as Record<string, string>, patch.specs) : [];
+
         await logOrderEvent(item.order_id, {
             kind: 'item_updated',
             field: cambioCantidad ? 'quantity' : 'specs',
-            oldValue: cambioCantidad ? `${item.quantity} × ${item.product}` : item.product,
-            newValue: cambioCantidad ? `${patch.quantity} × ${item.product}` : item.product,
+            oldValue: cambioCantidad
+                ? `${item.quantity} × ${item.product}`
+                : diff.map((d) => `${d.label} ${d.antes}`).join(', ') || item.product,
+            newValue: cambioCantidad
+                ? `${patch.quantity} × ${item.product}`
+                : diff.map((d) => `${d.label} ${d.despues}`).join(', ') || item.product,
+            // El producto va aparte: el hilo lo necesita para saber de qué línea
+            // habla, y en oldValue/newValue solo van los valores que cambiaron.
+            body: cambioCantidad || diff.length === 0 ? null : item.product,
         });
         revalidatePath('/pedidos');
         revalidatePath(`/pedidos/${item.order_id}`);

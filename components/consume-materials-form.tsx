@@ -29,10 +29,24 @@ interface Row {
     label: string
     qty: string
     available: number | null
+    /** Cómo se mide el material, ya abreviado ("u.", "m", "kg"). */
+    unit: string
     /** Lo que pide el pedido. null en las filas agregadas a mano. */
     pending: number | null
     /** Opciones cuando la línea viene de una familia con varios materiales por color. */
     alternatives: Alternative[]
+}
+
+// Todo lo que se cuenta de a uno se muestra "u.". Hoy en el inventario eso es
+// todo (Unidad, Pieza, No aplica), pero la unidad se lee del material igual: el
+// día que entre algo por metro o por kilo, decir "2 u." de una tira mandaría a
+// buscar cualquier cosa al depósito.
+function abreviarUnidad(unit: string | null): string {
+    const u = (unit ?? "").trim().toLowerCase()
+    const porUnidad = ["", "u", "u.", "unidad", "unidades", "pieza", "piezas", "no aplica"]
+    if (porUnidad.includes(u)) return "u."
+    if (u === "metro" || u === "metros") return "m"
+    return u
 }
 
 function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEstan: number[] }) {
@@ -74,7 +88,7 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
         onSelect: (i) => {
             const r = opciones[i]
             if (!r) return
-            onPick({ key: `extra:${r.material_id}`, ...r, qty: "1", pending: null, alternatives: [] })
+            onPick({ key: `extra:${r.material_id}`, ...r, qty: "1", unit: "u.", pending: null, alternatives: [] })
             setQuery("")
             setAbierto(false)
         },
@@ -120,14 +134,14 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
                                     nav.active === i ? "bg-muted" : ""
                                 }`}
                                 onClick={() => {
-                                    onPick({ key: `extra:${r.material_id}`, ...r, qty: "1", pending: null, alternatives: [] })
+                                    onPick({ key: `extra:${r.material_id}`, ...r, qty: "1", unit: "u.", pending: null, alternatives: [] })
                                     setQuery("")
                                     setAbierto(false)
                                 }}
                             >
                                 <span className="text-base flex-1 min-w-0 truncate">{r.label}</span>
                                 <span className="text-sm text-muted-foreground shrink-0">
-                                    hay {r.available}
+                                    {r.available} en stock
                                 </span>
                             </button>
                         ))}
@@ -165,6 +179,7 @@ export function ConsumeMaterialsForm({
                         // Sugerimos lo pendiente, sin pasarnos de lo que hay.
                         qty: String(Math.min(n.pending, n.available ?? n.pending)),
                         available: n.available,
+                        unit: abreviarUnidad(n.unit),
                         pending: n.pending,
                         alternatives: n.alternatives,
                     }
@@ -190,7 +205,7 @@ export function ConsumeMaterialsForm({
         if (r.qty.trim() === "") return null
         const n = parsear(r.qty)
         if (Number.isNaN(n) || n < 0) return "Cantidad inválida"
-        if (r.available !== null && n > r.available) return `Solo hay ${r.available}`
+        if (r.available !== null && n > r.available) return `Solo hay ${r.available} ${r.unit}`
         return null
     }
 
@@ -217,7 +232,7 @@ export function ConsumeMaterialsForm({
 
     return (
         <>
-            <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
+            <div className="space-y-2.5 max-h-[50vh] overflow-y-auto">
                 {rows.map((r, idx) => {
                     const error = errorDe(r)
                     const showSelector = r.alternatives.length > 1
@@ -258,15 +273,23 @@ export function ConsumeMaterialsForm({
                                             )
                                         }}
                                     >
-                                        <SelectTrigger className="h-9 text-base">
-                                            <SelectValue />
+                                        <SelectTrigger className="h-9 w-full min-w-0 text-base">
+                                            {/* Dos motivos por los que esta fila se montaba
+                                                encima del stock de la derecha: el SelectTrigger de
+                                                shadcn es w-fit y crece con la etiqueta (de ahí el
+                                                w-full), y SelectValue sin hijos dibuja los del
+                                                SelectItem elegido, o sea etiqueta + stock. Acá va
+                                                solo el nombre, truncado. */}
+                                            <SelectValue>
+                                                <span className="block truncate text-left">{r.label}</span>
+                                            </SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
                                             {r.alternatives.map((a) => (
                                                 <SelectItem key={a.material_id} value={String(a.material_id)}>
                                                     <span className="truncate">{a.label}</span>
-                                                    <span className="ml-2 text-xs text-muted-foreground">
-                                                        hay {a.available ?? "—"}
+                                                    <span className="ml-2 shrink-0 text-sm text-muted-foreground">
+                                                        {a.available ?? "—"} en stock
                                                     </span>
                                                 </SelectItem>
                                             ))}
@@ -282,19 +305,22 @@ export function ConsumeMaterialsForm({
                                         <div className="text-sm text-destructive">
                                             {r.available === 0
                                                 ? "No hay stock de este material"
-                                                : `Faltan ${r.pending! - r.available!} para completar el pedido`}
+                                                : `Faltan ${r.pending! - r.available!} ${r.unit}`}
                                         </div>
                                     )
                                 )}
                             </div>
 
+                            {/* Solo el stock. Cuánto lleva el pedido ya está en el input de
+                                la izquierda, y cuando no alcanza lo explica la línea roja de
+                                abajo; repetirlo acá ("necesita 3 · hay 1") apretaba la fila y
+                                se leía como un jeroglífico. */}
                             <span
-                                className={`text-sm shrink-0 pt-1.5 ${
+                                className={`text-sm shrink-0 whitespace-nowrap pt-1.5 ${
                                     faltaStock(r) ? "text-destructive" : "text-muted-foreground"
                                 }`}
                             >
-                                {r.pending !== null ? `necesita ${r.pending} · ` : "extra · "}
-                                hay {r.available ?? "—"}
+                                {r.available ?? "—"} en stock
                             </span>
 
                             <Button

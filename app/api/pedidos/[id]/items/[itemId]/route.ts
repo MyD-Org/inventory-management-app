@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
-import { deleteOrderItemInternal, readOrder, updateOrderItemInternal } from "@/lib/orders"
+import { deleteOrderItemInternal, diffSpecs, readOrder, updateOrderItemInternal } from "@/lib/orders"
 import { isApiEditable } from "@/lib/order-statuses"
 import { apiActor, logOrderEvent } from "@/lib/order-events"
 
@@ -49,7 +49,7 @@ export async function PATCH(
 
     try {
         // El producto se lee ANTES de tocarlo, para poder nombrarlo en la historia.
-        const [previo] = await sql`SELECT product, quantity FROM order_items WHERE id = ${itemId}`
+        const [previo] = await sql`SELECT product, quantity, specs FROM order_items WHERE id = ${itemId}`
         const result = await updateOrderItemInternal(itemId, {
             quantity: body.quantity !== undefined ? Number(body.quantity) : undefined,
             specs: body.specs,
@@ -60,11 +60,22 @@ export async function PATCH(
         await markModified(orderId)
         const cambioCantidad =
             body.quantity !== undefined && Number(body.quantity) !== Number(previo?.quantity)
+        // El hilo dice qué opción se tocó y de qué a qué, igual que cuando el
+        // cambio lo hace una persona desde la web.
+        const diff = body.specs
+            ? await diffSpecs((previo?.specs ?? {}) as Record<string, string>, body.specs)
+            : []
         await logOrderEvent(orderId, {
             kind: "item_updated",
             field: cambioCantidad ? "quantity" : "specs",
-            oldValue: cambioCantidad ? `${previo?.quantity} × ${previo?.product}` : previo?.product ?? null,
-            newValue: cambioCantidad ? `${Number(body.quantity)} × ${previo?.product}` : previo?.product ?? null,
+            oldValue: cambioCantidad
+                ? `${previo?.quantity} × ${previo?.product}`
+                : diff.map((d) => `${d.label} ${d.antes}`).join(", ") || previo?.product || null,
+            newValue: cambioCantidad
+                ? `${Number(body.quantity)} × ${previo?.product}`
+                : diff.map((d) => `${d.label} ${d.despues}`).join(", ") || previo?.product || null,
+            // El producto va aparte cuando el antes/después son los valores.
+            body: cambioCantidad || diff.length === 0 ? null : (previo?.product ?? null),
             actor: await apiActor(request),
         })
         return NextResponse.json({ ok: true, itemId: result.itemId, warning: result.warning })

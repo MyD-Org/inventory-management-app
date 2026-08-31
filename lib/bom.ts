@@ -19,7 +19,7 @@ export interface BomLine {
     // Familia de materiales a la que pertenece la línea. null = mapeo propio.
     familyId?: number | null
     // Material de REFERENCIA: el que define el costo de la línea en la hoja y el
-    // que se usa cuando la variante no aplica o no está mapeada.
+    // que se usa cuando la línea no varía o el pedido no especificó el valor.
     materialId: number | null
     label: string
     qty: number
@@ -35,9 +35,10 @@ export interface ResolvedBomLine {
     qty: number
     // true = se usó una variante en lugar del material de referencia.
     substituted: boolean
-    // El pedido pidió un valor que la hoja de costo no tiene mapeado. Se cae al
-    // material de referencia (que puede ser el equivocado), así que la línea del
-    // pedido queda marcada para revisión en vez de descontar en silencio.
+    // El pedido pidió un valor que la hoja de costo no tiene mapeado. Cuando pasa
+    // NO se elige ningún material: materialId queda en null y resolveBom saca la
+    // línea del BOM. Antes se caía al material de referencia, y eso hacía que el
+    // taller descontara del rollo equivocado creyendo que el sistema sabía.
     unmapped: string | null
     // Origen de la alternativa, para reconstruir las opciones al consumir stock.
     familyId?: number | null
@@ -60,7 +61,9 @@ export function resolveBomLine(line: BomLine, specs: Record<string, unknown>): R
     const value = String(raw)
     const matches = line.options.filter((o) => o.specValue === value)
     if (matches.length === 0) {
-        return { ...base, substituted: false, unmapped: `${line.specFieldKey}=${value}` }
+        // Sin material: la hoja no dice cuál va para este valor y adivinar sale
+        // caro. La línea se reporta en unmapped y no aporta nada al BOM.
+        return { ...base, materialId: null, substituted: false, unmapped: `${line.specFieldKey}=${value}` }
     }
 
     // Si un color tiene varios materiales, usa el marcado como default; si no hay
@@ -113,5 +116,7 @@ export function resolveBom(
     // Sin repetidos: si tres líneas varían por led_color y el color no está
     // mapeado en ninguna, al taller le alcanza con que se lo digan una vez.
     const unmapped = [...new Set(resolved.map((r) => r.unmapped).filter((u): u is string => u !== null))]
-    return { lines: resolved, unmapped }
+    // Las líneas sin mapear NO entran al BOM: es preferible que falte a que
+    // aparezca un material que nadie eligió. El aviso viaja en unmapped.
+    return { lines: resolved.filter((r) => r.unmapped === null), unmapped }
 }
