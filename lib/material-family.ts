@@ -17,7 +17,7 @@ export interface MaterialFamilyOption {
     isDefault?: boolean
 }
 
-export type CostStrategy = "default" | "average" | "highest" | "specific"
+export type CostStrategy = "average" | "highest" | "specific"
 
 export interface MaterialFamily {
     id: number
@@ -70,26 +70,27 @@ export function defaultOption(family: MaterialFamily): MaterialFamilyOption | un
 }
 
 // Costo unitario de la familia según la estrategia elegida.
-// - default: conserva el comportamiento anterior, costeando con el material default
-//   de la variante default (para no romper familias ya cargadas).
 // - average / highest: se aplican sobre TODOS los materiales de la familia.
 // - specific: un material elegido a mano de toda la familia.
+//
+// Hubo una cuarta, 'default', que costeaba con el material de la variante
+// predeterminada. Se quitó en la migración 24: nadie elegía esa variante a
+// propósito (es la primera cargada) y si su material no tenía costo, la familia
+// entera valía cero sin avisar. `average` es el fallback de las filas viejas.
 export function familyUnitCost(family: MaterialFamily): number {
     const options = family.options
     if (!options || options.length === 0) return 0
 
     switch (family.costStrategy) {
-        case "average":
-            return options.reduce((sum, o) => sum + o.unitCost, 0) / options.length
         case "highest":
             return Math.max(...options.map((o) => o.unitCost))
         case "specific": {
             const specific = options.find((o) => o.materialId === family.costMaterialId)
             return specific?.unitCost ?? options[0].unitCost
         }
-        case "default":
+        case "average":
         default:
-            return defaultOption(family)?.unitCost ?? options[0].unitCost
+            return options.reduce((sum, o) => sum + o.unitCost, 0) / options.length
     }
 }
 

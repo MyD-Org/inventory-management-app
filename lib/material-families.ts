@@ -79,7 +79,7 @@ export async function listMaterialFamilies(): Promise<MaterialFamily[]> {
     }));
 }
 
-const VALID_COST_STRATEGIES: CostStrategy[] = ['default', 'average', 'highest', 'specific'];
+const VALID_COST_STRATEGIES: CostStrategy[] = ['average', 'highest', 'specific'];
 
 function validFamilyPayload(p: MaterialFamilyPayload): string | null {
     if (!p.name?.trim()) return 'El nombre de la familia es requerido';

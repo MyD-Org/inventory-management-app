@@ -15,7 +15,7 @@ const tiraLed = (over: Partial<MaterialFamily> = {}): MaterialFamily => ({
     name: "Tira LED",
     specFieldKey: "led_color",
     defaultSpecValue: "calido",
-    costStrategy: "default",
+    costStrategy: "average",
     costMaterialId: null,
     options: [
         { specValue: "blanco", materialId: 10, label: "Tira LED blanca", unitCost: 900, barcode: "A10" },
@@ -68,8 +68,9 @@ describe("defaultOption", () => {
 })
 
 describe("familyUnitCost", () => {
-    it("usa el material default de la familia por defecto", () => {
-        expect(familyUnitCost(tiraLed())).toBe(1000)
+    it("promedia todos los materiales por defecto", () => {
+        // 900 + 1000 + 1500 = 3400 / 3
+        expect(familyUnitCost(tiraLed())).toBeCloseTo(1133.33, 2)
     })
 
     it("calcula el promedio de todos los materiales de la familia", () => {
@@ -109,18 +110,23 @@ describe("familyUnitCost", () => {
         expect(familyUnitCost(family)).toBe(1200)
     })
 
-    it("cae al primer material si la familia no tiene default marcado", () => {
-        expect(familyUnitCost(tiraLed({ defaultSpecValue: null }))).toBe(900)
+    // La variante predeterminada ya no interviene en el costo: se quitó la
+    // estrategia que la usaba (ver migración 24). Sigue definiendo qué material
+    // arrastra la línea de la hoja, eso lo cubre defaultOption.
+    it("no depende de la variante predeterminada", () => {
+        expect(familyUnitCost(tiraLed({ defaultSpecValue: null }))).toBeCloseTo(1133.33, 2)
     })
 })
 
 describe("lineFromFamily", () => {
-    it("arma la línea entera: nombre general, campo, variantes y costo de la predeterminada", () => {
+    // El material que arrastra la línea sale de la variante predeterminada; el
+    // costo, en cambio, de la estrategia de costeo. Son dos cosas distintas.
+    it("arma la línea entera: nombre general, campo, variantes y costo de la estrategia", () => {
         expect(lineFromFamily(tiraLed())).toEqual({
             familyId: 7,
             label: "Tira LED",
             materialId: 11,
-            unitCost: 1000,
+            unitCost: 3400 / 3,
             specFieldKey: "led_color",
             options: [
                 { specValue: "blanco", materialId: 10, label: "Tira LED blanca" },

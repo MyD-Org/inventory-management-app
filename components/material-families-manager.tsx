@@ -53,7 +53,7 @@ const emptyDraft: Draft = {
     fieldKey: "",
     options: [],
     defaultSpecValue: null,
-    costStrategy: "default",
+    costStrategy: "average",
     costMaterialId: null,
 }
 
@@ -66,26 +66,14 @@ function draftUnitCost(draft: Draft): number {
     if (filled.length === 0) return 0
 
     switch (draft.costStrategy) {
-        case "average":
-            return filled.reduce((sum, o) => sum + o.unitCost, 0) / filled.length
         case "highest":
             return Math.max(...filled.map((o) => o.unitCost))
         case "specific":
             return filled.find((o) => o.materialId === draft.costMaterialId)?.unitCost ?? filled[0].unitCost
-        case "default":
-        default: {
-            const ofDefault = filled.filter((o) => o.specValue === draft.defaultSpecValue)
-            return (ofDefault[0] ?? filled[0]).unitCost
-        }
+        case "average":
+        default:
+            return filled.reduce((sum, o) => sum + o.unitCost, 0) / filled.length
     }
-}
-
-// La variante con la que costea el método automático, para poder nombrarla en la UI.
-function draftDefaultSpecValue(draft: Draft): string | null {
-    const filled = draft.options.filter((o) => o.materialId !== null)
-    if (filled.length === 0) return null
-    const ofDefault = filled.find((o) => o.specValue === draft.defaultSpecValue)
-    return (ofDefault ?? filled[0]).specValue
 }
 
 let nextKey = 1
@@ -140,8 +128,9 @@ export function MaterialFamiliesManager({
                 return "más caro"
             case "specific":
                 return "material elegido"
-            case "default":
-                return "variante predeterminada"
+            case "average":
+            default:
+                return "promedio"
         }
     }
 
@@ -151,19 +140,15 @@ export function MaterialFamiliesManager({
     const costStrategyHelp = (draft: Draft): string => {
         const filled = draft.options.filter((o) => o.materialId !== null)
         switch (draft.costStrategy) {
-            case "average":
-                return `promedio de los ${filled.length} materiales cargados`
             case "highest":
                 return "el material más caro de toda la familia"
             case "specific":
-                return "el material que elijas abajo"
-            case "default":
-            default: {
-                const spec = draftDefaultSpecValue(draft)
-                return spec === null
-                    ? "el material de la variante predeterminada"
-                    : `el material de la variante predeterminada (${valueLabel(draft.fieldKey, spec)})`
-            }
+                return draft.costMaterialId === null
+                    ? "elegí el material acá al lado"
+                    : "el material elegido"
+            case "average":
+            default:
+                return `promedio de los ${filled.length} materiales cargados`
         }
     }
 
@@ -507,11 +492,11 @@ export function MaterialFamiliesManager({
                                                 </span>
                                                 <span className="truncate">{o.label}</span>
                                                 <span className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
-                                                    {((f.costStrategy === "default" &&
-                                                        o.isDefault &&
-                                                        o.specValue === f.defaultSpecValue) ||
-                                                        (f.costStrategy === "specific" &&
-                                                            o.materialId === f.costMaterialId)) && (
+                                                    {/* El badge marca EL material con el que se costea. Solo
+                                                        tiene sentido en "material elegido": promedio y más caro
+                                                        no señalan uno solo. */}
+                                                    {f.costStrategy === "specific" &&
+                                                        o.materialId === f.costMaterialId && (
                                                         <Badge variant="secondary">Costeo</Badge>
                                                     )}
                                                     {formatArs(o.unitCost)}
@@ -562,73 +547,81 @@ export function MaterialFamiliesManager({
                                     </Select>
                                 </div>
 
-                                {draft.fieldKey !== "" && draft.options.length > 0 && (
-                                    <div className="space-y-1.5">
-                                        <Label>Método de costeo</Label>
-                                        <Select
-                                            value={draft.costStrategy}
-                                            onValueChange={(v) =>
-                                                setDraft({
-                                                    ...draft,
-                                                    costStrategy: v as CostStrategy,
-                                                    costMaterialId:
-                                                        v === "specific" ? draft.costMaterialId : null,
-                                                })
-                                            }
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Elegí método" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="default">Variante predeterminada</SelectItem>
-                                                <SelectItem value="average">Promedio</SelectItem>
-                                                <SelectItem value="highest">Más caro</SelectItem>
-                                                <SelectItem value="specific">Material elegido</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        {/* El costo que va a quedar guardado, recalculado en vivo: elegir
-                                            metodo sin ver el numero era elegir a ciegas. */}
-                                        <p className="text-xs text-muted-foreground">
-                                            Costo de la familia:{" "}
-                                            <span className="font-medium text-foreground">
-                                                {formatArs(draftUnitCost(draft))}
-                                            </span>{" "}
-                                            · {costStrategyHelp(draft)}
-                                        </p>
-                                    </div>
-                                )}
                             </div>
 
-                            {draft.fieldKey !== "" && (
-                                <div className="space-y-2">
-                                    {draft.options.length > 0 && draft.costStrategy === "specific" && (
+                            {/* El costeo va en su propio bloque: el metodo y el material con el que
+                                se costea son una sola decision, y tenerlos en filas distintas
+                                (con el costo en el medio) los hacia parecer cosas separadas. */}
+                            {draft.fieldKey !== "" && draft.options.length > 0 && (
+                                <div className="space-y-2 rounded-md border p-3">
+                                    <div className="grid gap-4 sm:grid-cols-2">
                                         <div className="space-y-1.5">
-                                            <Label>Material para costear</Label>
+                                            <Label>Método de costeo</Label>
                                             <Select
-                                                value={draft.costMaterialId ? String(draft.costMaterialId) : ""}
+                                                value={draft.costStrategy}
                                                 onValueChange={(v) =>
-                                                    setDraft({ ...draft, costMaterialId: Number(v) })
+                                                    setDraft({
+                                                        ...draft,
+                                                        costStrategy: v as CostStrategy,
+                                                        costMaterialId:
+                                                            v === "specific" ? draft.costMaterialId : null,
+                                                    })
                                                 }
                                             >
                                                 <SelectTrigger>
-                                                    <SelectValue placeholder="Elegí material" />
+                                                    <SelectValue placeholder="Elegí método" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {draft.options
-                                                        .filter((o) => o.materialId !== null)
-                                                        .map((o) => (
-                                                            <SelectItem
-                                                                key={o.materialId}
-                                                                value={String(o.materialId)}
-                                                            >
-                                                                {o.label}
-                                                            </SelectItem>
-                                                        ))}
+                                                    <SelectItem value="average">Promedio</SelectItem>
+                                                    <SelectItem value="highest">Más caro</SelectItem>
+                                                    <SelectItem value="specific">Material elegido</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                    )}
 
+                                        {draft.costStrategy === "specific" && (
+                                            <div className="space-y-1.5">
+                                                <Label>Material para costear</Label>
+                                                <Select
+                                                    value={draft.costMaterialId ? String(draft.costMaterialId) : ""}
+                                                    onValueChange={(v) =>
+                                                        setDraft({ ...draft, costMaterialId: Number(v) })
+                                                    }
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Elegí material" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {draft.options
+                                                            .filter((o) => o.materialId !== null)
+                                                            .map((o) => (
+                                                                <SelectItem
+                                                                    key={o.materialId}
+                                                                    value={String(o.materialId)}
+                                                                >
+                                                                    {o.label}
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* El costo que va a quedar guardado, recalculado en vivo: elegir
+                                        metodo sin ver el numero era elegir a ciegas. */}
+                                    <p className="text-xs text-muted-foreground">
+                                        Costo de la familia:{" "}
+                                        <span className="font-medium text-foreground">
+                                            {formatArs(draftUnitCost(draft))}
+                                        </span>{" "}
+                                        · {costStrategyHelp(draft)}
+                                    </p>
+                                </div>
+                            )}
+
+                            {draft.fieldKey !== "" && (
+                                <div className="space-y-2">
                                     {/* Cabecera de la lista: cuántas variantes ya tienen material y el
                                         filtro para ir cargando solo las que faltan. Es la información
                                         que antes había que sacar scrolleando la lista entera. */}
