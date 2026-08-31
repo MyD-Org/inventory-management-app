@@ -114,9 +114,8 @@ function validFamilyPayload(p: MaterialFamilyPayload): string | null {
 
     if (p.cost_strategy === 'specific') {
         if (!Number.isFinite(p.cost_material_id)) return 'Elegí qué material se usa para costear';
-        const defaultGroup = byValue.get(p.default_spec_value?.trim() ?? '');
-        if (!defaultGroup?.some((x) => x.material_id === p.cost_material_id)) {
-            return 'El material de costeo tiene que pertenecer a la variante predeterminada';
+        if (!p.options.some((o) => o.material_id === p.cost_material_id)) {
+            return 'El material de costeo tiene que ser uno de los de la familia';
         }
     }
     return null;

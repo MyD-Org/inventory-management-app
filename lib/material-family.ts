@@ -69,12 +69,13 @@ export function defaultOption(family: MaterialFamily): MaterialFamilyOption | un
     return family.options[0]
 }
 
-// Costo unitario de la familia según la estrategia elegida. Se aplica sobre la
-// variante default; si no existe, cae a todas las opciones para no dejar cero.
+// Costo unitario de la familia según la estrategia elegida.
+// - default: conserva el comportamiento anterior, costeando con el material default
+//   de la variante default (para no romper familias ya cargadas).
+// - average / highest: se aplican sobre TODOS los materiales de la familia.
+// - specific: un material elegido a mano de toda la familia.
 export function familyUnitCost(family: MaterialFamily): number {
-    const bySpec = optionsBySpecValue(family)
-    const candidates = family.defaultSpecValue ? bySpec.get(family.defaultSpecValue) : undefined
-    const options = candidates && candidates.length > 0 ? candidates : family.options
+    const options = family.options
     if (!options || options.length === 0) return 0
 
     switch (family.costStrategy) {
@@ -88,7 +89,7 @@ export function familyUnitCost(family: MaterialFamily): number {
         }
         case "default":
         default:
-            return options.find((o) => o.isDefault)?.unitCost ?? options[0].unitCost
+            return defaultOption(family)?.unitCost ?? options[0].unitCost
     }
 }
 

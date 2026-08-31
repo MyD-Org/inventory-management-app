@@ -406,8 +406,7 @@ export function MaterialFamiliesManager({
                                                         o.isDefault &&
                                                         o.specValue === f.defaultSpecValue) ||
                                                         (f.costStrategy === "specific" &&
-                                                            o.materialId === f.costMaterialId &&
-                                                            o.specValue === f.defaultSpecValue)) && (
+                                                            o.materialId === f.costMaterialId)) && (
                                                         <Badge variant="secondary">Costeo</Badge>
                                                     )}
                                                     {formatArs(o.unitCost)}
@@ -473,63 +472,27 @@ export function MaterialFamiliesManager({
                                     {draft.options.length > 0 && (
                                         <>
                                             <Label>Cómo se calcula el costo</Label>
-                                            <div className="grid gap-3 sm:grid-cols-2">
-                                                <div className="space-y-1">
-                                                    <p className="text-xs text-muted-foreground">Variante de costo</p>
-                                                    <Select
-                                                        value={draft.defaultSpecValue ?? ""}
-                                                        onValueChange={(v) =>
-                                                            setDraft({
-                                                                ...draft,
-                                                                defaultSpecValue: v || null,
-                                                                costMaterialId:
-                                                                    draft.costStrategy === "specific"
-                                                                        ? null
-                                                                        : draft.costMaterialId,
-                                                            })
-                                                        }
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Elegí variante" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {Array.from(groupBySpecValue(draft.options)
-                                                                .entries())
-                                                                .filter(([, rows]) => rows.some((r) => r.materialId !== null))
-                                                                .map(([specValue]) => (
-                                                                    <SelectItem key={specValue} value={specValue}>
-                                                                        {valueLabel(draft.fieldKey, specValue)}
-                                                                    </SelectItem>
-                                                                ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-
-                                                <div className="space-y-1">
-                                                    <p className="text-xs text-muted-foreground">Cálculo del costo</p>
-                                                    <Select
-                                                        value={draft.costStrategy}
-                                                        onValueChange={(v) =>
-                                                            setDraft({
-                                                                ...draft,
-                                                                costStrategy: v as CostStrategy,
-                                                                costMaterialId:
-                                                                    v === "specific" ? draft.costMaterialId : null,
-                                                            })
-                                                        }
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Elegí cálculo" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="default">Default</SelectItem>
-                                                            <SelectItem value="average">Promedio</SelectItem>
-                                                            <SelectItem value="highest">Más caro</SelectItem>
-                                                            <SelectItem value="specific">Específico</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            </div>
+                                            <Select
+                                                value={draft.costStrategy}
+                                                onValueChange={(v) =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        costStrategy: v as CostStrategy,
+                                                        costMaterialId:
+                                                            v === "specific" ? draft.costMaterialId : null,
+                                                    })
+                                                }
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Elegí cálculo" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="default">Default</SelectItem>
+                                                    <SelectItem value="average">Promedio de todos los materiales</SelectItem>
+                                                    <SelectItem value="highest">Material más caro</SelectItem>
+                                                    <SelectItem value="specific">Material específico</SelectItem>
+                                                </SelectContent>
+                                            </Select>
 
                                             {draft.costStrategy === "specific" && (
                                                 <div className="space-y-1">
@@ -545,11 +508,7 @@ export function MaterialFamiliesManager({
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             {draft.options
-                                                                .filter(
-                                                                    (o) =>
-                                                                        o.specValue === draft.defaultSpecValue &&
-                                                                        o.materialId !== null,
-                                                                )
+                                                                .filter((o) => o.materialId !== null)
                                                                 .map((o) => (
                                                                     <SelectItem
                                                                         key={o.materialId}
@@ -627,6 +586,32 @@ export function MaterialFamiliesManager({
                                                 </div>
                                                 )
                                             })}
+
+                                            <div className="space-y-1 pt-1">
+                                                <p className="text-xs text-muted-foreground">
+                                                    Variante que sale por defecto al retirar stock
+                                                </p>
+                                                <Select
+                                                    value={draft.defaultSpecValue ?? ""}
+                                                    onValueChange={(v) =>
+                                                        setDraft({ ...draft, defaultSpecValue: v || null })
+                                                    }
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Elegí variante" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {Array.from(groupBySpecValue(draft.options)
+                                                            .entries())
+                                                            .filter(([, rows]) => rows.some((r) => r.materialId !== null))
+                                                            .map(([specValue]) => (
+                                                                <SelectItem key={specValue} value={specValue}>
+                                                                    {valueLabel(draft.fieldKey, specValue)}
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
                                         </>
                                     )}
                                 </div>

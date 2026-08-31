@@ -68,11 +68,11 @@ describe("defaultOption", () => {
 })
 
 describe("familyUnitCost", () => {
-    it("usa el material default de la variante default por defecto", () => {
+    it("usa el material default de la familia por defecto", () => {
         expect(familyUnitCost(tiraLed())).toBe(1000)
     })
 
-    it("calcula el promedio de los materiales de la variante default", () => {
+    it("calcula el promedio de todos los materiales de la familia", () => {
         const family = tiraLed({
             costStrategy: "average",
             options: [
@@ -81,10 +81,10 @@ describe("familyUnitCost", () => {
                 { specValue: "blanco", materialId: 10, label: "C", unitCost: 900, barcode: "C" },
             ],
         })
-        expect(familyUnitCost(family)).toBe(1100)
+        expect(familyUnitCost(family)).toBeCloseTo(1033.33, 2)
     })
 
-    it("usa el material más caro de la variante default", () => {
+    it("usa el material más caro de toda la familia", () => {
         const family = tiraLed({
             costStrategy: "highest",
             options: [
@@ -109,7 +109,7 @@ describe("familyUnitCost", () => {
         expect(familyUnitCost(family)).toBe(1200)
     })
 
-    it("cae al primer material si no hay variante default", () => {
+    it("cae al primer material si la familia no tiene default marcado", () => {
         expect(familyUnitCost(tiraLed({ defaultSpecValue: null }))).toBe(900)
     })
 })
