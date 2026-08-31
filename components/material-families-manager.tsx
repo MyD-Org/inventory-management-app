@@ -335,8 +335,8 @@ export function MaterialFamiliesManager({
                         const specCount = new Set(f.options.map((o) => o.specValue)).size
                         return (
                             <details key={f.id} className="group rounded-md border p-3">
-                                <div className="flex items-start justify-between gap-2">
-                                    <summary className="flex flex-1 cursor-pointer list-none items-start gap-2">
+                                <summary className="flex cursor-pointer list-none items-start justify-between gap-2">
+                                    <div className="flex min-w-0 flex-1 items-start gap-2">
                                         <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
                                         <div className="min-w-0">
                                             <p className="flex items-center gap-1.5 font-medium">
@@ -350,8 +350,8 @@ export function MaterialFamiliesManager({
                                                 {f.defaultSpecValue === null && " · falta elegir con cuál se calcula el costo"}
                                             </p>
                                         </div>
-                                    </summary>
-                                    <div className="flex shrink-0 gap-1">
+                                    </div>
+                                    <div className="flex shrink-0 gap-1" onClick={(e) => e.preventDefault()}>
                                         <Button variant="ghost" size="icon" onClick={() => openEdit(f)} title="Editar">
                                             <Pencil className="h-4 w-4" />
                                         </Button>
@@ -359,7 +359,7 @@ export function MaterialFamiliesManager({
                                             <Trash2 className="h-4 w-4 text-destructive" />
                                         </Button>
                                     </div>
-                                </div>
+                                </summary>
                                 {f.options.length > 0 && (
                                     <div className="mt-2 space-y-1 border-t pt-2">
                                         {f.options.map((o) => (
