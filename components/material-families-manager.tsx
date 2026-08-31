@@ -283,11 +283,15 @@ export function MaterialFamiliesManager({
             defaultKeys.add(list[0].key)
         }
 
+        // La variante default para BOM es la primera con materiales; no hace falta
+        // preguntarle al usuario porque al retirar stock siempre se puede elegir otra.
+        const defaultSpecValue = draft.defaultSpecValue ?? Array.from(bySpec.keys())[0]
+
         setSaving(true)
         const result = await saveMaterialFamily(draft.id, {
             name: draft.name,
             spec_field_key: draft.fieldKey,
-            default_spec_value: draft.defaultSpecValue,
+            default_spec_value: defaultSpecValue,
             cost_strategy: draft.costStrategy,
             cost_material_id: draft.costMaterialId,
             options: filled.map((o) => ({
@@ -374,8 +378,7 @@ export function MaterialFamiliesManager({
                                                 Varía según {fieldLabel(f.specFieldKey)} · {specCount}{" "}
                                                 {specCount === 1 ? "variante" : "variantes"} · {f.options.length}{" "}
                                                 {f.options.length === 1 ? "material" : "materiales"}
-                                                {f.defaultSpecValue === null && " · falta elegir con cuál se calcula el costo"}
-                                                {f.defaultSpecValue !== null && ` · ${formatArs(familyUnitCost(f))}`}
+                                                {f.options.length > 0 && ` · ${formatArs(familyUnitCost(f))}`}
                                             </p>
                                         </div>
                                     </div>
@@ -574,31 +577,6 @@ export function MaterialFamiliesManager({
                                                 )
                                             })}
 
-                                            <div className="space-y-1 pt-1">
-                                                <p className="text-xs text-muted-foreground">
-                                                    Variante que sale por defecto al retirar stock
-                                                </p>
-                                                <Select
-                                                    value={draft.defaultSpecValue ?? ""}
-                                                    onValueChange={(v) =>
-                                                        setDraft({ ...draft, defaultSpecValue: v || null })
-                                                    }
-                                                >
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Elegí variante" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {Array.from(groupBySpecValue(draft.options)
-                                                            .entries())
-                                                            .filter(([, rows]) => rows.some((r) => r.materialId !== null))
-                                                            .map(([specValue]) => (
-                                                                <SelectItem key={specValue} value={specValue}>
-                                                                    {valueLabel(draft.fieldKey, specValue)}
-                                                                </SelectItem>
-                                                            ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
                                         </>
                                     )}
                                 </div>

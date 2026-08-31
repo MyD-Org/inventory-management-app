@@ -105,11 +105,11 @@ function validFamilyPayload(p: MaterialFamilyPayload): string | null {
         if (defaults > 1) return `Solo puede haber un default en "${value}"`;
     }
 
-    // Sin predeterminada no hay con qué costear la línea que use la familia, así
-    // que se exige acá y no en la UI: es la regla, no una ayuda de pantalla.
-    if (p.options.length > 0) {
-        if (!p.default_spec_value?.trim()) return 'Elegí con qué variante se costea (la predeterminada)';
-        if (!byValue.has(p.default_spec_value.trim())) return 'La variante predeterminada tiene que ser una de las cargadas';
+    // La variante predeterminada se asigna automáticamente en la UI; si llega vacía
+    // la corregimos acá para no dejar la familia incompleta.
+    const defaultValue = p.default_spec_value?.trim();
+    if (p.options.length > 0 && defaultValue && !byValue.has(defaultValue)) {
+        return 'La variante predeterminada tiene que ser una de las cargadas';
     }
 
     if (p.cost_strategy === 'specific') {
