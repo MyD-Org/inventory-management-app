@@ -57,6 +57,37 @@ const emptyDraft: Draft = {
     costMaterialId: null,
 }
 
+// Qué costo va a quedar guardado, calculado sobre el borrador. Espeja
+// familyUnitCost() de lib/material-family, pero sobre las filas del formulario y
+// contando solo las que tienen material: es una vista previa, no la fuente de
+// verdad. Si las dos se separan, manda familyUnitCost.
+function draftUnitCost(draft: Draft): number {
+    const filled = draft.options.filter((o) => o.materialId !== null)
+    if (filled.length === 0) return 0
+
+    switch (draft.costStrategy) {
+        case "average":
+            return filled.reduce((sum, o) => sum + o.unitCost, 0) / filled.length
+        case "highest":
+            return Math.max(...filled.map((o) => o.unitCost))
+        case "specific":
+            return filled.find((o) => o.materialId === draft.costMaterialId)?.unitCost ?? filled[0].unitCost
+        case "default":
+        default: {
+            const ofDefault = filled.filter((o) => o.specValue === draft.defaultSpecValue)
+            return (ofDefault[0] ?? filled[0]).unitCost
+        }
+    }
+}
+
+// La variante con la que costea el método automático, para poder nombrarla en la UI.
+function draftDefaultSpecValue(draft: Draft): string | null {
+    const filled = draft.options.filter((o) => o.materialId !== null)
+    if (filled.length === 0) return null
+    const ofDefault = filled.find((o) => o.specValue === draft.defaultSpecValue)
+    return (ofDefault ?? filled[0]).specValue
+}
+
 let nextKey = 1
 const newKey = () => String(nextKey++)
 
@@ -74,6 +105,11 @@ export function MaterialFamiliesManager({
     const [saving, setSaving] = useState(false)
     const [pendingDelete, setPendingDelete] = useState<MaterialFamily | null>(null)
     const [deleting, setDeleting] = useState(false)
+
+    // Variante abierta en el modal. Una sola a la vez: con 14 colores, tenerlas todas
+    // desplegadas eran 2,5 pantallas de scroll y no se veía cuántas faltaban.
+    const [openSpec, setOpenSpec] = useState<string | null>(null)
+    const [onlyMissing, setOnlyMissing] = useState(false)
 
     // Mismo catálogo en cliente que el editor de costos: pocas familias, muchos
     // materiales, y el filtrado difuso ya está resuelto en el buscador de línea.
@@ -103,9 +139,31 @@ export function MaterialFamiliesManager({
             case "highest":
                 return "más caro"
             case "specific":
-                return "material específico"
+                return "material elegido"
             case "default":
-                return "default"
+                return "variante predeterminada"
+        }
+    }
+
+    // Qué hace cada método, en una línea. "Automático" era el más usado y el único
+    // que no se explicaba solo: costea con la variante predeterminada, que es la
+    // primera que se cargó.
+    const costStrategyHelp = (draft: Draft): string => {
+        const filled = draft.options.filter((o) => o.materialId !== null)
+        switch (draft.costStrategy) {
+            case "average":
+                return `promedio de los ${filled.length} materiales cargados`
+            case "highest":
+                return "el material más caro de toda la familia"
+            case "specific":
+                return "el material que elijas abajo"
+            case "default":
+            default: {
+                const spec = draftDefaultSpecValue(draft)
+                return spec === null
+                    ? "el material de la variante predeterminada"
+                    : `el material de la variante predeterminada (${valueLabel(draft.fieldKey, spec)})`
+            }
         }
     }
 
@@ -142,9 +200,20 @@ export function MaterialFamiliesManager({
         )
     }
 
-    const openNew = () => setDraft({ ...emptyDraft })
+    // Cada vez que se abre el modal se arranca con todo cerrado y sin filtro: el
+    // estado del acordeon es de la sesion de edicion, no del componente.
+    const resetPanels = () => {
+        setOpenSpec(null)
+        setOnlyMissing(false)
+    }
+
+    const openNew = () => {
+        resetPanels()
+        setDraft({ ...emptyDraft })
+    }
 
     const openEdit = (f: MaterialFamily) => {
+        resetPanels()
         // Se muestran todas las opciones del campo, con lo ya mapeado adentro: así
         // agregar un color nuevo es escribir en la fila que ya está, no acordarse
         // de que el color existe.
@@ -366,6 +435,18 @@ export function MaterialFamiliesManager({
         )
     }
 
+    // Derivados del borrador para la cabecera y el acordeon. Se calculan aca porque
+    // dependen del estado del filtro, no solo del draft.
+    const specGroups = draft ? Array.from(groupBySpecValue(draft.options).entries()) : []
+    const totalSpecCount = specGroups.length
+    const loadedSpecCount = specGroups.filter(([, rows]) => rows.some((o) => o.materialId !== null)).length
+    const missingSpecCount = totalSpecCount - loadedSpecCount
+    // El filtro no esconde la variante abierta: si la estas cargando y al elegir el
+    // material desaparece de la lista, se pierde el hilo de donde estabas.
+    const visibleGroups = onlyMissing
+        ? specGroups.filter(([specValue, rows]) => specValue === openSpec || rows.every((o) => o.materialId === null))
+        : specGroups
+
     return (
         <div className="space-y-4">
             <div className="flex justify-end">
@@ -499,12 +580,21 @@ export function MaterialFamiliesManager({
                                                 <SelectValue placeholder="Elegí método" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="default">Automático</SelectItem>
+                                                <SelectItem value="default">Variante predeterminada</SelectItem>
                                                 <SelectItem value="average">Promedio</SelectItem>
-                                                <SelectItem value="highest">Máximo</SelectItem>
-                                                <SelectItem value="specific">Manual</SelectItem>
+                                                <SelectItem value="highest">Más caro</SelectItem>
+                                                <SelectItem value="specific">Material elegido</SelectItem>
                                             </SelectContent>
                                         </Select>
+                                        {/* El costo que va a quedar guardado, recalculado en vivo: elegir
+                                            metodo sin ver el numero era elegir a ciegas. */}
+                                        <p className="text-xs text-muted-foreground">
+                                            Costo de la familia:{" "}
+                                            <span className="font-medium text-foreground">
+                                                {formatArs(draftUnitCost(draft))}
+                                            </span>{" "}
+                                            · {costStrategyHelp(draft)}
+                                        </p>
                                     </div>
                                 )}
                             </div>
@@ -539,9 +629,35 @@ export function MaterialFamiliesManager({
                                         </div>
                                     )}
 
-                                    <Label className={draft.options.length > 0 ? "pt-2" : undefined}>
-                                        Materiales por variante
-                                    </Label>
+                                    {/* Cabecera de la lista: cuántas variantes ya tienen material y el
+                                        filtro para ir cargando solo las que faltan. Es la información
+                                        que antes había que sacar scrolleando la lista entera. */}
+                                    <div
+                                        className={`flex flex-wrap items-baseline justify-between gap-2 ${
+                                            draft.options.length > 0 ? "pt-2" : ""
+                                        }`}
+                                    >
+                                        <Label>Materiales por variante</Label>
+                                        {draft.options.length > 0 && (
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs text-muted-foreground">
+                                                    {loadedSpecCount} de {totalSpecCount} cargadas
+                                                </span>
+                                                {missingSpecCount > 0 && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 px-2 text-xs"
+                                                        onClick={() => setOnlyMissing((v) => !v)}
+                                                    >
+                                                        {onlyMissing
+                                                            ? "Ver todas"
+                                                            : `Solo las que faltan (${missingSpecCount})`}
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                     {draft.options.length === 0 ? (
                                         <p className="text-xs text-muted-foreground">
                                             Ese campo no tiene opciones cargadas. Agregalas en{" "}
@@ -552,16 +668,46 @@ export function MaterialFamiliesManager({
                                         </p>
                                     ) : (
                                         <>
-                                            {/* La pregunta se hace UNA vez arriba de la columna: repetirla en cada
-                                                fila obliga a una etiqueta corta que no se entiende sola. */}
-                                            {Array.from(groupBySpecValue(draft.options).entries()).map(([specValue, rows]) => {
+                                            {/* Acordeon: una linea por variante, cerrada, con el material ya
+                                                cargado a la vista. Abierta muestra los inputs. La pregunta se
+                                                hace UNA vez arriba de la columna: repetirla en cada fila
+                                                obliga a una etiqueta corta que no se entiende sola. */}
+                                            {visibleGroups.map(([specValue, rows]) => {
                                                 const specLabel = valueLabel(draft.fieldKey, specValue)
+                                                const filled = rows.filter((o) => o.materialId !== null)
+                                                const isOpen = openSpec === specValue
                                                 return (
                                                 <div key={specValue} className="space-y-1 rounded-md border p-2">
-                                                    <p className="text-xs font-medium text-muted-foreground">
-                                                        {specLabel}
-                                                    </p>
-                                                    {rows.map((o) => (
+                                                    <button
+                                                        type="button"
+                                                        className="flex w-full items-center gap-2 text-left"
+                                                        onClick={() => setOpenSpec(isOpen ? null : specValue)}
+                                                    >
+                                                        <ChevronDown
+                                                            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+                                                                isOpen ? "" : "-rotate-90"
+                                                            }`}
+                                                        />
+                                                        <span className="text-xs font-medium text-muted-foreground">
+                                                            {specLabel}
+                                                        </span>
+                                                        {/* El resumen es lo que hace que colapsar no cueste
+                                                            informacion: se sigue viendo que falta mapear. */}
+                                                        <span
+                                                            className={`ml-auto truncate pl-2 text-xs ${
+                                                                filled.length === 0
+                                                                    ? "text-muted-foreground/60"
+                                                                    : "text-muted-foreground"
+                                                            }`}
+                                                        >
+                                                            {filled.length === 0
+                                                                ? "sin material"
+                                                                : filled.length === 1
+                                                                  ? filled[0].label
+                                                                  : `${filled[0].label} +${filled.length - 1}`}
+                                                        </span>
+                                                    </button>
+                                                    {isOpen && rows.map((o) => (
                                                         <div
                                                             key={o.key}
                                                             className="grid grid-cols-[1fr_auto] items-center gap-2"
@@ -599,15 +745,17 @@ export function MaterialFamiliesManager({
                                                             </Button>
                                                         </div>
                                                     ))}
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-7 w-full justify-start text-xs text-muted-foreground hover:text-foreground"
-                                                        onClick={() => addMaterialToSpec(specValue)}
-                                                    >
-                                                        <Plus className="mr-1.5 h-3.5 w-3.5" />
-                                                        Agregar otro material
-                                                    </Button>
+                                                    {isOpen && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-7 w-full justify-start text-xs text-muted-foreground hover:text-foreground"
+                                                            onClick={() => addMaterialToSpec(specValue)}
+                                                        >
+                                                            <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                                            Agregar otro material
+                                                        </Button>
+                                                    )}
                                                 </div>
                                                 )
                                             })}
