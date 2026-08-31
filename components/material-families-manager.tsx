@@ -370,10 +370,10 @@ export function MaterialFamiliesManager({
                                                 </span>
                                                 <span className="truncate">{o.label}</span>
                                                 <span className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
-                                                    {formatArs(o.unitCost)}
                                                     {o.isDefault && o.specValue === f.defaultSpecValue && (
                                                         <Badge variant="secondary">Costeo</Badge>
                                                     )}
+                                                    {formatArs(o.unitCost)}
                                                 </span>
                                             </div>
                                         ))}
