@@ -239,7 +239,7 @@ export function OrderItemsEditor({
                                                 <TooltipContent>
                                                     No existe la variante de{" "}
                                                     {item.unmapped_specs.map(specHumano).join(" y ")} para este
-                                                    producto. Revisá qué descontar del inventario.
+                                                    producto. Revisá al descontar del inventario.
                                                 </TooltipContent>
                                             </Tooltip>
                                         )}
