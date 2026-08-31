@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
     defaultOption,
     familyUnitCost,
+    familyLineOptions,
     lineFromFamily,
     syncLineWithFamily,
     type FamilyLineFields,
@@ -179,5 +180,49 @@ describe("syncLineWithFamily", () => {
         expect(synced.familyId).toBeNull()
         expect(synced.options).toEqual(linea().options)
         expect(synced.materialId).toBe(11)
+    })
+})
+
+describe("familyLineOptions", () => {
+    // El caso que rompía al guardar: un color con dos materiales. La familia los tiene
+    // como alternativas, pero la línea guarda uno solo por variante.
+    const conAlternativas = () =>
+        tiraLed({
+            options: [
+                { specValue: "calido", materialId: 11, label: "Cálida SG", unitCost: 1000, barcode: "A", isDefault: true },
+                { specValue: "calido", materialId: 111, label: "Cálida Cree", unitCost: 1200, barcode: "B", isDefault: false },
+                { specValue: "blanco", materialId: 10, label: "Blanca", unitCost: 900, barcode: "C", isDefault: true },
+            ],
+        })
+
+    it("deja una sola opción por variante", () => {
+        const options = familyLineOptions(conAlternativas())
+        expect(options).toHaveLength(2)
+        expect(options.map((o) => o.specValue)).toEqual(["calido", "blanco"])
+    })
+
+    it("elige el material marcado como default de cada variante", () => {
+        expect(familyLineOptions(conAlternativas())[0].materialId).toBe(11)
+    })
+
+    it("cae al primero si la variante no tiene ninguno marcado", () => {
+        const family = tiraLed({
+            options: [
+                { specValue: "calido", materialId: 11, label: "A", unitCost: 1000, barcode: "A", isDefault: false },
+                { specValue: "calido", materialId: 111, label: "B", unitCost: 1200, barcode: "B", isDefault: false },
+            ],
+        })
+        expect(familyLineOptions(family)[0].materialId).toBe(11)
+    })
+
+    it("la línea que arma lineFromFamily no repite variantes", () => {
+        const specValues = lineFromFamily(conAlternativas()).options.map((o) => o.specValue)
+        expect(new Set(specValues).size).toBe(specValues.length)
+    })
+
+    it("sincronizar una línea tampoco repite variantes", () => {
+        const line = syncLineWithFamily(linea(), conAlternativas())
+        const specValues = line.options.map((o) => o.specValue)
+        expect(new Set(specValues).size).toBe(specValues.length)
     })
 })

@@ -96,6 +96,23 @@ export function familyUnitCost(family: MaterialFamily): number {
 
 // Elegir una familia arma la línea entera: nombre general, campo que la hace
 // variar, todas las variantes, y el costo calculado por la estrategia.
+
+// Las variantes tal como las guarda una línea de hoja de costo: UNA por valor de
+// spec. La familia puede tener varios materiales para el mismo color (alternativas
+// del inventario), pero la línea guarda la foto del elegido —
+// budget_material_options tiene UNIQUE (budget_material_id, spec_value) — y ademas
+// validBudgetPayload rechaza el duplicado antes de llegar a la base.
+//
+// El elegido es el marcado con isDefault, que es exactamente para lo que existe esa
+// marca. Sin este colapso, cualquier hoja que use una familia con dos materiales en
+// un color no se puede guardar: "La variante X está repetida".
+export function familyLineOptions(family: MaterialFamily): FamilyLineFields["options"] {
+    return Array.from(optionsBySpecValue(family).values()).map((options) => {
+        const chosen = options.find((o) => o.isDefault) ?? options[0]
+        return { specValue: chosen.specValue, materialId: chosen.materialId, label: chosen.label }
+    })
+}
+
 export function lineFromFamily(family: MaterialFamily): FamilyLineFields {
     const def = defaultOption(family)
     return {
@@ -104,7 +121,7 @@ export function lineFromFamily(family: MaterialFamily): FamilyLineFields {
         materialId: def?.materialId ?? null,
         unitCost: familyUnitCost(family),
         specFieldKey: family.specFieldKey,
-        options: family.options.map((o) => ({ specValue: o.specValue, materialId: o.materialId, label: o.label })),
+        options: familyLineOptions(family),
     }
 }
 
@@ -127,7 +144,7 @@ export function syncLineWithFamily<T extends FamilyLineFields>(line: T, family: 
         label: family.name,
         materialId: def?.materialId ?? line.materialId,
         specFieldKey: family.specFieldKey,
-        options: family.options.map((o) => ({ specValue: o.specValue, materialId: o.materialId, label: o.label })),
+        options: familyLineOptions(family),
     }
 }
 
