@@ -942,19 +942,67 @@ export async function reconcileOrderBoms(orderId: number): Promise<ReconciledIte
         if (!order) return []
         if (order.status === "retirado" || order.status === "cancelado") return []
 
+        const [{ count }] = await sql`
+            SELECT COUNT(*)::int AS count FROM stock_movements
+            WHERE order_id = ${orderId} AND movement_type = 'salida'
+        `
+        if (count > 0) return []
+
+        // Limpieza 1: ítems huérfanos que quedaron con unmapped_specs pero sin
+        // budget_id. Pasa cuando alguien borra la hoja de costo a mano o queda
+        // un estado inconsistente: sin hoja de costo debe ser needs_review.
+        const itemsSinBudgetConUnmapped = await sql`
+            SELECT id
+            FROM order_items
+            WHERE order_id = ${orderId}
+              AND budget_id IS NULL
+              AND needs_review = FALSE
+              AND jsonb_array_length(COALESCE(unmapped_specs, '[]'::jsonb)) > 0
+            ORDER BY line_no ASC
+        `
+        for (const item of itemsSinBudgetConUnmapped as any[]) {
+            await sql`DELETE FROM order_item_materials WHERE order_item_id = ${item.id}`
+            await sql`
+                UPDATE order_items
+                SET needs_review = TRUE,
+                    unmapped_specs = '[]'::jsonb
+                WHERE id = ${item.id}
+            `
+        }
+
+        // Limpieza 2: si una hoja de costo se borró o quedó vacía después de
+        // vincularse al pedido, el ítem queda con un budget_id inválido y
+        // muestra "variante sin resolver" en vez de "sin lista de materiales".
+        // Se desvincula y vuelve a needs_review para que el taller lo arme a mano.
+        const itemsConBudgetInvalido = await sql`
+            SELECT oi.id
+            FROM order_items oi
+            WHERE oi.order_id = ${orderId}
+              AND oi.budget_id IS NOT NULL
+              AND oi.needs_review = FALSE
+              AND (
+                  NOT EXISTS (SELECT 1 FROM budgets b WHERE b.id = oi.budget_id)
+                  OR NOT EXISTS (SELECT 1 FROM budget_materials bm WHERE bm.budget_id = oi.budget_id)
+              )
+            ORDER BY oi.line_no ASC
+        `
+        for (const item of itemsConBudgetInvalido as any[]) {
+            await sql`DELETE FROM order_item_materials WHERE order_item_id = ${item.id}`
+            await sql`
+                UPDATE order_items
+                SET budget_id = NULL,
+                    needs_review = TRUE,
+                    unmapped_specs = '[]'::jsonb
+                WHERE id = ${item.id}
+            `
+        }
+
         const pendientes = await sql`
             SELECT id, product, specs, quantity
             FROM order_items
             WHERE order_id = ${orderId} AND needs_review = TRUE
             ORDER BY line_no ASC
         `
-        if (pendientes.length === 0) return []
-
-        const [{ count }] = await sql`
-            SELECT COUNT(*)::int AS count FROM stock_movements
-            WHERE order_id = ${orderId} AND movement_type = 'salida'
-        `
-        if (count > 0) return []
 
         const arregladas: ReconciledItem[] = []
 
