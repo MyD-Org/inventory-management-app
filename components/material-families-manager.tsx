@@ -1,36 +1,36 @@
 "use client"
 
-// Familias de materiales: "Placa 1 led varía según el color; 2200k es este material
-// del inventario y 3000k este otro". Se declara UNA VEZ acá y las hojas de costo la
-// eligen como si fuera un material, sin recargar el mapeo producto por producto.
+// Familias de materiales: "Placa 1 led varía según el color; 2200k puede ser este
+// material o este otro". Se declara UNA VEZ acá y las hojas de costo la eligen
+// como si fuera un material, sin recargar el mapeo producto por producto.
 //
 // El orden de la pantalla es el orden en que se piensa: primero el nombre general
-// de la materia prima, después según qué varía, y recién ahí qué material sale
+// de la materia prima, después según qué varía, y recién ahí qué materiales salen
 // para cada valor.
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ConfirmDialog } from "@/components/confirm-dialog"
-import { Layers, Loader2, Pencil, Plus, Trash2 } from "lucide-react"
+import { ChevronDown, Layers, Loader2, Pencil, Plus, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { formatArs } from "@/lib/format"
 import { getMaterialsCatalog } from "@/lib/budget-actions"
 import { saveMaterialFamily, deleteMaterialFamily } from "@/lib/material-families"
-import type { MaterialFamily } from "@/lib/material-family"
+import { familyUnitCost, type CostStrategy, type MaterialFamily } from "@/lib/material-family"
 import { MaterialLineAutocomplete, type MaterialSearchResult } from "@/components/material-line-autocomplete"
 import type { SpecFieldChoice } from "@/lib/spec-choices"
 
-// Una fila del formulario: un valor del vocabulario (cálido, azul, …) y qué
-// material del inventario le corresponde. Sin material = la familia no la mapea;
-// no se guarda y un pedido de ese valor cae en la variante predeterminada y queda
-// marcado para revisión, igual que hoy.
+// Una fila del formulario. Un mismo valor de spec puede tener varias filas (varios
+// materiales para un color). El default de cada color es el primer material cargado.
 interface DraftOption {
+    key: string
     specValue: string
     materialId: number | null
     label: string
@@ -43,9 +43,22 @@ interface Draft {
     fieldKey: string
     options: DraftOption[]
     defaultSpecValue: string | null
+    costStrategy: CostStrategy
+    costMaterialId: number | null
 }
 
-const emptyDraft: Draft = { id: null, name: "", fieldKey: "", options: [], defaultSpecValue: null }
+const emptyDraft: Draft = {
+    id: null,
+    name: "",
+    fieldKey: "",
+    options: [],
+    defaultSpecValue: null,
+    costStrategy: "default",
+    costMaterialId: null,
+}
+
+let nextKey = 1
+const newKey = () => String(nextKey++)
 
 export function MaterialFamiliesManager({
     families,
@@ -75,6 +88,29 @@ export function MaterialFamiliesManager({
     const fieldLabel = (key: string) => fieldOf(key)?.label ?? key
     const valueLabel = (key: string, value: string) =>
         fieldOf(key)?.options.find((o) => o.value === value)?.label ?? value
+    const costStrategyLabel = (strategy: CostStrategy) => {
+        switch (strategy) {
+            case "average":
+                return "promedio"
+            case "highest":
+                return "más caro"
+            case "specific":
+                return "material específico"
+            case "default":
+                return "default"
+        }
+    }
+
+    // Agrupa las filas de borrador por specValue, respetando el orden de carga.
+    const groupBySpecValue = <T extends { specValue: string }>(options: T[]) => {
+        const groups = new Map<string, T[]>()
+        for (const o of options) {
+            const list = groups.get(o.specValue) ?? []
+            list.push(o)
+            groups.set(o.specValue, list)
+        }
+        return groups
+    }
 
     // Al elegir el campo se listan TODAS sus opciones como filas vacías. Es la
     // diferencia con cargarlas de a una: se ve de entrada qué falta mapear, y lo
@@ -88,6 +124,7 @@ export function MaterialFamiliesManager({
                       fieldKey: key,
                       defaultSpecValue: null,
                       options: (fieldOf(key)?.options ?? []).map((o) => ({
+                          key: newKey(),
                           specValue: o.value,
                           materialId: null,
                           label: "",
@@ -103,22 +140,42 @@ export function MaterialFamiliesManager({
         // Se muestran todas las opciones del campo, con lo ya mapeado adentro: así
         // agregar un color nuevo es escribir en la fila que ya está, no acordarse
         // de que el color existe.
-        const mapped = new Map(f.options.map((o) => [o.specValue, o]))
+        const mapped = groupBySpecValue(f.options)
         const all = fieldOf(f.specFieldKey)?.options ?? []
-        const rows: DraftOption[] = all.map((o) => {
-            const hit = mapped.get(o.value)
-            return {
-                specValue: o.value,
-                materialId: hit?.materialId ?? null,
-                label: hit?.label ?? "",
-                unitCost: hit?.unitCost ?? 0,
+        const rows: DraftOption[] = []
+        for (const opt of all) {
+            const hits = mapped.get(opt.value)
+            if (hits && hits.length > 0) {
+                for (const h of hits) {
+                    rows.push({
+                        key: newKey(),
+                        specValue: opt.value,
+                        materialId: h.materialId,
+                        label: h.label,
+                        unitCost: h.unitCost,
+                    })
+                }
+            } else {
+                rows.push({
+                    key: newKey(),
+                    specValue: opt.value,
+                    materialId: null,
+                    label: "",
+                    unitCost: 0,
+                })
             }
-        })
+        }
         // Valores mapeados que ya no están en el vocabulario: se muestran igual
         // para poder verlos y sacarlos, en vez de borrarlos por la espalda.
         for (const o of f.options) {
             if (!all.some((a) => a.value === o.specValue)) {
-                rows.push({ specValue: o.specValue, materialId: o.materialId, label: o.label, unitCost: o.unitCost })
+                rows.push({
+                    key: newKey(),
+                    specValue: o.specValue,
+                    materialId: o.materialId,
+                    label: o.label,
+                    unitCost: o.unitCost,
+                })
             }
         }
         setDraft({
@@ -127,43 +184,76 @@ export function MaterialFamiliesManager({
             fieldKey: f.specFieldKey,
             options: rows,
             defaultSpecValue: f.defaultSpecValue,
+            costStrategy: f.costStrategy,
+            costMaterialId: f.costMaterialId,
         })
     }
 
-    const updateRow = (specValue: string, patch: Partial<DraftOption>) => {
+    const updateRow = (key: string, patch: Partial<DraftOption>) => {
         setDraft((d) =>
             d === null
                 ? d
                 : {
                       ...d,
-                      options: d.options.map((o) => (o.specValue === specValue ? { ...o, ...patch } : o)),
+                      options: d.options.map((o) => (o.key === key ? { ...o, ...patch } : o)),
                   },
         )
     }
 
-    // La primera variante que se carga queda de predeterminada sola: en la enorme
-    // mayoría de los casos es la correcta y evita un click que nadie entiende
-    // hasta que le falla el guardado.
-    const pickRowMaterial = (specValue: string, m: MaterialSearchResult) => {
+    const addMaterialToSpec = (specValue: string) => {
         setDraft((d) => {
             if (d === null) return d
-            const options = d.options.map((o) =>
-                o.specValue === specValue
-                    ? { ...o, materialId: m.id, label: m.name, unitCost: Number(m.unit_cost) }
-                    : o,
-            )
-            const hadDefault = d.defaultSpecValue !== null && options.some((o) => o.specValue === d.defaultSpecValue && o.materialId !== null)
-            return { ...d, options, defaultSpecValue: hadDefault ? d.defaultSpecValue : specValue }
+            return {
+                ...d,
+                options: [
+                    ...d.options,
+                    {
+                        key: newKey(),
+                        specValue,
+                        materialId: null,
+                        label: "",
+                        unitCost: 0,
+                    },
+                ],
+            }
         })
     }
 
-    const clearRow = (specValue: string) => {
+    const removeRow = (key: string) => {
         setDraft((d) => {
             if (d === null) return d
+            return { ...d, options: d.options.filter((o) => o.key !== key) }
+        })
+    }
+
+    const pickRowMaterial = (key: string, m: MaterialSearchResult) => {
+        setDraft((d) => {
+            if (d === null) return d
+            const target = d.options.find((o) => o.key === key)
+            if (!target) return d
             const options = d.options.map((o) =>
-                o.specValue === specValue ? { ...o, materialId: null, label: "", unitCost: 0 } : o,
+                o.key === key ? { ...o, materialId: m.id, label: m.name, unitCost: Number(m.unit_cost) } : o,
             )
-            const next = d.defaultSpecValue === specValue ? options.find((o) => o.materialId !== null)?.specValue ?? null : d.defaultSpecValue
+            const hadDefault =
+                d.defaultSpecValue !== null &&
+                options.some((o) => o.specValue === d.defaultSpecValue && o.materialId !== null)
+            return { ...d, options, defaultSpecValue: hadDefault ? d.defaultSpecValue : target.specValue }
+        })
+    }
+
+    const clearRow = (key: string) => {
+        setDraft((d) => {
+            if (d === null) return d
+            const target = d.options.find((o) => o.key === key)
+            if (!target) return d
+            const options = d.options.map((o) =>
+                o.key === key ? { ...o, materialId: null, label: "", unitCost: 0 } : o,
+            )
+            const sameSpecWithMaterial = options.filter((o) => o.specValue === target.specValue && o.materialId !== null)
+            const next =
+                d.defaultSpecValue === target.specValue
+                    ? sameSpecWithMaterial[0]?.specValue ?? null
+                    : d.defaultSpecValue
             return { ...d, options, defaultSpecValue: next }
         })
     }
@@ -186,12 +276,29 @@ export function MaterialFamiliesManager({
             return
         }
 
+        // El primer material cargado de cada color es el default (costeo/BOM).
+        const bySpec = groupBySpecValue(filled)
+        const defaultKeys = new Set<string>()
+        for (const [, list] of bySpec) {
+            defaultKeys.add(list[0].key)
+        }
+
+        // La variante default para BOM es la primera con materiales; no hace falta
+        // preguntarle al usuario porque al retirar stock siempre se puede elegir otra.
+        const defaultSpecValue = draft.defaultSpecValue ?? Array.from(bySpec.keys())[0]
+
         setSaving(true)
         const result = await saveMaterialFamily(draft.id, {
             name: draft.name,
             spec_field_key: draft.fieldKey,
-            default_spec_value: draft.defaultSpecValue,
-            options: filled.map((o) => ({ spec_value: o.specValue, material_id: o.materialId as number })),
+            default_spec_value: defaultSpecValue,
+            cost_strategy: draft.costStrategy,
+            cost_material_id: draft.costMaterialId,
+            options: filled.map((o) => ({
+                spec_value: o.specValue,
+                material_id: o.materialId as number,
+                is_default: defaultKeys.has(o.key),
+            })),
         })
         setSaving(false)
 
@@ -200,7 +307,7 @@ export function MaterialFamiliesManager({
             return
         }
         toast.success(draft.id === null ? "Familia creada" : "Familia actualizada", {
-            description: `${draft.name.trim()} · ${filled.length} ${filled.length === 1 ? "variante" : "variantes"}.`,
+            description: `${draft.name.trim()} · ${filled.length} ${filled.length === 1 ? "material" : "materiales"} en ${bySpec.size} ${bySpec.size === 1 ? "variante" : "variantes"}.`,
         })
         setDraft(null)
         router.refresh()
@@ -251,51 +358,69 @@ export function MaterialFamiliesManager({
                 <p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
                     No hay familias todavía. Creá la primera con el nombre general de la materia prima —“Placa 1 led”,
                     “Óptica individual”, “Grampa”— y asociá cada variante al material del inventario que le
-                    corresponde.
+                    corresponde. Un mismo color puede tener varios materiales.
                 </p>
             ) : (
                 <div className="space-y-2">
-                    {families.map((f) => (
-                        <div key={f.id} className="rounded-md border p-3">
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                    <p className="flex items-center gap-1.5 font-medium">
-                                        <Layers className="h-4 w-4 shrink-0 text-primary" />
-                                        <span className="truncate">{f.name}</span>
-                                    </p>
-                                    <p className="mt-0.5 text-xs text-muted-foreground">
-                                        Varía según {fieldLabel(f.specFieldKey)} · {f.options.length}{" "}
-                                        {f.options.length === 1 ? "variante" : "variantes"}
-                                        {f.defaultSpecValue === null && " · falta elegir con cuál se calcula el costo"}
-                                    </p>
-                                </div>
-                                <div className="flex shrink-0 gap-1">
-                                    <Button variant="ghost" size="icon" onClick={() => openEdit(f)} title="Editar">
-                                        <Pencil className="h-4 w-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" onClick={() => setPendingDelete(f)} title="Eliminar">
-                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                </div>
-                            </div>
-                            {f.options.length > 0 && (
-                                <div className="mt-2 space-y-1 border-t pt-2">
-                                    {f.options.map((o) => (
-                                        <div key={o.specValue} className="grid grid-cols-[110px_1fr_auto] items-center gap-2 text-xs">
-                                            <span className="truncate text-muted-foreground">
-                                                {valueLabel(f.specFieldKey, o.specValue)}
-                                            </span>
-                                            <span className="truncate">{o.label}</span>
-                                            <span className="whitespace-nowrap text-muted-foreground">
-                                                {formatArs(o.unitCost)}
-                                                {o.specValue === f.defaultSpecValue && " · con esta se calcula el costo"}
-                                            </span>
+                    {families.map((f) => {
+                        const specCount = new Set(f.options.map((o) => o.specValue)).size
+                        return (
+                            <details key={f.id} className="group rounded-md border p-3">
+                                <summary className="flex cursor-pointer list-none items-start justify-between gap-2">
+                                    <div className="flex min-w-0 flex-1 items-start gap-2">
+                                        <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                                        <div className="min-w-0">
+                                            <p className="flex items-center gap-1.5 font-medium">
+                                                <Layers className="h-4 w-4 shrink-0 text-primary" />
+                                                <span className="truncate">{f.name}</span>
+                                            </p>
+                                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                                Varía según {fieldLabel(f.specFieldKey)} · {specCount}{" "}
+                                                {specCount === 1 ? "variante" : "variantes"} · {f.options.length}{" "}
+                                                {f.options.length === 1 ? "material" : "materiales"}
+                                                {f.options.length > 0 && ` · ${formatArs(familyUnitCost(f))}`}
+                                            </p>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                                    </div>
+                                    <div className="flex shrink-0 gap-1" onClick={(e) => e.preventDefault()}>
+                                        <Button variant="ghost" size="icon" onClick={() => openEdit(f)} title="Editar">
+                                            <Pencil className="h-4 w-4" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" onClick={() => setPendingDelete(f)} title="Eliminar">
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </div>
+                                </summary>
+                                {f.options.length > 0 && (
+                                    <div className="mt-2 space-y-1 border-t pt-2">
+                                        {f.defaultSpecValue !== null && (
+                                            <p className="mb-2 text-xs font-medium text-muted-foreground">
+                                                Costo · {costStrategyLabel(f.costStrategy)} · {formatArs(familyUnitCost(f))}
+                                            </p>
+                                        )}
+                                        {f.options.map((o) => (
+                                            <div key={`${o.specValue}-${o.materialId}`} className="grid grid-cols-[110px_1fr_auto] items-center gap-2 text-xs">
+                                                <span className="truncate text-muted-foreground">
+                                                    {valueLabel(f.specFieldKey, o.specValue)}
+                                                </span>
+                                                <span className="truncate">{o.label}</span>
+                                                <span className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
+                                                    {((f.costStrategy === "default" &&
+                                                        o.isDefault &&
+                                                        o.specValue === f.defaultSpecValue) ||
+                                                        (f.costStrategy === "specific" &&
+                                                            o.materialId === f.costMaterialId)) && (
+                                                        <Badge variant="secondary">Costeo</Badge>
+                                                    )}
+                                                    {formatArs(o.unitCost)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </details>
+                        )
+                    })}
                 </div>
             )}
 
@@ -307,8 +432,8 @@ export function MaterialFamiliesManager({
 
                     {draft !== null && (
                         <div className="space-y-4">
-                            <div>
-                                <Label htmlFor="family-name">Nombre general de la materia prima *</Label>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="family-name">Nombre del grupo de materiales *</Label>
                                 <Input
                                     id="family-name"
                                     value={draft.name}
@@ -316,35 +441,86 @@ export function MaterialFamiliesManager({
                                     placeholder="Placa 1 led"
                                     autoComplete="off"
                                 />
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    Así se va a llamar la línea en las hojas de costo. Sin el color ni la medida: eso son
-                                    las variantes.
-                                </p>
                             </div>
 
-                            <div>
-                                <Label>Varía según *</Label>
-                                <Select value={draft.fieldKey} onValueChange={setField}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Elegí el campo (color, óptica, grampa…)" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {specFields.map((f) => (
-                                            <SelectItem key={f.key} value={f.key}>
-                                                {f.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="space-y-1.5">
+                                    <Label>Característica que varía *</Label>
+                                    <Select value={draft.fieldKey} onValueChange={setField}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Elegí el campo (color, óptica, grampa…)" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {specFields.map((f) => (
+                                                <SelectItem key={f.key} value={f.key}>
+                                                    {f.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {draft.fieldKey !== "" && draft.options.length > 0 && (
+                                    <div className="space-y-1.5">
+                                        <Label>Método de costeo</Label>
+                                        <Select
+                                            value={draft.costStrategy}
+                                            onValueChange={(v) =>
+                                                setDraft({
+                                                    ...draft,
+                                                    costStrategy: v as CostStrategy,
+                                                    costMaterialId:
+                                                        v === "specific" ? draft.costMaterialId : null,
+                                                })
+                                            }
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Elegí método" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="default">Automático</SelectItem>
+                                                <SelectItem value="average">Promedio</SelectItem>
+                                                <SelectItem value="highest">Máximo</SelectItem>
+                                                <SelectItem value="specific">Manual</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
                             </div>
 
                             {draft.fieldKey !== "" && (
                                 <div className="space-y-2">
-                                    <Label>Qué material sale para cada variante</Label>
-                                    <p className="text-xs text-muted-foreground">
-                                        Dejá vacías las que no uses. A la derecha marcá con cuál de las variantes se
-                                        calcula el costo del producto: es también la que sale si el pedido no aclara.
-                                    </p>
+                                    {draft.options.length > 0 && draft.costStrategy === "specific" && (
+                                        <div className="space-y-1.5">
+                                            <Label>Material para costear</Label>
+                                            <Select
+                                                value={draft.costMaterialId ? String(draft.costMaterialId) : ""}
+                                                onValueChange={(v) =>
+                                                    setDraft({ ...draft, costMaterialId: Number(v) })
+                                                }
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Elegí material" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {draft.options
+                                                        .filter((o) => o.materialId !== null)
+                                                        .map((o) => (
+                                                            <SelectItem
+                                                                key={o.materialId}
+                                                                value={String(o.materialId)}
+                                                            >
+                                                                {o.label}
+                                                            </SelectItem>
+                                                        ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+
+                                    <Label className={draft.options.length > 0 ? "pt-2" : undefined}>
+                                        Materiales por variante
+                                    </Label>
                                     {draft.options.length === 0 ? (
                                         <p className="text-xs text-muted-foreground">
                                             Ese campo no tiene opciones cargadas. Agregalas en{" "}
@@ -355,56 +531,52 @@ export function MaterialFamiliesManager({
                                         </p>
                                     ) : (
                                         <>
-                                        {/* La pregunta se hace UNA vez arriba de la columna: repetirla en cada
-                                            fila obliga a una etiqueta corta que no se entiende sola. */}
-                                        <div className="grid grid-cols-[100px_1fr_auto] items-end gap-2 text-xs text-muted-foreground">
-                                            <span />
-                                            <span>Material del inventario</span>
-                                            <span className="w-[104px] leading-tight">Se calcula el costo con</span>
-                                        </div>
-                                        {draft.options.map((o) => (
-                                            <div
-                                                key={o.specValue}
-                                                className="grid grid-cols-[100px_1fr_auto] items-center gap-2"
-                                            >
-                                                <span className="truncate text-sm text-muted-foreground">
-                                                    {valueLabel(draft.fieldKey, o.specValue)}
-                                                </span>
-                                                <MaterialLineAutocomplete
-                                                    value={o.label}
-                                                    catalog={catalog}
-                                                    linked={o.materialId !== null}
-                                                    onPick={(m) => pickRowMaterial(o.specValue, m)}
-                                                    onText={(t) => updateRow(o.specValue, { materialId: null, label: t })}
-                                                />
-                                                <div className="flex w-[104px] items-center justify-between gap-1">
-                                                    <input
-                                                        className="ml-6"
-                                                        type="radio"
-                                                        name="family-default"
-                                                        disabled={o.materialId === null}
-                                                        checked={draft.defaultSpecValue === o.specValue}
-                                                        onChange={() => setDraft({ ...draft, defaultSpecValue: o.specValue })}
-                                                        aria-label={`Calcular el costo con ${valueLabel(draft.fieldKey, o.specValue)}`}
-                                                        title={
-                                                            o.materialId === null
-                                                                ? "Cargá primero el material de esta variante"
-                                                                : `Calcular el costo con ${o.label}`
-                                                        }
-                                                    />
+                                            {/* La pregunta se hace UNA vez arriba de la columna: repetirla en cada
+                                                fila obliga a una etiqueta corta que no se entiende sola. */}
+                                            {Array.from(groupBySpecValue(draft.options).entries()).map(([specValue, rows]) => {
+                                                const specLabel = valueLabel(draft.fieldKey, specValue)
+                                                return (
+                                                <div key={specValue} className="space-y-1 rounded-md border p-2">
+                                                    <p className="text-xs font-medium text-muted-foreground">
+                                                        {specLabel}
+                                                    </p>
+                                                    {rows.map((o) => (
+                                                        <div
+                                                            key={o.key}
+                                                            className="grid grid-cols-[1fr_auto] items-center gap-2"
+                                                        >
+                                                            <MaterialLineAutocomplete
+                                                                value={o.label}
+                                                                catalog={catalog}
+                                                                linked={o.materialId !== null}
+                                                                onPick={(m) => pickRowMaterial(o.key, m)}
+                                                                onText={(t) => updateRow(o.key, { materialId: null, label: t })}
+                                                            />
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8"
+                                                                disabled={o.materialId === null && o.label === ""}
+                                                                onClick={() => clearRow(o.key)}
+                                                                title="Vaciar esta opción"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
                                                     <Button
                                                         variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8"
-                                                        disabled={o.materialId === null && o.label === ""}
-                                                        onClick={() => clearRow(o.specValue)}
-                                                        title="Vaciar esta variante"
+                                                        size="sm"
+                                                        className="h-7 w-full justify-start text-xs text-muted-foreground hover:text-foreground"
+                                                        onClick={() => addMaterialToSpec(specValue)}
                                                     >
-                                                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                                        <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                                        Agregar otro material
                                                     </Button>
                                                 </div>
-                                            </div>
-                                        ))}
+                                                )
+                                            })}
+
                                         </>
                                     )}
                                 </div>

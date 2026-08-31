@@ -94,13 +94,23 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                         <span className="text-right">Necesita</span>
                         <span className="text-right">En stock</span>
                     </div>
-                    {needs.map((n) => (
+                    {needs.map((n) => {
+                        const needKey =
+                            n.family_id !== null
+                                ? `fam:${n.family_id}:${n.spec_value}`
+                                : `mat:${n.material_id ?? n.label}`
+                        return (
                         <div
-                            key={n.material_id ?? n.label}
+                            key={needKey}
                             className="grid grid-cols-[minmax(0,1fr)_5rem_11rem] items-center gap-3 px-4 py-2.5"
                         >
                             <span className="min-w-0 truncate">
                                 {n.label}
+                                {n.alternatives.length > 1 && (
+                                    <span className="block text-xs text-muted-foreground">
+                                        {n.alternatives.length} opciones
+                                    </span>
+                                )}
                                 {n.consumed > 0 && n.pending > 0 && (
                                     <span className="block text-xs text-muted-foreground">
                                         {n.consumed} ya descontados
@@ -112,7 +122,8 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                                 <Estado n={n} />
                             </span>
                         </div>
-                    ))}
+                        )
+                    })}
                 </div>
             )}
 

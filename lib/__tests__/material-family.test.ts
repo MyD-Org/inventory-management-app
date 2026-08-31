@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
     defaultOption,
+    familyUnitCost,
     lineFromFamily,
     syncLineWithFamily,
     type FamilyLineFields,
@@ -14,6 +15,8 @@ const tiraLed = (over: Partial<MaterialFamily> = {}): MaterialFamily => ({
     name: "Tira LED",
     specFieldKey: "led_color",
     defaultSpecValue: "calido",
+    costStrategy: "default",
+    costMaterialId: null,
     options: [
         { specValue: "blanco", materialId: 10, label: "Tira LED blanca", unitCost: 900, barcode: "A10" },
         { specValue: "calido", materialId: 11, label: "Tira LED cálida", unitCost: 1000, barcode: "A11" },
@@ -50,6 +53,64 @@ describe("defaultOption", () => {
 
     it("no rompe con una familia sin variantes", () => {
         expect(defaultOption(tiraLed({ options: [] }))).toBeUndefined()
+    })
+
+    it("cuando un color tiene varios materiales, usa el marcado como default", () => {
+        const family = tiraLed({
+            options: [
+                { specValue: "calido", materialId: 11, label: "Tira LED cálida A", unitCost: 1000, barcode: "A11" },
+                { specValue: "calido", materialId: 111, label: "Tira LED cálida B", unitCost: 1050, barcode: "A111", isDefault: true },
+                { specValue: "blanco", materialId: 10, label: "Tira LED blanca", unitCost: 900, barcode: "A10" },
+            ],
+        })
+        expect(defaultOption(family)?.materialId).toBe(111)
+    })
+})
+
+describe("familyUnitCost", () => {
+    it("usa el material default de la familia por defecto", () => {
+        expect(familyUnitCost(tiraLed())).toBe(1000)
+    })
+
+    it("calcula el promedio de todos los materiales de la familia", () => {
+        const family = tiraLed({
+            costStrategy: "average",
+            options: [
+                { specValue: "calido", materialId: 11, label: "A", unitCost: 1000, barcode: "A" },
+                { specValue: "calido", materialId: 111, label: "B", unitCost: 1200, barcode: "B" },
+                { specValue: "blanco", materialId: 10, label: "C", unitCost: 900, barcode: "C" },
+            ],
+        })
+        expect(familyUnitCost(family)).toBeCloseTo(1033.33, 2)
+    })
+
+    it("usa el material más caro de toda la familia", () => {
+        const family = tiraLed({
+            costStrategy: "highest",
+            options: [
+                { specValue: "calido", materialId: 11, label: "A", unitCost: 1000, barcode: "A" },
+                { specValue: "calido", materialId: 111, label: "B", unitCost: 1200, barcode: "B" },
+                { specValue: "blanco", materialId: 10, label: "C", unitCost: 900, barcode: "C" },
+            ],
+        })
+        expect(familyUnitCost(family)).toBe(1200)
+    })
+
+    it("usa el material específico elegido para costear", () => {
+        const family = tiraLed({
+            costStrategy: "specific",
+            costMaterialId: 111,
+            options: [
+                { specValue: "calido", materialId: 11, label: "A", unitCost: 1000, barcode: "A" },
+                { specValue: "calido", materialId: 111, label: "B", unitCost: 1200, barcode: "B" },
+                { specValue: "blanco", materialId: 10, label: "C", unitCost: 900, barcode: "C" },
+            ],
+        })
+        expect(familyUnitCost(family)).toBe(1200)
+    })
+
+    it("cae al primer material si la familia no tiene default marcado", () => {
+        expect(familyUnitCost(tiraLed({ defaultSpecValue: null }))).toBe(900)
     })
 })
 

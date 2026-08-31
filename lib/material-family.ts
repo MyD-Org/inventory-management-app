@@ -13,7 +13,11 @@ export interface MaterialFamilyOption {
     label: string // materials.name, siempre en vivo
     unitCost: number
     barcode: string
+    /** Indica cuál material representa al color para costeo y BOM por defecto. */
+    isDefault?: boolean
 }
+
+export type CostStrategy = "default" | "average" | "highest" | "specific"
 
 export interface MaterialFamily {
     id: number
@@ -22,6 +26,10 @@ export interface MaterialFamily {
     // Con qué variante se costea la línea que use esta familia. null = familia
     // incompleta: la UI no la deja usar hasta que se elija una.
     defaultSpecValue: string | null
+    // Cómo se calcula el costo dentro de la variante default.
+    costStrategy: CostStrategy
+    // Material usado para costear cuando la estrategia es 'specific'.
+    costMaterialId: number | null
     options: MaterialFamilyOption[]
 }
 
@@ -36,22 +44,64 @@ export interface FamilyLineFields {
     options: Array<{ specValue: string; materialId: number | null; label: string }>
 }
 
-// La variante con la que se costea. Cae a la primera si la predeterminada no
-// existe (familia recién creada, o el valor quedó fuera del vocabulario): es
-// mejor costear con algo cargado que dejar la línea en cero.
+// Agrupa las opciones de una familia por valor de spec. Un color puede tener
+// varios materiales; este helper es el punto único donde se maneja ese agrupamiento.
+export function optionsBySpecValue(family: MaterialFamily): Map<string, MaterialFamilyOption[]> {
+    const groups = new Map<string, MaterialFamilyOption[]>()
+    for (const o of family.options) {
+        const list = groups.get(o.specValue) ?? []
+        list.push(o)
+        groups.set(o.specValue, list)
+    }
+    return groups
+}
+
+// La variante con la que se costea. Si el color tiene varios materiales, usa el
+// marcado como default; si no hay marca, cae al primero. Cae a la primera opción
+// de la familia si la predeterminada no existe: es mejor costear con algo cargado
+// que dejar la línea en cero.
 export function defaultOption(family: MaterialFamily): MaterialFamilyOption | undefined {
-    return family.options.find((o) => o.specValue === family.defaultSpecValue) ?? family.options[0]
+    const bySpec = optionsBySpecValue(family)
+    const candidates = family.defaultSpecValue ? bySpec.get(family.defaultSpecValue) : undefined
+    if (candidates && candidates.length > 0) {
+        return candidates.find((o) => o.isDefault) ?? candidates[0]
+    }
+    return family.options[0]
+}
+
+// Costo unitario de la familia según la estrategia elegida.
+// - default: conserva el comportamiento anterior, costeando con el material default
+//   de la variante default (para no romper familias ya cargadas).
+// - average / highest: se aplican sobre TODOS los materiales de la familia.
+// - specific: un material elegido a mano de toda la familia.
+export function familyUnitCost(family: MaterialFamily): number {
+    const options = family.options
+    if (!options || options.length === 0) return 0
+
+    switch (family.costStrategy) {
+        case "average":
+            return options.reduce((sum, o) => sum + o.unitCost, 0) / options.length
+        case "highest":
+            return Math.max(...options.map((o) => o.unitCost))
+        case "specific": {
+            const specific = options.find((o) => o.materialId === family.costMaterialId)
+            return specific?.unitCost ?? options[0].unitCost
+        }
+        case "default":
+        default:
+            return defaultOption(family)?.unitCost ?? options[0].unitCost
+    }
 }
 
 // Elegir una familia arma la línea entera: nombre general, campo que la hace
-// variar, todas las variantes, y el costo de la predeterminada.
+// variar, todas las variantes, y el costo calculado por la estrategia.
 export function lineFromFamily(family: MaterialFamily): FamilyLineFields {
     const def = defaultOption(family)
     return {
         familyId: family.id,
         label: family.name,
         materialId: def?.materialId ?? null,
-        unitCost: def?.unitCost ?? 0,
+        unitCost: familyUnitCost(family),
         specFieldKey: family.specFieldKey,
         options: family.options.map((o) => ({ specValue: o.specValue, materialId: o.materialId, label: o.label })),
     }

@@ -290,29 +290,74 @@ export async function readOrder(orderId: number): Promise<Order | null> {
 // Materiales del pedido que NO alcanzan con el stock actual. Va en la respuesta
 // del POST (missing_materials, según el doc) para que el bot pueda avisar, y lo
 // muestra el detalle del pedido para que el taller sepa qué reponer.
-// Suma lo requerido por material a través de todas las líneas del pedido.
+//
+// Para líneas que vienen de una familia, agrupa por (family_id, spec_value) y
+// suma el stock disponible de TODAS las alternativas: si un color tiene dos
+// materiales y entre los dos alcanza, no se reporta como faltante.
 export async function missingMaterials(orderId: number): Promise<MissingMaterial[]> {
     const rows = await sql`
         SELECT
             oim.material_id,
-            MIN(oim.label) AS label,
-            SUM(oim.qty_total) AS required,
-            COALESCE(MIN(i.available_stock), 0) AS available
+            oim.label,
+            oim.qty_total,
+            oim.family_id,
+            oim.spec_value,
+            COALESCE(i.available_stock, 0) AS available
         FROM order_item_materials oim
         JOIN order_items oi ON oi.id = oim.order_item_id
         LEFT JOIN inventory i ON i.material_id = oim.material_id
         WHERE oi.order_id = ${orderId} AND oim.material_id IS NOT NULL
-        GROUP BY oim.material_id
-        HAVING SUM(oim.qty_total) > COALESCE(MIN(i.available_stock), 0)
-        ORDER BY MIN(oim.label) ASC
+        ORDER BY oim.id ASC
     `
-    return (rows as any[]).map((r) => ({
-        material_id: r.material_id,
-        label: r.label,
-        required: Number(r.required),
-        available: Number(r.available),
-        missing: Number(r.required) - Number(r.available),
-    }))
+
+    const familyRows = (rows as any[]).filter((r) => r.family_id !== null)
+    const familyIds = [...new Set(familyRows.map((r) => r.family_id as number))]
+    const specValues = [...new Set(familyRows.map((r) => r.spec_value as string))]
+
+    const stockByFamilySpec = new Map<string, number>()
+    if (familyIds.length > 0 && specValues.length > 0) {
+        const altRows = await sql`
+            SELECT
+                fo.family_id,
+                fo.spec_value,
+                COALESCE(SUM(i.available_stock), 0) AS available
+            FROM material_family_options fo
+            LEFT JOIN inventory i ON i.material_id = fo.material_id
+            WHERE fo.family_id = ANY(${familyIds})
+              AND fo.spec_value = ANY(${specValues})
+            GROUP BY fo.family_id, fo.spec_value
+        `
+        for (const r of altRows as any[]) {
+            stockByFamilySpec.set(`${r.family_id}:${r.spec_value}`, Number(r.available))
+        }
+    }
+
+    const groups = new Map<string, MissingMaterial>()
+    for (const r of rows as any[]) {
+        const isFamily = r.family_id !== null
+        const key = isFamily ? `fam:${r.family_id}:${r.spec_value}` : `mat:${r.material_id}`
+        const required = Number(r.qty_total)
+        const existing = groups.get(key)
+        if (existing) {
+            existing.required += required
+            continue
+        }
+
+        const available = isFamily
+            ? (stockByFamilySpec.get(`${r.family_id}:${r.spec_value}`) ?? 0)
+            : Number(r.available)
+        groups.set(key, {
+            material_id: r.material_id as number,
+            label: r.label as string,
+            required,
+            available,
+            missing: Math.max(required - available, 0),
+        })
+    }
+
+    return [...groups.values()]
+        .filter((g) => g.required > g.available)
+        .sort((a, b) => a.label.localeCompare(b.label))
 }
 
 // ---------- Escritura ----------
@@ -353,15 +398,15 @@ export async function explodeBom(
     // alguien vio y revisó, mejor que explotar el BOM sin sustituciones.
     const rows = await sql`
         SELECT
-            bm.id, bm.material_id, bm.label, bm.qty,
+            bm.id, bm.material_id, bm.label, bm.qty, bm.family_id,
             COALESCE(f.spec_field_key, bm.spec_field_key) AS spec_field_key,
             COALESCE(fam.options, own.options, '[]') AS options
         FROM budget_materials bm
         LEFT JOIN material_families f ON f.id = bm.family_id
         LEFT JOIN LATERAL (
             SELECT json_agg(
-                json_build_object('specValue', fo.spec_value, 'materialId', fo.material_id, 'label', m.name)
-                ORDER BY fo.id
+                json_build_object('specValue', fo.spec_value, 'materialId', fo.material_id, 'label', m.name, 'isDefault', fo.is_default)
+                ORDER BY LOWER(fo.spec_value) ASC, m.name ASC
             ) AS options
             FROM material_family_options fo
             JOIN materials m ON m.id = fo.material_id
@@ -369,7 +414,7 @@ export async function explodeBom(
         ) fam ON TRUE
         LEFT JOIN LATERAL (
             SELECT json_agg(
-                json_build_object('specValue', o.spec_value, 'materialId', o.material_id, 'label', o.label)
+                json_build_object('specValue', o.spec_value, 'materialId', o.material_id, 'label', o.label, 'isDefault', TRUE)
                 ORDER BY o.id
             ) AS options
             FROM budget_material_options o
@@ -381,6 +426,7 @@ export async function explodeBom(
 
     const lines: BomLine[] = rows.map((r) => ({
         id: r.id as number,
+        familyId: (r.family_id as number | null) ?? null,
         materialId: r.material_id as number | null,
         label: r.label as string,
         qty: Number(r.qty),
@@ -389,6 +435,7 @@ export async function explodeBom(
             specValue: String(o.specValue),
             materialId: o.materialId == null ? null : Number(o.materialId),
             label: String(o.label),
+            isDefault: o.isDefault ?? true,
         })),
     }))
 
@@ -396,8 +443,8 @@ export async function explodeBom(
 
     for (const line of resolved) {
         await sql`
-            INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total)
-            VALUES (${orderItemId}, ${line.materialId}, ${line.label}, ${line.qty}, ${line.qtyTotal})
+            INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total, family_id, spec_value)
+            VALUES (${orderItemId}, ${line.materialId}, ${line.label}, ${line.qty}, ${line.qtyTotal}, ${line.familyId ?? null}, ${line.specValue ?? null})
         `
     }
 
@@ -522,45 +569,141 @@ export interface MaterialNeed {
     pending: number
     /** Stock disponible hoy. null si el material no está en el inventario. */
     available: number | null
+    /** Origen de la alternativa, para ofrecer otras opciones al consumir. */
+    family_id: number | null
+    spec_value: string | null
+    /** Otros materiales posibles para el mismo color/familia. */
+    alternatives: Array<{ material_id: number; label: string; available: number | null }>
 }
 
 // Estado de cada material del pedido: cuánto necesita, cuánto ya se descontó y
 // cuánto hay. Es la base tanto del listado como del diálogo de descuento, para
 // que los dos muestren exactamente los mismos números.
+//
+// Las líneas que vienen de una familia se agrupan por (family_id, spec_value):
+// un color puede tener varios materiales y el taller elige cuál consume. Las
+// demás se agrupan por material_id como siempre.
 export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
     const rows = await sql`
         SELECT
             oim.material_id,
-            MIN(oim.label) AS label,
-            SUM(oim.qty_total) AS required,
-            COALESCE(MIN(i.available_stock), 0) AS available,
-            (oim.material_id IS NOT NULL AND MIN(i.id) IS NOT NULL) AS en_inventario,
-            COALESCE((
-                SELECT SUM(sm.quantity)
-                FROM stock_movements sm
-                WHERE sm.order_id = ${orderId}
-                  AND sm.material_id = oim.material_id
-                  AND sm.movement_type = 'salida'
-            ), 0) AS consumed
+            oim.label,
+            oim.qty_total,
+            oim.family_id,
+            oim.spec_value,
+            COALESCE(i.available_stock, 0) AS available,
+            (oim.material_id IS NOT NULL AND i.id IS NOT NULL) AS en_inventario
         FROM order_item_materials oim
         JOIN order_items oi ON oi.id = oim.order_item_id
         LEFT JOIN inventory i ON i.material_id = oim.material_id
         WHERE oi.order_id = ${orderId}
-        GROUP BY oim.material_id
-        ORDER BY MIN(oim.label) ASC
+        ORDER BY oim.id ASC
     `
-    return (rows as any[]).map((r) => {
-        const required = Number(r.required)
-        const consumed = Number(r.consumed)
-        return {
-            material_id: r.material_id,
-            label: r.label,
-            required,
-            consumed,
-            pending: Math.max(required - consumed, 0),
-            available: r.en_inventario ? Number(r.available) : null,
+
+    const familyRows = (rows as any[]).filter((r) => r.family_id !== null)
+    const familyIds = [...new Set(familyRows.map((r) => r.family_id as number))]
+    const specValues = [...new Set(familyRows.map((r) => r.spec_value as string))]
+
+    const alternativesByFamilySpec = new Map<string, Array<{ material_id: number; label: string; available: number | null }>>()
+    if (familyIds.length > 0 && specValues.length > 0) {
+        const altRows = await sql`
+            SELECT
+                fo.family_id,
+                fo.spec_value,
+                fo.material_id,
+                m.name AS label,
+                i.available_stock
+            FROM material_family_options fo
+            JOIN materials m ON m.id = fo.material_id
+            LEFT JOIN inventory i ON i.material_id = fo.material_id
+            WHERE fo.family_id = ANY(${familyIds})
+              AND fo.spec_value = ANY(${specValues})
+            ORDER BY fo.is_default DESC, fo.id ASC
+        `
+        for (const r of altRows as any[]) {
+            const key = `${r.family_id}:${r.spec_value}`
+            const list = alternativesByFamilySpec.get(key) ?? []
+            list.push({
+                material_id: r.material_id as number,
+                label: r.label as string,
+                available: r.available_stock == null ? null : Number(r.available_stock),
+            })
+            alternativesByFamilySpec.set(key, list)
         }
-    })
+    }
+
+    const groups = new Map<string, MaterialNeed>()
+    for (const r of rows as any[]) {
+        const isFamily = r.family_id !== null
+        const key = isFamily ? `fam:${r.family_id}:${r.spec_value}` : `mat:${r.material_id}`
+        const required = Number(r.qty_total)
+        const existing = groups.get(key)
+        if (existing) {
+            existing.required += required
+            continue
+        }
+
+        if (isFamily) {
+            const altKey = `${r.family_id}:${r.spec_value}`
+            const alternatives = alternativesByFamilySpec.get(altKey) ?? []
+            groups.set(key, {
+                material_id: r.material_id as number,
+                label: r.label as string,
+                required,
+                consumed: 0,
+                pending: 0,
+                available: r.en_inventario ? Number(r.available) : null,
+                family_id: r.family_id as number,
+                spec_value: r.spec_value as string,
+                alternatives,
+            })
+        } else {
+            groups.set(key, {
+                material_id: r.material_id as number | null,
+                label: r.label as string,
+                required,
+                consumed: 0,
+                pending: 0,
+                available: r.en_inventario ? Number(r.available) : null,
+                family_id: null,
+                spec_value: null,
+                alternatives: [],
+            })
+        }
+    }
+
+    const materialIds = [...groups.values()]
+        .map((g) => g.material_id)
+        .filter((id): id is number => id !== null)
+    const alternativeIds = [...groups.values()].flatMap((g) => g.alternatives.map((a) => a.material_id))
+    const allIds = [...new Set([...materialIds, ...alternativeIds])]
+
+    const consumedByMaterial = new Map<number, number>()
+    if (allIds.length > 0) {
+        const consumedRows = await sql`
+            SELECT material_id, COALESCE(SUM(quantity), 0) AS consumed
+            FROM stock_movements
+            WHERE order_id = ${orderId}
+              AND movement_type = 'salida'
+              AND material_id = ANY(${allIds})
+            GROUP BY material_id
+        `
+        for (const r of consumedRows as any[]) {
+            consumedByMaterial.set(r.material_id as number, Number(r.consumed))
+        }
+    }
+
+    for (const need of groups.values()) {
+        const consumedMain = need.material_id !== null ? (consumedByMaterial.get(need.material_id) ?? 0) : 0
+        const consumedAlts = need.alternatives.reduce(
+            (sum, a) => sum + (consumedByMaterial.get(a.material_id) ?? 0),
+            0,
+        )
+        need.consumed = consumedMain + consumedAlts
+        need.pending = Math.max(need.required - need.consumed, 0)
+    }
+
+    return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label))
 }
 
 // ---------- Edición interna de ítems ----------

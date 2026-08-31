@@ -17,7 +17,7 @@
 import { neon } from '@neondatabase/serverless';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
-import type { MaterialFamily, MaterialFamilyOption } from '@/lib/material-family';
+import type { CostStrategy, MaterialFamily, MaterialFamilyOption } from '@/lib/material-family';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -25,7 +25,9 @@ export interface MaterialFamilyPayload {
     name: string;
     spec_field_key: string;
     default_spec_value: string | null;
-    options: Array<{ spec_value: string; material_id: number }>;
+    cost_strategy: CostStrategy;
+    cost_material_id: number | null;
+    options: Array<{ spec_value: string; material_id: number; is_default: boolean }>;
 }
 
 // Todas las familias con sus variantes resueltas contra el inventario.
@@ -38,6 +40,7 @@ export async function listMaterialFamilies(): Promise<MaterialFamily[]> {
     const rows = await sql`
         SELECT
             f.id, f.name, f.spec_field_key, f.default_spec_value,
+            f.cost_strategy, f.cost_material_id,
             COALESCE(
                 json_agg(
                     json_build_object(
@@ -45,8 +48,9 @@ export async function listMaterialFamilies(): Promise<MaterialFamily[]> {
                         'materialId', o.material_id,
                         'label', m.name,
                         'unitCost', m.unit_cost,
-                        'barcode', m.barcode
-                    ) ORDER BY o.id
+                        'barcode', m.barcode,
+                        'isDefault', o.is_default
+                    ) ORDER BY LOWER(o.spec_value) ASC, m.name ASC
                 ) FILTER (WHERE o.id IS NOT NULL),
                 '[]'
             ) AS options
@@ -62,57 +66,82 @@ export async function listMaterialFamilies(): Promise<MaterialFamily[]> {
         name: r.name as string,
         specFieldKey: r.spec_field_key as string,
         defaultSpecValue: (r.default_spec_value as string | null) ?? null,
+        costStrategy: (r.cost_strategy as CostStrategy) ?? 'default',
+        costMaterialId: (r.cost_material_id as number | null) ?? null,
         options: (r.options as MaterialFamilyOption[]).map((o) => ({
             specValue: String(o.specValue),
             materialId: Number(o.materialId),
             label: String(o.label),
             unitCost: Number(o.unitCost),
             barcode: String(o.barcode),
+            isDefault: Boolean(o.isDefault),
         })),
     }));
 }
 
+const VALID_COST_STRATEGIES: CostStrategy[] = ['default', 'average', 'highest', 'specific'];
+
 function validFamilyPayload(p: MaterialFamilyPayload): string | null {
     if (!p.name?.trim()) return 'El nombre de la familia es requerido';
     if (!p.spec_field_key?.trim()) return 'Falta indicar según qué campo varía la familia';
+    if (!VALID_COST_STRATEGIES.includes(p.cost_strategy)) return 'Estrategia de costeo inválida';
 
-    const seen = new Set<string>();
+    const byValue = new Map<string, Array<{ material_id: number; is_default: boolean }>>();
     for (const o of p.options) {
         const value = o.spec_value?.trim();
         if (!value) return 'Hay variantes sin valor';
         if (!Number.isFinite(o.material_id)) return `La variante "${value}" no tiene material`;
-        if (seen.has(value)) return `La variante "${value}" está repetida`;
-        seen.add(value);
+        const list = byValue.get(value) ?? [];
+        if (list.some((x) => x.material_id === o.material_id)) {
+            return `El material de "${value}" está repetido`;
+        }
+        list.push({ material_id: o.material_id, is_default: o.is_default });
+        byValue.set(value, list);
     }
-    // Sin predeterminada no hay con qué costear la línea que use la familia, así
-    // que se exige acá y no en la UI: es la regla, no una ayuda de pantalla.
-    if (p.options.length > 0) {
-        if (!p.default_spec_value?.trim()) return 'Elegí con qué variante se costea (la predeterminada)';
-        if (!seen.has(p.default_spec_value.trim())) return 'La variante predeterminada tiene que ser una de las cargadas';
+
+    for (const [value, list] of byValue) {
+        const defaults = list.filter((x) => x.is_default).length;
+        if (defaults === 0) return `Elegí cuál material es el default de "${value}"`;
+        if (defaults > 1) return `Solo puede haber un default en "${value}"`;
+    }
+
+    // La variante predeterminada se asigna automáticamente en la UI; si llega vacía
+    // la corregimos acá para no dejar la familia incompleta.
+    const defaultValue = p.default_spec_value?.trim();
+    if (p.options.length > 0 && defaultValue && !byValue.has(defaultValue)) {
+        return 'La variante predeterminada tiene que ser una de las cargadas';
+    }
+
+    if (p.cost_strategy === 'specific') {
+        if (!Number.isFinite(p.cost_material_id)) return 'Elegí qué material se usa para costear';
+        if (!p.options.some((o) => o.material_id === p.cost_material_id)) {
+            return 'El material de costeo tiene que ser uno de los de la familia';
+        }
     }
     return null;
 }
 
-// Crea (id null) o actualiza (id) una familia entera. Las variantes se reemplazan
-// (delete + insert), igual que las líneas de una hoja de costo: son pocas y así el
-// guardado es una sola verdad, sin diffs.
-export async function saveMaterialFamily(id: number | null, payload: MaterialFamilyPayload) {
-    const session = await auth();
-    if (session?.user?.role !== 'admin') return { error: 'No tenés permisos para realizar esta acción' };
-
+// Lógica pura de guardado (sin auth). La usan saveMaterialFamily (UI admin) y las
+// tools de IA con su propio guard de seguridad.
+export async function insertMaterialFamily(
+    id: number | null,
+    payload: MaterialFamilyPayload,
+): Promise<{ success: true; id: number } | { error: string }> {
     const invalid = validFamilyPayload(payload);
     if (invalid) return { error: invalid };
 
     const name = payload.name.trim();
     const fieldKey = payload.spec_field_key.trim();
     const defaultValue = payload.options.length > 0 ? payload.default_spec_value!.trim() : null;
+    const costStrategy = payload.cost_strategy;
+    const costMaterialId = payload.cost_strategy === 'specific' ? payload.cost_material_id : null;
 
     try {
         let familyId = id;
         if (familyId == null) {
             const [row] = await sql`
-                INSERT INTO material_families (name, spec_field_key, default_spec_value)
-                VALUES (${name}, ${fieldKey}, ${defaultValue})
+                INSERT INTO material_families (name, spec_field_key, default_spec_value, cost_strategy, cost_material_id)
+                VALUES (${name}, ${fieldKey}, ${defaultValue}, ${costStrategy}, ${costMaterialId})
                 RETURNING id
             `;
             familyId = row.id as number;
@@ -120,7 +149,9 @@ export async function saveMaterialFamily(id: number | null, payload: MaterialFam
             const updated = await sql`
                 UPDATE material_families
                 SET name = ${name}, spec_field_key = ${fieldKey},
-                    default_spec_value = ${defaultValue}, updated_at = NOW()
+                    default_spec_value = ${defaultValue},
+                    cost_strategy = ${costStrategy}, cost_material_id = ${costMaterialId},
+                    updated_at = NOW()
                 WHERE id = ${familyId}
                 RETURNING id
             `;
@@ -130,8 +161,8 @@ export async function saveMaterialFamily(id: number | null, payload: MaterialFam
 
         for (const o of payload.options) {
             await sql`
-                INSERT INTO material_family_options (family_id, spec_value, material_id)
-                VALUES (${familyId}, ${o.spec_value.trim()}, ${o.material_id})
+                INSERT INTO material_family_options (family_id, spec_value, material_id, is_default)
+                VALUES (${familyId}, ${o.spec_value.trim()}, ${o.material_id}, ${o.is_default})
             `;
         }
 
@@ -148,6 +179,15 @@ export async function saveMaterialFamily(id: number | null, payload: MaterialFam
         console.error('Error saving material family:', error);
         return { error: 'Error al guardar la familia' };
     }
+}
+
+// Crea (id null) o actualiza (id) una familia entera. Las variantes se reemplazan
+// (delete + insert), igual que las líneas de una hoja de costo: son pocas y así el
+// guardado es una sola verdad, sin diffs.
+export async function saveMaterialFamily(id: number | null, payload: MaterialFamilyPayload) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') return { error: 'No tenés permisos para realizar esta acción' };
+    return insertMaterialFamily(id, payload);
 }
 
 // Borra la familia. Las líneas de hoja de costo que la usaban NO pierden sus
