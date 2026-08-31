@@ -219,6 +219,27 @@ export interface Order {
     delivery_date_verified_at: string | null
 }
 
+// De dónde entró el pedido. Lista cerrada: la columna es un varchar sin CHECK,
+// así que sin esto la API guarda cualquier string y el hilo de actividad termina
+// diciendo "creado desde pepito".
+//
+//   manual   → alguien lo cargó en la app (la web)
+//   whatsapp → el bot
+//   crm      → el CRM
+//   api      → entró por la API sin declarar quién es
+export const ORDER_ORIGINS = ["manual", "whatsapp", "crm", "api"] as const
+export type OrderOrigin = (typeof ORDER_ORIGINS)[number]
+
+export function isOrderOrigin(v: unknown): v is OrderOrigin {
+    return typeof v === "string" && (ORDER_ORIGINS as readonly string[]).includes(v.trim().toLowerCase())
+}
+
+/** Deja el origen en minúscula y sin espacios; lo que no está en la lista cae en "manual". */
+export function normalizeOrigin(v: unknown): OrderOrigin {
+    const limpio = typeof v === "string" ? v.trim().toLowerCase() : ""
+    return isOrderOrigin(limpio) ? (limpio as OrderOrigin) : "manual"
+}
+
 export async function readOrder(orderId: number): Promise<Order | null> {
     const overrides = await getCustomerStatusMap()
     const [order] = await sql`
@@ -401,7 +422,7 @@ export async function createOrder(payload: OrderPayload) {
 
     // Los pedidos del bot pasan por revisión humana antes de entrar al flujo (lo
     // sugiere el doc del CRM). Los cargados a mano ya los revisó quien los tipeó.
-    const origin = payload.origin?.trim() || "manual"
+    const origin = normalizeOrigin(payload.origin)
     const initialStatus = origin === "manual" ? "recibido" : "por_revisar"
 
     const inserted = await sql`

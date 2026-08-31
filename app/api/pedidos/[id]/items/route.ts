@@ -3,6 +3,7 @@ import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
 import { addOrderItemInternal, missingMaterials, readOrder } from "@/lib/orders"
 import { isApiEditable } from "@/lib/order-statuses"
+import { apiActor, logOrderEvent } from "@/lib/order-events"
 
 // Agrega una línea a un pedido existente. Usa la misma lógica interna que la
 // vista manual (lib/order-actions.ts) para que el resultado sea idéntico.
@@ -62,6 +63,12 @@ export async function POST(
             SET modified_at = NOW(), delivery_date_verified_at = NULL
             WHERE id = ${id}
         `
+
+        await logOrderEvent(id, {
+            kind: "item_added",
+            newValue: `${Number(body.quantity ?? 1)} × ${body.product}`,
+            actor: await apiActor(request),
+        })
 
         return NextResponse.json({
             ok: true,

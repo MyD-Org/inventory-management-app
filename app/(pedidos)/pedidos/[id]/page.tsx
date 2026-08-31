@@ -12,8 +12,10 @@ import { OrderStatusSelect } from "@/components/order-status-select"
 import { OrderItemsEditor } from "@/components/order-items-editor"
 import { InvoiceButton } from "@/components/invoice-button"
 import { OrderMaterials } from "@/components/order-materials"
-import { DateField, NotesField, PriorityField, TextField } from "@/components/order-props-editor"
+import { DateField, PriorityField, TextField } from "@/components/order-props-editor"
 import { OrderCustomerField } from "@/components/order-customer-field"
+import { OrderActivity } from "@/components/order-activity"
+import { listOrderEvents } from "@/lib/order-events"
 
 export const dynamic = 'force-dynamic';
 
@@ -90,10 +92,11 @@ export default async function OrderDetailPage({
 
     // Los productos del selector salen del CATÁLOGO de Alegra, no de las hojas
     // de costo: un producto existe porque se vende, y la hoja es opcional.
-    const [needs, vocab, products] = await Promise.all([
+    const [needs, vocab, products, events] = await Promise.all([
         materialNeeds(id),
         getSpecs(),
         listSellableProducts(),
+        listOrderEvents(id),
     ])
 
     // Specs en el orden del vocabulario y solo los valores: "ámbar · grampa larga · 25°"
@@ -173,11 +176,17 @@ export default async function OrderDetailPage({
                     <Fact label="Estado">
                         <OrderStatusSelect id={order.id} status={order.status} />
                     </Fact>
-                    <Fact label="Entrega">
-                        <span className={overdue ? "text-destructive font-semibold" : "font-medium"}>
-                            {formatDate(order.delivery_date_estimate)}
-                            {overdue && " · vencida"}
-                        </span>
+                    {/* Editable acá y en un solo lugar: antes estaba dos veces,
+                        arriba de solo lectura y abajo en el aside para tocarla. */}
+                    <Fact label="Entrega estimada">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <DateField id={order.id} value={order.delivery_date_estimate} />
+                            {overdue && (
+                                <span className="shrink-0 text-xs font-semibold text-destructive">
+                                    vencida
+                                </span>
+                            )}
+                        </div>
                     </Fact>
                     <Fact label="Prioridad">
                         <span className="font-medium">
@@ -187,8 +196,10 @@ export default async function OrderDetailPage({
                     <Fact label="Trabajo">
                         <span className="font-mono tabular-nums font-medium">{units} u.</span>
                     </Fact>
-                    {isAdmin && (
-                        <Fact label="Factura">
+                    {/* La celda es para todos: emitir lo puede hacer cualquiera del
+                        taller. Lo que sigue siendo del admin son los IMPORTES, y esos
+                        los recorta el server en la simulación, no esta pantalla. */}
+                    <Fact label="Factura">
                             {order.alegra_invoice_id ? (
                                 <a
                                     href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
@@ -204,8 +215,7 @@ export default async function OrderDetailPage({
                             ) : (
                                 <span className="text-muted-foreground">Sin emitir</span>
                             )}
-                        </Fact>
-                    )}
+                    </Fact>
                 </dl>
             </header>
 
@@ -243,13 +253,27 @@ export default async function OrderDetailPage({
                     {/* 2. Qué buscar al depósito, con su estado de stock */}
                     <OrderMaterials orderId={order.id} needs={needs} />
 
-                    {/* 3. Avisos, al final */}
+                    {/* 3. Quién hizo qué, y las notas del taller */}
+                    <OrderActivity orderId={order.id} events={events} />
+
+                    {/* 4. Avisos, al final */}
                     {/* En papel las propiedades van en una línea al pie, no en
                         una columna larga: el cliente ya está en el encabezado y
                         el resto son datos de referencia. */}
-                    {order.notes && (
-                        <div className="hidden print:block rounded-md bg-muted/50 p-2.5 text-base mb-3">
-                            {order.notes}
+                    {/* En papel salen las notas, que son instrucciones para el taller.
+                        Los cambios de campo no: eso se consulta en pantalla. */}
+                    {events.filter((e) => e.kind === "note").length > 0 && (
+                        <div className="hidden print:block border-t pt-2 mb-3 space-y-1.5">
+                            {events
+                                .filter((e) => e.kind === "note")
+                                .slice()
+                                .reverse()
+                                .map((e) => (
+                                    <div key={e.id} className="text-base">
+                                        <span className="font-medium">{e.actor_name}: </span>
+                                        {e.body}
+                                    </div>
+                                ))}
                         </div>
                     )}
                     <div className="hidden print:block border-t pt-2 text-sm text-muted-foreground">
@@ -262,7 +286,7 @@ export default async function OrderDetailPage({
                             year: "numeric",
                         })}
                         {order.delivery_date_estimate && (
-                            <>{" · "}Entrega {formatDate(order.delivery_date_estimate)}</>
+                            <>{" · "}Entrega estimada {formatDate(order.delivery_date_estimate)}</>
                         )}
                     </div>
                 </div>
@@ -273,11 +297,14 @@ export default async function OrderDetailPage({
                     Estado, entrega, prioridad y factura ya viven en el
                     encabezado; acá queda lo que se consulta, no lo que se opera. */}
                 <aside className="no-print lg:border-l lg:pl-5 lg:sticky lg:top-4 flex flex-col gap-6">
-                    <div className="flex flex-col gap-2.5">
-                        <h2 className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground border-b pb-2">
-                            Seguimiento
-                        </h2>
-                        {order.source_conversation && (
+                    {/* El grupo entero depende del link: las notas se mudaron al hilo
+                        de actividad, así que sin conversación no queda nada adentro y
+                        el título solo era un encabezado colgado. */}
+                    {order.source_conversation && (
+                        <div className="flex flex-col gap-2.5">
+                            <h2 className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground border-b pb-2">
+                                Seguimiento
+                            </h2>
                             <a
                                 href={order.source_conversation}
                                 target="_blank"
@@ -288,9 +315,8 @@ export default async function OrderDetailPage({
                                 <span className="flex-1 min-w-0 truncate">Ver la conversación</span>
                                 <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
                             </a>
-                        )}
-                        <NotesField id={order.id} value={order.notes} />
-                    </div>
+                        </div>
+                    )}
 
                     <div className="flex flex-col gap-1">
                         <h2 className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground border-b pb-2 mb-1.5">
@@ -320,9 +346,6 @@ export default async function OrderDetailPage({
                         </h2>
                         <Prop label="Prioridad">
                             <PriorityField id={order.id} value={order.priority} />
-                        </Prop>
-                        <Prop label="Entrega">
-                            <DateField id={order.id} value={order.delivery_date_estimate} />
                         </Prop>
                         {isAdmin && order.invoice_warnings?.length > 0 && (
                             <Prop label="Factura">

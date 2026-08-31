@@ -1,7 +1,7 @@
 import { sql } from "@/lib/database"
 import { auth } from "@/auth"
-import { OrdersBoard, type BoardCard } from "@/components/orders-board"
-import { OrdersTable } from "@/components/orders-table"
+import { type BoardCard } from "@/components/orders-board"
+import { OrdersView } from "@/components/orders-view"
 import { orderNeedsReview } from "@/lib/order-statuses"
 import { ViewToggle } from "@/components/view-toggle"
 
@@ -84,13 +84,11 @@ export default async function OrdersPage({
                 <ViewToggle lista={lista} />
             </div>
 
-            {lista ? (
-                <div className="overflow-y-auto scrollbar-hide">
-                    <OrdersTable orders={cards} isAdmin={session?.user?.role === "admin"} />
-                </div>
-            ) : (
-                <OrdersBoard cards={cards.filter((c) => c.status !== "cancelado")} />
-            )}
+            <OrdersView
+                cards={cards}
+                lista={lista}
+                isAdmin={session?.user?.role === "admin"}
+            />
         </div>
     )
 }

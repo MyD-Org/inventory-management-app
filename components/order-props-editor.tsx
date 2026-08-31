@@ -71,7 +71,9 @@ export function DateField({ id, value }: { id: number; value: string | null }) {
                 if ((value ?? "") === v) return
                 save({ delivery_date_estimate: v }, "Fecha de entrega actualizada")
             }}
-            className="h-7 border-0 bg-transparent px-1.5 -ml-1.5 text-base hover:bg-muted focus-visible:ring-0 w-full"
+            // Igual que el selector de estado: al ancho del contenido y sin el
+            // relleno que el Input de shadcn agrega en modo oscuro.
+            className="h-7 w-fit max-w-full border-0 bg-transparent dark:bg-transparent px-1.5 -ml-1.5 text-base hover:bg-muted focus-visible:ring-0"
         />
     )
 }
@@ -114,7 +116,7 @@ export function NotesField({ id, value }: { id: number; value: string | null }) 
         <Textarea
             value={v}
             rows={2}
-            placeholder="Notas para el taller"
+            placeholder="Notas"
             onChange={(e) => setV(e.target.value)}
             onBlur={() => {
                 if ((value ?? "") === v) return

@@ -35,7 +35,9 @@ function Estado({ n }: { n: MaterialNeed }) {
 export function OrderMaterials({ orderId, needs }: { orderId: number; needs: MaterialNeed[] }) {
     const router = useRouter()
     const { toast } = useToast()
-    const [abierto, setAbierto] = useState(true)
+    // Cerrado por defecto: el detalle ya es largo y esta lista se abre cuando se
+    // va a buscar al depósito, no cada vez que se mira el pedido.
+    const [abierto, setAbierto] = useState(false)
     const [dialogo, setDialogo] = useState(false)
 
     const descontables = needs.filter((n) => n.material_id !== null && n.pending > 0)

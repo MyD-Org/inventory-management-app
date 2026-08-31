@@ -29,7 +29,8 @@ interface Linea {
     alegraItemId: number
     name: string
     quantity: number
-    price: number
+    /** Ausente para quien no es admin: el server no manda importes. */
+    price?: number
     description: string
     match: "variante" | "base" | "agregado"
 }
@@ -37,7 +38,9 @@ interface Linea {
 interface Preview {
     lines: Linea[]
     warnings: string[]
-    total: number
+    total: number | null
+    /** true = el server recortó los importes porque quien mira no es admin. */
+    sin_importes?: boolean
     clientName: string | null
     clientId: number | null
     numberTemplate: { id: number; name: string } | null
@@ -158,9 +161,11 @@ export function InvoiceButton({ orderId }: { orderId: number }) {
                                             <p className="font-medium break-words">{l.name}</p>
                                             <p className="text-xs text-muted-foreground break-words">{l.description}</p>
                                         </div>
-                                        <span className="tabular-nums shrink-0 text-right w-24">
-                                            {formatArs(l.price * l.quantity)}
-                                        </span>
+                                        {l.price != null && (
+                                            <span className="tabular-nums shrink-0 text-right w-24">
+                                                {formatArs(l.price * l.quantity)}
+                                            </span>
+                                        )}
                                     </div>
                                 ))}
                                 {sinLineas && (
@@ -170,10 +175,14 @@ export function InvoiceButton({ orderId }: { orderId: number }) {
                                 )}
                             </div>
 
-                            <div className="flex justify-between text-base font-semibold px-1">
-                                <span>Total</span>
-                                <span className="tabular-nums">{formatArs(preview.total)}</span>
-                            </div>
+                            {/* Sin importes la fila del total no se dibuja: un "Total —"
+                                no aporta nada y deja la sensación de que falta un dato. */}
+                            {preview.total != null && (
+                                <div className="flex justify-between text-base font-semibold px-1">
+                                    <span>Total</span>
+                                    <span className="tabular-nums">{formatArs(preview.total)}</span>
+                                </div>
+                            )}
 
                             {preview.warnings.length > 0 && (
                                 <div className="rounded-md bg-amber-50 dark:bg-amber-950/40 p-2.5 space-y-1 overflow-hidden">

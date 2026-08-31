@@ -39,7 +39,12 @@ export function OrderStatusSelect({ id, status }: { id: number; status: OrderSta
 
     return (
         <Select value={value} onValueChange={change} disabled={saving}>
-            <SelectTrigger className="h-7 w-full border-0 bg-transparent px-1.5 text-base hover:bg-muted focus:ring-0 justify-start gap-2">
+            <SelectTrigger // w-fit: el control se ajusta al texto. Con w-full el recuadro tomaba
+                // toda la celda y parecía un campo vacío enorme.
+                // dark:bg-transparent: el Select de shadcn trae un relleno propio
+                // en oscuro (dark:bg-input/30) que bg-transparent no pisa, porque
+                // son variantes distintas y tailwind-merge conserva las dos.
+                className="h-7 w-fit max-w-full border-0 bg-transparent dark:bg-transparent px-1.5 text-base hover:bg-muted focus:ring-0 justify-start gap-2">
                 <StatusIcon status={value} />
                 <span>{STATUS_LABELS[value]}</span>
             </SelectTrigger>
