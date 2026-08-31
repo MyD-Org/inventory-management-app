@@ -53,8 +53,27 @@ const emptyDraft: Draft = {
     fieldKey: "",
     options: [],
     defaultSpecValue: null,
-    costStrategy: "default",
+    costStrategy: "average",
     costMaterialId: null,
+}
+
+// Qué costo va a quedar guardado, calculado sobre el borrador. Espeja
+// familyUnitCost() de lib/material-family, pero sobre las filas del formulario y
+// contando solo las que tienen material: es una vista previa, no la fuente de
+// verdad. Si las dos se separan, manda familyUnitCost.
+function draftUnitCost(draft: Draft): number {
+    const filled = draft.options.filter((o) => o.materialId !== null)
+    if (filled.length === 0) return 0
+
+    switch (draft.costStrategy) {
+        case "highest":
+            return Math.max(...filled.map((o) => o.unitCost))
+        case "specific":
+            return filled.find((o) => o.materialId === draft.costMaterialId)?.unitCost ?? filled[0].unitCost
+        case "average":
+        default:
+            return filled.reduce((sum, o) => sum + o.unitCost, 0) / filled.length
+    }
 }
 
 let nextKey = 1
@@ -75,6 +94,11 @@ export function MaterialFamiliesManager({
     const [pendingDelete, setPendingDelete] = useState<MaterialFamily | null>(null)
     const [deleting, setDeleting] = useState(false)
 
+    // Variante abierta en el modal. Una sola a la vez: con 14 colores, tenerlas todas
+    // desplegadas eran 2,5 pantallas de scroll y no se veía cuántas faltaban.
+    const [openSpec, setOpenSpec] = useState<string | null>(null)
+    const [onlyMissing, setOnlyMissing] = useState(false)
+
     // Mismo catálogo en cliente que el editor de costos: pocas familias, muchos
     // materiales, y el filtrado difuso ya está resuelto en el buscador de línea.
     const [catalog, setCatalog] = useState<MaterialSearchResult[]>([])
@@ -85,6 +109,14 @@ export function MaterialFamiliesManager({
     }, [])
 
     const fieldOf = (key: string) => specFields.find((f) => f.key === key)
+    // El vocabulario guarda las opciones en el orden en que se fueron cargando. En el
+    // modal se listan alfabéticamente: son decenas de colores y encontrarlos de un
+    // vistazo importa más que respetar el orden de carga. `numeric` mantiene juntas
+    // las temperaturas ("Blanco 2700" antes que "Blanco 10000").
+    const sortedOptions = (key: string) =>
+        [...(fieldOf(key)?.options ?? [])].sort((a, b) =>
+            a.label.localeCompare(b.label, "es", { numeric: true, sensitivity: "base" }),
+        )
     const fieldLabel = (key: string) => fieldOf(key)?.label ?? key
     const valueLabel = (key: string, value: string) =>
         fieldOf(key)?.options.find((o) => o.value === value)?.label ?? value
@@ -95,9 +127,28 @@ export function MaterialFamiliesManager({
             case "highest":
                 return "más caro"
             case "specific":
-                return "material específico"
-            case "default":
-                return "default"
+                return "material elegido"
+            case "average":
+            default:
+                return "promedio"
+        }
+    }
+
+    // Qué hace cada método, en una línea. "Automático" era el más usado y el único
+    // que no se explicaba solo: costea con la variante predeterminada, que es la
+    // primera que se cargó.
+    const costStrategyHelp = (draft: Draft): string => {
+        const filled = draft.options.filter((o) => o.materialId !== null)
+        switch (draft.costStrategy) {
+            case "highest":
+                return "el material más caro de toda la familia"
+            case "specific":
+                return draft.costMaterialId === null
+                    ? "elegí el material acá al lado"
+                    : "el material elegido"
+            case "average":
+            default:
+                return `promedio de los ${filled.length} materiales cargados`
         }
     }
 
@@ -123,7 +174,7 @@ export function MaterialFamiliesManager({
                       ...d,
                       fieldKey: key,
                       defaultSpecValue: null,
-                      options: (fieldOf(key)?.options ?? []).map((o) => ({
+                      options: sortedOptions(key).map((o) => ({
                           key: newKey(),
                           specValue: o.value,
                           materialId: null,
@@ -134,14 +185,25 @@ export function MaterialFamiliesManager({
         )
     }
 
-    const openNew = () => setDraft({ ...emptyDraft })
+    // Cada vez que se abre el modal se arranca con todo cerrado y sin filtro: el
+    // estado del acordeon es de la sesion de edicion, no del componente.
+    const resetPanels = () => {
+        setOpenSpec(null)
+        setOnlyMissing(false)
+    }
+
+    const openNew = () => {
+        resetPanels()
+        setDraft({ ...emptyDraft })
+    }
 
     const openEdit = (f: MaterialFamily) => {
+        resetPanels()
         // Se muestran todas las opciones del campo, con lo ya mapeado adentro: así
         // agregar un color nuevo es escribir en la fila que ya está, no acordarse
         // de que el color existe.
         const mapped = groupBySpecValue(f.options)
-        const all = fieldOf(f.specFieldKey)?.options ?? []
+        const all = sortedOptions(f.specFieldKey)
         const rows: DraftOption[] = []
         for (const opt of all) {
             const hits = mapped.get(opt.value)
@@ -222,7 +284,20 @@ export function MaterialFamiliesManager({
     const removeRow = (key: string) => {
         setDraft((d) => {
             if (d === null) return d
-            return { ...d, options: d.options.filter((o) => o.key !== key) }
+            const target = d.options.find((o) => o.key === key)
+            if (!target) return d
+            const options = d.options.filter((o) => o.key !== key)
+            // Misma corrección que clearRow: si la fila que se va era la que sostenía
+            // a su variante como predeterminada, la predeterminada queda apuntando a
+            // una variante sin material y el servidor rechaza el guardado.
+            const sameSpecWithMaterial = options.filter(
+                (o) => o.specValue === target.specValue && o.materialId !== null,
+            )
+            const next =
+                d.defaultSpecValue === target.specValue
+                    ? sameSpecWithMaterial[0]?.specValue ?? null
+                    : d.defaultSpecValue
+            return { ...d, options, defaultSpecValue: next }
         })
     }
 
@@ -345,6 +420,18 @@ export function MaterialFamiliesManager({
         )
     }
 
+    // Derivados del borrador para la cabecera y el acordeon. Se calculan aca porque
+    // dependen del estado del filtro, no solo del draft.
+    const specGroups = draft ? Array.from(groupBySpecValue(draft.options).entries()) : []
+    const totalSpecCount = specGroups.length
+    const loadedSpecCount = specGroups.filter(([, rows]) => rows.some((o) => o.materialId !== null)).length
+    const missingSpecCount = totalSpecCount - loadedSpecCount
+    // El filtro no esconde la variante abierta: si la estas cargando y al elegir el
+    // material desaparece de la lista, se pierde el hilo de donde estabas.
+    const visibleGroups = onlyMissing
+        ? specGroups.filter(([specValue, rows]) => specValue === openSpec || rows.every((o) => o.materialId === null))
+        : specGroups
+
     return (
         <div className="space-y-4">
             <div className="flex justify-end">
@@ -405,11 +492,11 @@ export function MaterialFamiliesManager({
                                                 </span>
                                                 <span className="truncate">{o.label}</span>
                                                 <span className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
-                                                    {((f.costStrategy === "default" &&
-                                                        o.isDefault &&
-                                                        o.specValue === f.defaultSpecValue) ||
-                                                        (f.costStrategy === "specific" &&
-                                                            o.materialId === f.costMaterialId)) && (
+                                                    {/* El badge marca EL material con el que se costea. Solo
+                                                        tiene sentido en "material elegido": promedio y más caro
+                                                        no señalan uno solo. */}
+                                                    {f.costStrategy === "specific" &&
+                                                        o.materialId === f.costMaterialId && (
                                                         <Badge variant="secondary">Costeo</Badge>
                                                     )}
                                                     {formatArs(o.unitCost)}
@@ -460,67 +547,110 @@ export function MaterialFamiliesManager({
                                     </Select>
                                 </div>
 
-                                {draft.fieldKey !== "" && draft.options.length > 0 && (
-                                    <div className="space-y-1.5">
-                                        <Label>Método de costeo</Label>
-                                        <Select
-                                            value={draft.costStrategy}
-                                            onValueChange={(v) =>
-                                                setDraft({
-                                                    ...draft,
-                                                    costStrategy: v as CostStrategy,
-                                                    costMaterialId:
-                                                        v === "specific" ? draft.costMaterialId : null,
-                                                })
-                                            }
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Elegí método" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="default">Automático</SelectItem>
-                                                <SelectItem value="average">Promedio</SelectItem>
-                                                <SelectItem value="highest">Máximo</SelectItem>
-                                                <SelectItem value="specific">Manual</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                )}
                             </div>
 
-                            {draft.fieldKey !== "" && (
-                                <div className="space-y-2">
-                                    {draft.options.length > 0 && draft.costStrategy === "specific" && (
+                            {/* El costeo va en su propio bloque: el metodo y el material con el que
+                                se costea son una sola decision, y tenerlos en filas distintas
+                                (con el costo en el medio) los hacia parecer cosas separadas. */}
+                            {draft.fieldKey !== "" && draft.options.length > 0 && (
+                                <div className="space-y-2 rounded-md border p-3">
+                                    <div className="grid gap-4 sm:grid-cols-2">
                                         <div className="space-y-1.5">
-                                            <Label>Material para costear</Label>
+                                            <Label>Método de costeo</Label>
                                             <Select
-                                                value={draft.costMaterialId ? String(draft.costMaterialId) : ""}
+                                                value={draft.costStrategy}
                                                 onValueChange={(v) =>
-                                                    setDraft({ ...draft, costMaterialId: Number(v) })
+                                                    setDraft({
+                                                        ...draft,
+                                                        costStrategy: v as CostStrategy,
+                                                        costMaterialId:
+                                                            v === "specific" ? draft.costMaterialId : null,
+                                                    })
                                                 }
                                             >
                                                 <SelectTrigger>
-                                                    <SelectValue placeholder="Elegí material" />
+                                                    <SelectValue placeholder="Elegí método" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {draft.options
-                                                        .filter((o) => o.materialId !== null)
-                                                        .map((o) => (
-                                                            <SelectItem
-                                                                key={o.materialId}
-                                                                value={String(o.materialId)}
-                                                            >
-                                                                {o.label}
-                                                            </SelectItem>
-                                                        ))}
+                                                    <SelectItem value="average">Promedio</SelectItem>
+                                                    <SelectItem value="highest">Más caro</SelectItem>
+                                                    <SelectItem value="specific">Material elegido</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                    )}
 
-                                    <Label className={draft.options.length > 0 ? "pt-2" : undefined}>
-                                        Materiales por variante
-                                    </Label>
+                                        {draft.costStrategy === "specific" && (
+                                            <div className="space-y-1.5">
+                                                <Label>Material para costear</Label>
+                                                <Select
+                                                    value={draft.costMaterialId ? String(draft.costMaterialId) : ""}
+                                                    onValueChange={(v) =>
+                                                        setDraft({ ...draft, costMaterialId: Number(v) })
+                                                    }
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Elegí material" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {draft.options
+                                                            .filter((o) => o.materialId !== null)
+                                                            .map((o) => (
+                                                                <SelectItem
+                                                                    key={o.materialId}
+                                                                    value={String(o.materialId)}
+                                                                >
+                                                                    {o.label}
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* El costo que va a quedar guardado, recalculado en vivo: elegir
+                                        metodo sin ver el numero era elegir a ciegas. */}
+                                    <p className="text-xs text-muted-foreground">
+                                        Costo de la familia:{" "}
+                                        <span className="font-medium text-foreground">
+                                            {formatArs(draftUnitCost(draft))}
+                                        </span>{" "}
+                                        · {costStrategyHelp(draft)}
+                                    </p>
+                                </div>
+                            )}
+
+                            {draft.fieldKey !== "" && (
+                                <div className="space-y-2">
+                                    {/* Cabecera de la lista: cuántas variantes ya tienen material y el
+                                        filtro para ir cargando solo las que faltan. Es la información
+                                        que antes había que sacar scrolleando la lista entera. */}
+                                    <div
+                                        className={`flex flex-wrap items-baseline justify-between gap-2 ${
+                                            draft.options.length > 0 ? "pt-2" : ""
+                                        }`}
+                                    >
+                                        <Label>Materiales por variante</Label>
+                                        {draft.options.length > 0 && (
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs text-muted-foreground">
+                                                    {loadedSpecCount} de {totalSpecCount} cargadas
+                                                </span>
+                                                {missingSpecCount > 0 && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 px-2 text-xs"
+                                                        onClick={() => setOnlyMissing((v) => !v)}
+                                                    >
+                                                        {onlyMissing
+                                                            ? "Ver todas"
+                                                            : `Solo las que faltan (${missingSpecCount})`}
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                     {draft.options.length === 0 ? (
                                         <p className="text-xs text-muted-foreground">
                                             Ese campo no tiene opciones cargadas. Agregalas en{" "}
@@ -531,16 +661,46 @@ export function MaterialFamiliesManager({
                                         </p>
                                     ) : (
                                         <>
-                                            {/* La pregunta se hace UNA vez arriba de la columna: repetirla en cada
-                                                fila obliga a una etiqueta corta que no se entiende sola. */}
-                                            {Array.from(groupBySpecValue(draft.options).entries()).map(([specValue, rows]) => {
+                                            {/* Acordeon: una linea por variante, cerrada, con el material ya
+                                                cargado a la vista. Abierta muestra los inputs. La pregunta se
+                                                hace UNA vez arriba de la columna: repetirla en cada fila
+                                                obliga a una etiqueta corta que no se entiende sola. */}
+                                            {visibleGroups.map(([specValue, rows]) => {
                                                 const specLabel = valueLabel(draft.fieldKey, specValue)
+                                                const filled = rows.filter((o) => o.materialId !== null)
+                                                const isOpen = openSpec === specValue
                                                 return (
                                                 <div key={specValue} className="space-y-1 rounded-md border p-2">
-                                                    <p className="text-xs font-medium text-muted-foreground">
-                                                        {specLabel}
-                                                    </p>
-                                                    {rows.map((o) => (
+                                                    <button
+                                                        type="button"
+                                                        className="flex w-full items-center gap-2 text-left"
+                                                        onClick={() => setOpenSpec(isOpen ? null : specValue)}
+                                                    >
+                                                        <ChevronDown
+                                                            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+                                                                isOpen ? "" : "-rotate-90"
+                                                            }`}
+                                                        />
+                                                        <span className="text-xs font-medium text-muted-foreground">
+                                                            {specLabel}
+                                                        </span>
+                                                        {/* El resumen es lo que hace que colapsar no cueste
+                                                            informacion: se sigue viendo que falta mapear. */}
+                                                        <span
+                                                            className={`ml-auto truncate pl-2 text-xs ${
+                                                                filled.length === 0
+                                                                    ? "text-muted-foreground/60"
+                                                                    : "text-muted-foreground"
+                                                            }`}
+                                                        >
+                                                            {filled.length === 0
+                                                                ? "sin material"
+                                                                : filled.length === 1
+                                                                  ? filled[0].label
+                                                                  : `${filled[0].label} +${filled.length - 1}`}
+                                                        </span>
+                                                    </button>
+                                                    {isOpen && rows.map((o) => (
                                                         <div
                                                             key={o.key}
                                                             className="grid grid-cols-[1fr_auto] items-center gap-2"
@@ -556,23 +716,39 @@ export function MaterialFamiliesManager({
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 className="h-8 w-8"
-                                                                disabled={o.materialId === null && o.label === ""}
-                                                                onClick={() => clearRow(o.key)}
-                                                                title="Vaciar esta opción"
+                                                                // Con varios materiales en la variante el tacho saca la
+                                                                // fila entera. En la última no puede: si se fuera, el
+                                                                // grupo desaparecería y con él el botón para volver a
+                                                                // agregarle un material, así que ahí solo se vacía.
+                                                                disabled={
+                                                                    rows.length === 1 &&
+                                                                    o.materialId === null &&
+                                                                    o.label === ""
+                                                                }
+                                                                onClick={() =>
+                                                                    rows.length > 1 ? removeRow(o.key) : clearRow(o.key)
+                                                                }
+                                                                title={
+                                                                    rows.length > 1
+                                                                        ? "Quitar este material"
+                                                                        : "Vaciar esta opción"
+                                                                }
                                                             >
                                                                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
                                                             </Button>
                                                         </div>
                                                     ))}
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-7 w-full justify-start text-xs text-muted-foreground hover:text-foreground"
-                                                        onClick={() => addMaterialToSpec(specValue)}
-                                                    >
-                                                        <Plus className="mr-1.5 h-3.5 w-3.5" />
-                                                        Agregar otro material
-                                                    </Button>
+                                                    {isOpen && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-7 w-full justify-start text-xs text-muted-foreground hover:text-foreground"
+                                                            onClick={() => addMaterialToSpec(specValue)}
+                                                        >
+                                                            <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                                            Agregar otro material
+                                                        </Button>
+                                                    )}
                                                 </div>
                                                 )
                                             })}
