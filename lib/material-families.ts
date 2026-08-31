@@ -106,13 +106,12 @@ function validFamilyPayload(p: MaterialFamilyPayload): string | null {
     return null;
 }
 
-// Crea (id null) o actualiza (id) una familia entera. Las variantes se reemplazan
-// (delete + insert), igual que las líneas de una hoja de costo: son pocas y así el
-// guardado es una sola verdad, sin diffs.
-export async function saveMaterialFamily(id: number | null, payload: MaterialFamilyPayload) {
-    const session = await auth();
-    if (session?.user?.role !== 'admin') return { error: 'No tenés permisos para realizar esta acción' };
-
+// Lógica pura de guardado (sin auth). La usan saveMaterialFamily (UI admin) y las
+// tools de IA con su propio guard de seguridad.
+export async function insertMaterialFamily(
+    id: number | null,
+    payload: MaterialFamilyPayload,
+): Promise<{ success: true; id: number } | { error: string }> {
     const invalid = validFamilyPayload(payload);
     if (invalid) return { error: invalid };
 
@@ -161,6 +160,15 @@ export async function saveMaterialFamily(id: number | null, payload: MaterialFam
         console.error('Error saving material family:', error);
         return { error: 'Error al guardar la familia' };
     }
+}
+
+// Crea (id null) o actualiza (id) una familia entera. Las variantes se reemplazan
+// (delete + insert), igual que las líneas de una hoja de costo: son pocas y así el
+// guardado es una sola verdad, sin diffs.
+export async function saveMaterialFamily(id: number | null, payload: MaterialFamilyPayload) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') return { error: 'No tenés permisos para realizar esta acción' };
+    return insertMaterialFamily(id, payload);
 }
 
 // Borra la familia. Las líneas de hoja de costo que la usaban NO pierden sus
