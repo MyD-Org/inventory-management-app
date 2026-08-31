@@ -165,3 +165,56 @@ export function costStrategySummary(family: MaterialFamily): string {
             return `el costo es el promedio de los ${family.options.length} materiales`
     }
 }
+
+// Variantes que ya tiene una familia, en la forma en que se guardan.
+export interface StoredOption {
+    specValue: string
+    materialId: number
+    isDefault: boolean
+}
+
+// Suma variantes nuevas a las que la familia ya tiene, SIN tocar las existentes.
+//
+// Es la regla que hace segura la tool add_family_options del asistente: guardar una
+// familia reemplaza todas sus variantes (insertMaterialFamily hace delete + insert),
+// así que si el agente mandara la lista entera podría borrar la carga previa por
+// omisión. Mandando solo lo nuevo y mergeando acá, lo peor que puede pasar es que no
+// agregue nada.
+//
+// Reglas:
+// - Un (specValue, materialId) que ya existe se ignora: la operación es idempotente
+//   y repetir un pedido no duplica ni pisa.
+// - En una variante NUEVA, el primer material entra como default: cada variante
+//   necesita exactamente uno y no hay a quién preguntarle.
+// - En una variante que YA existe, lo nuevo entra como NO default: cambiar con qué
+//   material costea una variante ya cargada es una decisión, no un efecto secundario
+//   de agregar.
+export function mergeFamilyOptions(
+    existing: StoredOption[],
+    incoming: Array<{ specValue: string; materialId: number }>,
+): { options: StoredOption[]; added: StoredOption[]; skipped: Array<{ specValue: string; materialId: number }> } {
+    const options = [...existing]
+    const added: StoredOption[] = []
+    const skipped: Array<{ specValue: string; materialId: number }> = []
+
+    for (const candidate of incoming) {
+        const specValue = candidate.specValue.trim()
+        const duplicate = options.some(
+            (o) => o.specValue.trim().toLowerCase() === specValue.toLowerCase() && o.materialId === candidate.materialId,
+        )
+        if (duplicate) {
+            skipped.push({ specValue, materialId: candidate.materialId })
+            continue
+        }
+        const specExists = options.some((o) => o.specValue.trim().toLowerCase() === specValue.toLowerCase())
+        const option: StoredOption = {
+            specValue,
+            materialId: candidate.materialId,
+            isDefault: !specExists,
+        }
+        options.push(option)
+        added.push(option)
+    }
+
+    return { options, added, skipped }
+}

@@ -4,6 +4,7 @@ import {
     familyUnitCost,
     familyLineOptions,
     lineFromFamily,
+    mergeFamilyOptions,
     syncLineWithFamily,
     type FamilyLineFields,
     type MaterialFamily,
@@ -224,5 +225,63 @@ describe("familyLineOptions", () => {
         const line = syncLineWithFamily(linea(), conAlternativas())
         const specValues = line.options.map((o) => o.specValue)
         expect(new Set(specValues).size).toBe(specValues.length)
+    })
+})
+
+describe("mergeFamilyOptions", () => {
+    // "Optica individual" con dos grados ya cargados, el caso que motivó la tool.
+    const existentes = [
+        { specValue: "15º", materialId: 100, isDefault: true },
+        { specValue: "30º", materialId: 101, isDefault: true },
+    ]
+
+    it("agrega variantes nuevas sin tocar las que ya estaban", () => {
+        const { options, added } = mergeFamilyOptions(existentes, [
+            { specValue: "75º", materialId: 422 },
+            { specValue: "5º", materialId: 639 },
+        ])
+        expect(options).toHaveLength(4)
+        expect(options.slice(0, 2)).toEqual(existentes)
+        expect(added.map((o) => o.specValue)).toEqual(["75º", "5º"])
+    })
+
+    it("marca como default el primer material de una variante nueva", () => {
+        const { added } = mergeFamilyOptions(existentes, [{ specValue: "75º", materialId: 422 }])
+        expect(added[0].isDefault).toBe(true)
+    })
+
+    it("no toca el default de una variante que ya existe", () => {
+        const { options, added } = mergeFamilyOptions(existentes, [{ specValue: "15º", materialId: 999 }])
+        expect(added[0].isDefault).toBe(false)
+        // El que ya costeaba la variante sigue siendo el default.
+        expect(options.find((o) => o.materialId === 100)?.isDefault).toBe(true)
+    })
+
+    it("es idempotente: repetir una variante ya cargada no la duplica", () => {
+        const { options, added, skipped } = mergeFamilyOptions(existentes, [
+            { specValue: "15º", materialId: 100 },
+        ])
+        expect(options).toEqual(existentes)
+        expect(added).toEqual([])
+        expect(skipped).toEqual([{ specValue: "15º", materialId: 100 }])
+    })
+
+    it("no puede borrar variantes: el resultado siempre contiene a las existentes", () => {
+        const { options } = mergeFamilyOptions(existentes, [])
+        expect(options).toEqual(existentes)
+    })
+
+    it("compara ignorando espacios y mayúsculas para no duplicar la misma variante", () => {
+        const { added, skipped } = mergeFamilyOptions(existentes, [{ specValue: " 15º ", materialId: 100 }])
+        expect(added).toEqual([])
+        expect(skipped).toHaveLength(1)
+    })
+
+    it("dos materiales para una misma variante nueva: solo el primero es default", () => {
+        const { added } = mergeFamilyOptions(existentes, [
+            { specValue: "75º", materialId: 422 },
+            { specValue: "75º", materialId: 423 },
+        ])
+        expect(added.map((o) => o.isDefault)).toEqual([true, false])
     })
 })
