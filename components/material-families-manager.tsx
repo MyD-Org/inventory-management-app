@@ -455,13 +455,7 @@ export function MaterialFamiliesManager({
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    ¿Falta el campo que querés? Agregalo en{" "}
-                                    <Link href="/pedidos/opciones" className="underline">
-                                        opciones de pedidos
-                                    </Link>
-                                    .
-                                </p>
+
                             </div>
 
                             {draft.fieldKey !== "" && (
