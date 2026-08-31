@@ -132,7 +132,13 @@ export async function insertMaterialFamily(
 
     const name = payload.name.trim();
     const fieldKey = payload.spec_field_key.trim();
-    const defaultValue = payload.options.length > 0 ? payload.default_spec_value!.trim() : null;
+    // Si no llega variante predeterminada tomamos la primera cargada, como anuncia
+    // validFamilyPayload. La UI siempre la manda, pero las tools de IA no: sin este
+    // fallback el `!` reventaba con un TypeError fuera del try y salía un 500.
+    const defaultValue =
+        payload.options.length > 0
+            ? payload.default_spec_value?.trim() || payload.options[0].spec_value.trim()
+            : null;
     const costStrategy = payload.cost_strategy;
     const costMaterialId = payload.cost_strategy === 'specific' ? payload.cost_material_id : null;
 
