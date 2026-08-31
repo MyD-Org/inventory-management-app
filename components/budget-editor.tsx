@@ -635,7 +635,8 @@ export function BudgetEditor({
                                                 {m.familyId !== null ? (
                                                     // Línea armada por una familia: el nombre es el general
                                                     // ("Placa 1 led"), no un material del inventario, así que no
-                                                    // hay nada que buscar acá. Se cambia desvinculando.
+                                                    // hay nada que buscar acá. El tachito de la línea la borra
+                                                    // entera de una sola vez.
                                                     // El nombre manda: la columna es angosta y la etiqueta
                                                     // "familia" ya la dice el panel de abajo. El ícono alcanza
                                                     // para distinguirla de un material suelto.
@@ -668,7 +669,12 @@ export function BudgetEditor({
                                                 onChange={(n) => updateMaterial(i, { unitCost: n })}
                                             />
                                             <span className="text-sm text-right font-medium">{formatArs(m.qty * m.unitCost)}</span>
-                                            <Button variant="ghost" size="icon" onClick={() => removeMaterial(i)}>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => removeMaterial(i)}
+                                                title="Eliminar línea"
+                                            >
                                                 <Trash2 className="w-4 h-4 text-destructive" />
                                             </Button>
                                         </div>
@@ -717,15 +723,6 @@ export function BudgetEditor({
                                                                         {costStrategySummary(f)}
                                                                     </p>
                                                                 </button>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    className="h-7 shrink-0 text-xs text-muted-foreground"
-                                                                    onClick={() => unlinkFamily(i)}
-                                                                    title="Dejar esta línea con un material fijo, sin variantes"
-                                                                >
-                                                                    Quitar familia
-                                                                </Button>
                                                             </div>
                                                             {variantsOpen(i) && (
                                                                 <>
