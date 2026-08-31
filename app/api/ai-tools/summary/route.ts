@@ -13,7 +13,11 @@ export async function GET(request: NextRequest) {
         COUNT(*)::int AS total_materials,
         COALESCE(SUM(i.current_stock * m.unit_cost), 0)::numeric(14,2) AS total_value,
         COUNT(*) FILTER (WHERE i.current_stock <= m.min_stock)::int AS low_stock_count,
-        COUNT(*) FILTER (WHERE i.current_stock = 0)::int AS out_of_stock_count
+        COUNT(*) FILTER (WHERE i.current_stock = 0)::int AS out_of_stock_count,
+        -- Materiales sin precio cargado. Va en el panorama general por el mismo
+        -- motivo que low_stock_count: es un agujero que hay que avisar sin que
+        -- nadie lo pregunte, porque cualquier costo que los use sale mal.
+        COUNT(*) FILTER (WHERE m.unit_cost = 0)::int AS cost_zero_count
       FROM materials m
       JOIN inventory i ON i.material_id = m.id
     `
