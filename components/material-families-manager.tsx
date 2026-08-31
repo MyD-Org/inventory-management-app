@@ -370,7 +370,7 @@ export function MaterialFamiliesManager({
                                                 <span className="truncate">{o.label}</span>
                                                 <span className="whitespace-nowrap text-muted-foreground">
                                                     {formatArs(o.unitCost)}
-                                                    {o.isDefault && o.specValue === f.defaultSpecValue && " · con esta se calcula el costo"}
+                                                    {o.isDefault && o.specValue === f.defaultSpecValue && " · usada para costear"}
                                                 </span>
                                             </div>
                                         ))}
