@@ -432,7 +432,7 @@ export function MaterialFamiliesManager({
 
                     {draft !== null && (
                         <div className="space-y-4">
-                            <div>
+                            <div className="space-y-1.5">
                                 <Label htmlFor="family-name">Nombre general de la materia prima *</Label>
                                 <Input
                                     id="family-name"
@@ -441,81 +441,81 @@ export function MaterialFamiliesManager({
                                     placeholder="Placa 1 led"
                                     autoComplete="off"
                                 />
-
                             </div>
 
-                            <div>
-                                <Label>Varía según *</Label>
-                                <Select value={draft.fieldKey} onValueChange={setField}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Elegí el campo (color, óptica, grampa…)" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {specFields.map((f) => (
-                                            <SelectItem key={f.key} value={f.key}>
-                                                {f.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="space-y-1.5">
+                                    <Label>Varía según *</Label>
+                                    <Select value={draft.fieldKey} onValueChange={setField}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Elegí el campo (color, óptica, grampa…)" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {specFields.map((f) => (
+                                                <SelectItem key={f.key} value={f.key}>
+                                                    {f.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
+                                {draft.fieldKey !== "" && draft.options.length > 0 && (
+                                    <div className="space-y-1.5">
+                                        <Label>Cómo se calcula el costo</Label>
+                                        <Select
+                                            value={draft.costStrategy}
+                                            onValueChange={(v) =>
+                                                setDraft({
+                                                    ...draft,
+                                                    costStrategy: v as CostStrategy,
+                                                    costMaterialId:
+                                                        v === "specific" ? draft.costMaterialId : null,
+                                                })
+                                            }
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Elegí cálculo" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="default">Default</SelectItem>
+                                                <SelectItem value="average">Promedio de todos los materiales</SelectItem>
+                                                <SelectItem value="highest">Material más caro</SelectItem>
+                                                <SelectItem value="specific">Material específico</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
                             </div>
 
                             {draft.fieldKey !== "" && (
                                 <div className="space-y-2">
-                                    {draft.options.length > 0 && (
-                                        <>
-                                            <Label>Cómo se calcula el costo</Label>
+                                    {draft.options.length > 0 && draft.costStrategy === "specific" && (
+                                        <div className="space-y-1.5">
+                                            <Label>Material para costear</Label>
                                             <Select
-                                                value={draft.costStrategy}
+                                                value={draft.costMaterialId ? String(draft.costMaterialId) : ""}
                                                 onValueChange={(v) =>
-                                                    setDraft({
-                                                        ...draft,
-                                                        costStrategy: v as CostStrategy,
-                                                        costMaterialId:
-                                                            v === "specific" ? draft.costMaterialId : null,
-                                                    })
+                                                    setDraft({ ...draft, costMaterialId: Number(v) })
                                                 }
                                             >
                                                 <SelectTrigger>
-                                                    <SelectValue placeholder="Elegí cálculo" />
+                                                    <SelectValue placeholder="Elegí material" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="default">Default</SelectItem>
-                                                    <SelectItem value="average">Promedio de todos los materiales</SelectItem>
-                                                    <SelectItem value="highest">Material más caro</SelectItem>
-                                                    <SelectItem value="specific">Material específico</SelectItem>
+                                                    {draft.options
+                                                        .filter((o) => o.materialId !== null)
+                                                        .map((o) => (
+                                                            <SelectItem
+                                                                key={o.materialId}
+                                                                value={String(o.materialId)}
+                                                            >
+                                                                {o.label}
+                                                            </SelectItem>
+                                                        ))}
                                                 </SelectContent>
                                             </Select>
-
-                                            {draft.costStrategy === "specific" && (
-                                                <div className="space-y-1">
-                                                    <p className="text-xs text-muted-foreground">Material para costear</p>
-                                                    <Select
-                                                        value={draft.costMaterialId ? String(draft.costMaterialId) : ""}
-                                                        onValueChange={(v) =>
-                                                            setDraft({ ...draft, costMaterialId: Number(v) })
-                                                        }
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Elegí material" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {draft.options
-                                                                .filter((o) => o.materialId !== null)
-                                                                .map((o) => (
-                                                                    <SelectItem
-                                                                        key={o.materialId}
-                                                                        value={String(o.materialId)}
-                                                                    >
-                                                                        {o.label}
-                                                                    </SelectItem>
-                                                                ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            )}
-                                        </>
+                                        </div>
                                     )}
 
                                     <Label className={draft.options.length > 0 ? "pt-2" : undefined}>
