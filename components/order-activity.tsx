@@ -149,6 +149,12 @@ function Cambio({ e }: { e: OrderEvent }) {
             case "item_removed":
                 return <>quitó <Val>{viejo}</Val></>
             case "item_updated":
+                // El pedido se cargó cuando el producto no tenía hoja de costo y al
+                // abrirlo se encontró: no es "un dato" cualquiera, es que la línea
+                // pasó a tener materiales.
+                if (e.field === "materiales") {
+                    return <>cargó la lista de materiales de <Val>{nuevo}</Val></>
+                }
                 return viejo && nuevo && viejo !== nuevo ? (
                     <>cambió <Val tachado>{viejo}</Val> <span aria-hidden>→</span> <Val>{nuevo}</Val></>
                 ) : (

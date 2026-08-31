@@ -1,6 +1,7 @@
 import { resolveBom, sameSpecs, type BomLine, type BomOption } from "@/lib/bom"
 import { sql } from "@/lib/database"
 import { customerStatus as toCustomerStatus, type OrderStatus as Status } from "@/lib/order-statuses"
+import { logOrderEvent } from "@/lib/order-events"
 import {
     validateOrderPayloadWith,
     validateSpecs,
@@ -379,10 +380,11 @@ export async function validateOrderPayload(
 // REAL con lib/bom.ts antes de insertar. Sin variantes cargadas el resultado es
 // idéntico al INSERT … SELECT que había antes.
 //
-// Si el pedido trae un valor que la hoja no tiene mapeado, se cae al material de
-// referencia —que puede ser el equivocado— y se anota en order_items.unmapped_specs,
-// en vez de descontar en silencio del rollo que no era. NO usa needs_review: esa
-// bandera significa "esta línea no tiene lista de materiales" y acá el BOM sí está.
+// Si el pedido trae un valor que la hoja no tiene mapeado, esa línea NO aporta
+// material: se anota en order_items.unmapped_specs y el taller decide qué sacar.
+// Antes se caía al material de referencia y eso hacía descontar del rollo que no
+// era. NO usa needs_review: esa bandera significa "esta línea no tiene lista de
+// materiales" y acá el BOM sí está, solo que incompleto.
 export async function explodeBom(
     orderItemId: number,
     budgetId: number,
@@ -569,6 +571,8 @@ export interface MaterialNeed {
     pending: number
     /** Stock disponible hoy. null si el material no está en el inventario. */
     available: number | null
+    /** Cómo se mide el material (unidad, metros, kg): las cantidades sin unidad mienten. */
+    unit: string | null
     /** Origen de la alternativa, para ofrecer otras opciones al consumir. */
     family_id: number | null
     spec_value: string | null
@@ -592,10 +596,12 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
             oim.family_id,
             oim.spec_value,
             COALESCE(i.available_stock, 0) AS available,
+            m.unit_of_measure AS unit,
             (oim.material_id IS NOT NULL AND i.id IS NOT NULL) AS en_inventario
         FROM order_item_materials oim
         JOIN order_items oi ON oi.id = oim.order_item_id
         LEFT JOIN inventory i ON i.material_id = oim.material_id
+        LEFT JOIN materials m ON m.id = oim.material_id
         WHERE oi.order_id = ${orderId}
         ORDER BY oim.id ASC
     `
@@ -653,6 +659,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
                 consumed: 0,
                 pending: 0,
                 available: r.en_inventario ? Number(r.available) : null,
+                unit: (r.unit as string | null) ?? null,
                 family_id: r.family_id as number,
                 spec_value: r.spec_value as string,
                 alternatives,
@@ -665,6 +672,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
                 consumed: 0,
                 pending: 0,
                 available: r.en_inventario ? Number(r.available) : null,
+                unit: (r.unit as string | null) ?? null,
                 family_id: null,
                 spec_value: null,
                 alternatives: [],
@@ -876,9 +884,12 @@ export interface ReconciledItem {
     unmapped: string[]
 }
 
-// Vuelve a resolver las líneas marcadas needs_review (el producto no tenía hoja
-// de costo cuando se cargó el pedido) y, si la hoja ya existe, explota el BOM y
-// baja la bandera.
+// Pone al día el BOM del pedido al abrirlo. Hace dos cosas:
+//   1. Vuelve a resolver las líneas marcadas needs_review (el producto no tenía
+//      hoja de costo cuando se cargó el pedido) y, si la hoja ya existe, explota
+//      el BOM y baja la bandera.
+//   2. Rehace el BOM de las líneas con valores sin mapear, que se armaron cuando
+//      esos casos caían al material de referencia.
 //
 // Por qué acá y no un botón: que falte la hoja de costo NO es un dato del
 // pedido, es un dato del catálogo que cambia por su cuenta. Congelar el BOM al
@@ -949,6 +960,29 @@ export async function reconcileOrderBoms(orderId: number): Promise<ReconciledIte
             `
 
             arregladas.push({ itemId: item.id as number, product: String(item.product), unmapped })
+        }
+
+        // Segunda pasada: líneas que SÍ tienen hoja de costo pero quedaron con
+        // algún valor sin mapear. Su BOM se armó cuando esos casos caían al
+        // material de referencia; hoy no se elige ninguno, así que hay que
+        // rehacerlo para que no quede listado un material que nadie eligió.
+        const conHuecos = await sql`
+            SELECT id, budget_id, specs, quantity
+            FROM order_items
+            WHERE order_id = ${orderId}
+              AND needs_review = FALSE
+              AND budget_id IS NOT NULL
+              AND jsonb_array_length(COALESCE(unmapped_specs, '[]'::jsonb)) > 0
+            ORDER BY line_no ASC
+        `
+        for (const item of conHuecos as any[]) {
+            await sql`DELETE FROM order_item_materials WHERE order_item_id = ${item.id}`
+            await explodeBom(
+                item.id as number,
+                item.budget_id as number,
+                (item.specs ?? {}) as Record<string, unknown>,
+                Number(item.quantity),
+            )
         }
 
         for (const item of arregladas) {

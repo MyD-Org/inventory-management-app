@@ -22,10 +22,12 @@ function Estado({ n }: { n: MaterialNeed }) {
         return <span className="font-mono text-sm tabular-nums text-emerald-600">descontado</span>
     }
     if (n.available < n.pending) {
-        // Cuánto falta, no solo que falta: es el número que se anota para comprar.
+        // Solo el stock, en rojo. Al lado está la columna NECESITA, así que la
+        // resta la hace la vista: agregar "faltan 2" era decir lo mismo dos veces
+        // y rompía la columna de números.
         return (
             <span className="font-mono text-sm tabular-nums font-medium text-destructive">
-                {n.available} · faltan {n.pending - n.available}
+                {n.available}
             </span>
         )
     }
@@ -134,8 +136,7 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                     </DialogHeader>
 
                     <p className="text-base text-muted-foreground -mt-2">
-                        Se registra como una salida de stock por este pedido. Podés ajustar las
-                        cantidades, quitar filas o agregar otro material.
+                        Se registra como una salida de stock por este pedido.
                     </p>
 
                     <ConsumeMaterialsForm

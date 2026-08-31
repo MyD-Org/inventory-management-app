@@ -57,9 +57,9 @@ describe("resolveBomLine", () => {
         expect(resolveBomLine(optica, { optic: 25 }).materialId).toBe(30)
     })
 
-    it("cae al material de referencia y avisa cuando el valor no está mapeado", () => {
+    it("no elige ningún material cuando el valor no está mapeado", () => {
         const r = resolveBomLine(tiraLed(), { led_color: "neutro" })
-        expect(r.materialId).toBe(10)
+        expect(r.materialId).toBeNull()
         expect(r.substituted).toBe(false)
         expect(r.unmapped).toBe("led_color=neutro")
     })
@@ -80,7 +80,7 @@ describe("resolveBomLine", () => {
 
     it("avisa también si la línea declara un campo pero no tiene ninguna variante cargada", () => {
         const r = resolveBomLine(tiraLed({ options: [] }), { led_color: "calido" })
-        expect(r.materialId).toBe(10)
+        expect(r.materialId).toBeNull()
         expect(r.unmapped).toBe("led_color=calido")
     })
 })
@@ -99,6 +99,13 @@ describe("resolveBom", () => {
     it("junta los valores sin mapear sin repetirlos", () => {
         const otraTira = tiraLed({ id: 3, materialId: 13, label: "Tira LED secundaria" })
         const { unmapped } = resolveBom([tiraLed(), otraTira, fuente], { led_color: "neutro" }, 1)
+        expect(unmapped).toEqual(["led_color=neutro"])
+    })
+
+    it("saca del BOM las líneas sin mapear, pero deja las que resolvieron", () => {
+        const { lines, unmapped } = resolveBom([tiraLed(), fuente], { led_color: "neutro" }, 2)
+        expect(lines).toHaveLength(1)
+        expect(lines[0]).toMatchObject({ materialId: 20, qtyTotal: 2 })
         expect(unmapped).toEqual(["led_color=neutro"])
     })
 
