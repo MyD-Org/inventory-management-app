@@ -563,7 +563,7 @@ export function BudgetEditor({
                 {fromAi && (
                     <div className="flex items-center gap-2 p-3 rounded-lg border bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-200 text-sm">
                         <Sparkles className="w-4 h-4 shrink-0" />
-                        Propuesta generada por la IA: revisá materiales, cantidades y costos antes de guardar. La decisión final es tuya.
+                        Propuesta generada por la IA: revisá materiales, cantidades y costos antes de guardar.
                     </div>
                 )}
 
