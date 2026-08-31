@@ -23,6 +23,21 @@ export async function POST(request: NextRequest) {
     }
 
     const b = body as Record<string, unknown>
+
+    // El renderer de templates de ai-api solo interpola escalares: un {{params.options}}
+    // que resuelve a un array tira "Template placeholder not found". Por eso las tools
+    // mandan las listas como string JSON (misma convención que items_json / specs_json
+    // en los endpoints de pedidos). Aceptamos las dos formas: options (array, para
+    // llamadas directas) y options_json (string, para el agente).
+    let rawOptions: unknown = b.options
+    if (rawOptions === undefined && typeof b.options_json === "string") {
+        try {
+            rawOptions = JSON.parse(b.options_json)
+        } catch {
+            return NextResponse.json({ error: "options_json no es JSON válido" }, { status: 400 })
+        }
+    }
+
     const name = typeof b.name === "string" ? b.name.trim() : ""
     const specFieldKey = typeof b.spec_field_key === "string" ? b.spec_field_key.trim() : ""
     const defaultSpecValue = typeof b.default_spec_value === "string" ? b.default_spec_value.trim() : null
@@ -35,12 +50,12 @@ export async function POST(request: NextRequest) {
     if (!specFieldKey) {
         return NextResponse.json({ error: "Falta spec_field_key" }, { status: 400 })
     }
-    if (!Array.isArray(b.options) || b.options.length === 0) {
+    if (!Array.isArray(rawOptions) || rawOptions.length === 0) {
         return NextResponse.json({ error: "Faltan options" }, { status: 400 })
     }
 
     const options: MaterialFamilyPayload["options"] = []
-    for (const item of b.options) {
+    for (const item of rawOptions) {
         if (typeof item !== "object" || item === null) {
             return NextResponse.json({ error: "Cada option debe ser un objeto" }, { status: 400 })
         }
