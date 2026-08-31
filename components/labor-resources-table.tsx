@@ -30,7 +30,11 @@ interface LaborResource {
 }
 
 function formatArs(n: number): string {
-    return `$${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`
+    const abs = Math.abs(n)
+    const [intPart, decPart] = abs.toFixed(2).split(".")
+    const intWithDots = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+    const sign = n < 0 ? "-" : ""
+    return `${sign}$${intWithDots},${decPart}`
 }
 
 export function LaborResourcesTable({
