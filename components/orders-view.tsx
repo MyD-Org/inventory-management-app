@@ -104,13 +104,6 @@ export function OrdersView({
                     active={filter === "vencidos"}
                     onClick={() => setFilter((f) => (f === "vencidos" ? null : "vencidos"))}
                 />
-                <Stat
-                    label="Sin materiales"
-                    value={counts.sinMateriales}
-                    tone="warn"
-                    active={filter === "sin_materiales"}
-                    onClick={() => setFilter((f) => (f === "sin_materiales" ? null : "sin_materiales"))}
-                />
                 <Stat label="Falta facturar" value={counts.sinFactura} />
                 <Stat label="Entregan esta semana" value={counts.estaSemana} />
                 <Stat label={lista ? "Pedidos" : "Activos"} value={counts.activos} />
