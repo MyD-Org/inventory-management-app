@@ -211,19 +211,39 @@ export function BudgetEditor({
                 sessionStorage.removeItem(BUDGET_DRAFT_KEY)
                 const draft = JSON.parse(raw) as {
                     title?: string
-                    lines?: Array<{ materialId: number | null; label: string; qty: number; unitPrice: number }>
+                    lines?: Array<{
+                        materialId: number | null
+                        familyId?: number | null
+                        label: string
+                        qty: number
+                        unitPrice: number
+                    }>
                 }
-                const lines: MaterialLine[] = (draft.lines ?? []).map((l) => ({
-                    uid: newUid(),
-                    materialId: typeof l.materialId === "number" ? l.materialId : null,
-                    label: String(l.label ?? ""),
-                    qty: Number.isFinite(l.qty) && l.qty > 0 ? l.qty : 1,
-                    unitCost: Number.isFinite(l.unitPrice) && l.unitPrice >= 0 ? l.unitPrice : 0,
-                    // El asistente no propone variantes ni familias: se agregan a mano después.
-                    specFieldKey: null,
-                    options: [],
-                    familyId: null,
-                }))
+                // Una línea con familyId se arma como si la hubieras elegido a mano en el
+                // buscador: trae todas las variantes y el costo sale de la estrategia de la
+                // familia, no del material que el asistente haya citado. Sin familyId sigue
+                // siendo un material fijo, que es lo que el asistente pedía antes de que
+                // build_budget supiera de familias.
+                const lines: MaterialLine[] = (draft.lines ?? []).map((l) => {
+                    const family = typeof l.familyId === "number" ? familyById.get(l.familyId) : undefined
+                    if (family) {
+                        return {
+                            uid: newUid(),
+                            ...lineFromFamily(family),
+                            qty: Number.isFinite(l.qty) && l.qty > 0 ? l.qty : 1,
+                        }
+                    }
+                    return {
+                        uid: newUid(),
+                        materialId: typeof l.materialId === "number" ? l.materialId : null,
+                        label: String(l.label ?? ""),
+                        qty: Number.isFinite(l.qty) && l.qty > 0 ? l.qty : 1,
+                        unitCost: Number.isFinite(l.unitPrice) && l.unitPrice >= 0 ? l.unitPrice : 0,
+                        specFieldKey: null,
+                        options: [],
+                        familyId: null,
+                    }
+                })
                 if (!lines.length) return
                 setFromAi(true)
 
@@ -231,13 +251,19 @@ export function BudgetEditor({
                     // Nuevo: precargar título + materiales.
                     if (draft.title) setName(draft.title)
                     setMaterials(lines)
-                    // Refrescar contra los costos vigentes de la DB (la IA pudo citar costos viejos).
-                    const ids = lines.map((l) => l.materialId).filter((n): n is number => n !== null)
+                    // Refrescar contra los costos vigentes de la DB (la IA pudo citar costos
+                    // viejos). Las líneas con familia quedan afuera: su costo ya salió de la
+                    // estrategia de la familia con datos frescos, y pisarlo con el costo de un
+                    // material suelto convertiría un promedio en el precio de uno solo.
+                    const ids = lines
+                        .filter((l) => l.familyId === null)
+                        .map((l) => l.materialId)
+                        .filter((n): n is number => n !== null)
                     if (ids.length) {
                         void getCurrentCosts(ids).then(({ costs }) => {
                             setMaterials((prev) =>
                                 prev.map((m) =>
-                                    m.materialId !== null && costs[m.materialId] !== undefined
+                                    m.familyId === null && m.materialId !== null && costs[m.materialId] !== undefined
                                         ? { ...m, unitCost: costs[m.materialId] }
                                         : m,
                                 ),

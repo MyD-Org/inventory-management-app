@@ -867,3 +867,103 @@ export async function deleteOrderItemInternal(itemId: number): Promise<DeleteOrd
         return { ok: false, error: "No se pudo borrar la línea" }
     }
 }
+
+// ---------- Reconciliación de BOMs pendientes ----------
+
+export interface ReconciledItem {
+    itemId: number
+    product: string
+    unmapped: string[]
+}
+
+// Vuelve a resolver las líneas marcadas needs_review (el producto no tenía hoja
+// de costo cuando se cargó el pedido) y, si la hoja ya existe, explota el BOM y
+// baja la bandera.
+//
+// Por qué acá y no un botón: que falte la hoja de costo NO es un dato del
+// pedido, es un dato del catálogo que cambia por su cuenta. Congelar el BOM al
+// crear el pedido tiene sentido cuando HAY receta —cambiarla después no debe
+// reescribir pedidos en marcha—, pero cuando no había nada que congelar la
+// marca roja quedaba pegada para siempre aunque el taller cargara la hoja al
+// rato.
+//
+// Es conservadora a propósito. No toca nada si:
+//   - el pedido ya salió (retirado) o se canceló: ahí el BOM es historia;
+//   - ya se descontó stock: mismo criterio que updateOrderItemInternal, meter
+//     materiales nuevos abajo de un descuento hecho deja los números mintiendo;
+//   - la hoja existe pero está vacía: sin materiales la línea se sigue armando
+//     a mano, así que la advertencia tiene que quedar.
+//
+// Nunca hace throw: es un efecto de abrir la pantalla, no puede voltear la
+// lectura del pedido.
+export async function reconcileOrderBoms(orderId: number): Promise<ReconciledItem[]> {
+    try {
+        const [order] = await sql`SELECT status FROM orders WHERE id = ${orderId}`
+        if (!order) return []
+        if (order.status === "retirado" || order.status === "cancelado") return []
+
+        const pendientes = await sql`
+            SELECT id, product, specs, quantity
+            FROM order_items
+            WHERE order_id = ${orderId} AND needs_review = TRUE
+            ORDER BY line_no ASC
+        `
+        if (pendientes.length === 0) return []
+
+        const [{ count }] = await sql`
+            SELECT COUNT(*)::int AS count FROM stock_movements
+            WHERE order_id = ${orderId} AND movement_type = 'salida'
+        `
+        if (count > 0) return []
+
+        const arregladas: ReconciledItem[] = []
+
+        for (const item of pendientes as any[]) {
+            const resolved = await resolveProduct(String(item.product))
+            if (!resolved?.budgetId) continue
+
+            const [{ count: lineas }] = await sql`
+                SELECT COUNT(*)::int AS count FROM budget_materials WHERE budget_id = ${resolved.budgetId}
+            `
+            if (lineas === 0) continue
+
+            // No debería haber materiales (la línea nunca explotó), pero si algo
+            // quedó a medias de un intento anterior, se rehace limpio.
+            await sql`DELETE FROM order_item_materials WHERE order_item_id = ${item.id}`
+            const { unmapped } = await explodeBom(
+                item.id as number,
+                resolved.budgetId,
+                (item.specs ?? {}) as Record<string, unknown>,
+                Number(item.quantity),
+            )
+
+            // El nombre del producto NO se pisa: es lo que el cliente pidió y lo
+            // que el taller viene leyendo. alegra_item_id solo se completa si
+            // estaba vacío; si ya había uno, alguien lo eligió.
+            await sql`
+                UPDATE order_items
+                SET budget_id = ${resolved.budgetId},
+                    alegra_item_id = COALESCE(alegra_item_id, ${resolved.alegraItemId}),
+                    needs_review = FALSE
+                WHERE id = ${item.id}
+            `
+
+            arregladas.push({ itemId: item.id as number, product: String(item.product), unmapped })
+        }
+
+        for (const item of arregladas) {
+            await logOrderEvent(orderId, {
+                kind: "item_updated",
+                field: "materiales",
+                newValue: item.product,
+                body: `Se cargó la lista de materiales de "${item.product}", que antes no tenía hoja de costo.`,
+                actor: { name: "Sistema" },
+            })
+        }
+
+        return arregladas
+    } catch (error) {
+        console.error("Error en reconcileOrderBoms:", error)
+        return []
+    }
+}

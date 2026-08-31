@@ -61,8 +61,13 @@ export function AiAssistant() {
           BUDGET_DRAFT_KEY,
           JSON.stringify({
             title: card.title,
+            // familyId no está en el tipo BudgetLine del widget, pero el widget emite la
+            // card tal como la manda ai-api (no filtra campos), así que llega igual. Es
+            // lo que distingue "costear con esta familia" de "costear con este material
+            // fijo": ver el schema de build_budget en ai-api.
             lines: card.lines.map((l) => ({
               materialId: l.materialId ?? null,
+              familyId: (l as { familyId?: number }).familyId ?? null,
               label: l.label,
               qty: l.qty ?? 1,
               unitPrice: l.unitPrice ?? 0,
