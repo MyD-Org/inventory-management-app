@@ -25,7 +25,7 @@ export interface MaterialFamilyPayload {
     name: string;
     spec_field_key: string;
     default_spec_value: string | null;
-    options: Array<{ spec_value: string; material_id: number }>;
+    options: Array<{ spec_value: string; material_id: number; is_default: boolean }>;
 }
 
 // Todas las familias con sus variantes resueltas contra el inventario.
@@ -45,8 +45,9 @@ export async function listMaterialFamilies(): Promise<MaterialFamily[]> {
                         'materialId', o.material_id,
                         'label', m.name,
                         'unitCost', m.unit_cost,
-                        'barcode', m.barcode
-                    ) ORDER BY o.id
+                        'barcode', m.barcode,
+                        'isDefault', o.is_default
+                    ) ORDER BY LOWER(o.spec_value) ASC, m.name ASC
                 ) FILTER (WHERE o.id IS NOT NULL),
                 '[]'
             ) AS options
@@ -68,6 +69,7 @@ export async function listMaterialFamilies(): Promise<MaterialFamily[]> {
             label: String(o.label),
             unitCost: Number(o.unitCost),
             barcode: String(o.barcode),
+            isDefault: Boolean(o.isDefault),
         })),
     }));
 }
@@ -76,19 +78,30 @@ function validFamilyPayload(p: MaterialFamilyPayload): string | null {
     if (!p.name?.trim()) return 'El nombre de la familia es requerido';
     if (!p.spec_field_key?.trim()) return 'Falta indicar según qué campo varía la familia';
 
-    const seen = new Set<string>();
+    const byValue = new Map<string, Array<{ material_id: number; is_default: boolean }>>();
     for (const o of p.options) {
         const value = o.spec_value?.trim();
         if (!value) return 'Hay variantes sin valor';
         if (!Number.isFinite(o.material_id)) return `La variante "${value}" no tiene material`;
-        if (seen.has(value)) return `La variante "${value}" está repetida`;
-        seen.add(value);
+        const list = byValue.get(value) ?? [];
+        if (list.some((x) => x.material_id === o.material_id)) {
+            return `El material de "${value}" está repetido`;
+        }
+        list.push({ material_id: o.material_id, is_default: o.is_default });
+        byValue.set(value, list);
     }
+
+    for (const [value, list] of byValue) {
+        const defaults = list.filter((x) => x.is_default).length;
+        if (defaults === 0) return `Elegí cuál material es el default de "${value}"`;
+        if (defaults > 1) return `Solo puede haber un default en "${value}"`;
+    }
+
     // Sin predeterminada no hay con qué costear la línea que use la familia, así
     // que se exige acá y no en la UI: es la regla, no una ayuda de pantalla.
     if (p.options.length > 0) {
         if (!p.default_spec_value?.trim()) return 'Elegí con qué variante se costea (la predeterminada)';
-        if (!seen.has(p.default_spec_value.trim())) return 'La variante predeterminada tiene que ser una de las cargadas';
+        if (!byValue.has(p.default_spec_value.trim())) return 'La variante predeterminada tiene que ser una de las cargadas';
     }
     return null;
 }
@@ -130,8 +143,8 @@ export async function saveMaterialFamily(id: number | null, payload: MaterialFam
 
         for (const o of payload.options) {
             await sql`
-                INSERT INTO material_family_options (family_id, spec_value, material_id)
-                VALUES (${familyId}, ${o.spec_value.trim()}, ${o.material_id})
+                INSERT INTO material_family_options (family_id, spec_value, material_id, is_default)
+                VALUES (${familyId}, ${o.spec_value.trim()}, ${o.material_id}, ${o.is_default})
             `;
         }
 

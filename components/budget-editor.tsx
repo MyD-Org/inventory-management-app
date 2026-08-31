@@ -38,7 +38,7 @@ import { ResourceLineAutocomplete } from "@/components/resource-line-autocomplet
 import type { SpecFieldChoice } from "@/lib/spec-choices"
 // Familias de materiales: el mapeo variante -> material declarado una vez en el
 // inventario. Elegir una arma la línea entera.
-import { defaultOption, lineFromFamily, syncLineWithFamily, type MaterialFamily } from "@/lib/material-family"
+import { defaultOption, lineFromFamily, optionsBySpecValue, syncLineWithFamily, type MaterialFamily } from "@/lib/material-family"
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -309,7 +309,7 @@ export function BudgetEditor({
             id: f.id,
             name: f.name,
             fieldLabel: specFields.find((sf) => sf.key === f.specFieldKey)?.label ?? f.specFieldKey,
-            variantCount: f.options.length,
+            variantCount: new Set(f.options.map((o) => o.specValue)).size,
             unitCost: defaultOption(f)?.unitCost ?? 0,
         }))
 
@@ -656,8 +656,11 @@ export function BudgetEditor({
                                                                         {" · varía según "}
                                                                         <span className="font-medium text-foreground">{fieldLabel}</span>
                                                                         {" · "}
+                                                                        {new Set(f.options.map((o) => o.specValue)).size}{" "}
+                                                                        {new Set(f.options.map((o) => o.specValue)).size === 1 ? "variante" : "variantes"}
+                                                                        {" · "}
                                                                         {f.options.length}{" "}
-                                                                        {f.options.length === 1 ? "variante" : "variantes"}
+                                                                        {f.options.length === 1 ? "material" : "materiales"}
                                                                     </p>
                                                                 </button>
                                                                 <Button
@@ -672,19 +675,24 @@ export function BudgetEditor({
                                                             </div>
                                                             {variantsOpen(i) && (
                                                                 <>
-                                                                    {f.options.map((o) => (
-                                                                        <div
-                                                                            key={o.specValue}
-                                                                            className="grid grid-cols-[110px_1fr_auto] items-center gap-2 text-xs"
-                                                                        >
-                                                                            <span className="truncate text-muted-foreground">
-                                                                                {variantLabel(f.specFieldKey, o.specValue)}
-                                                                            </span>
-                                                                            <span className="truncate">{o.label}</span>
-                                                                            <span className="whitespace-nowrap text-muted-foreground">
-                                                                                {formatArs(o.unitCost)}
-                                                                                {o.specValue === f.defaultSpecValue && " · con esta se calcula el costo"}
-                                                                            </span>
+                                                                    {Array.from(optionsBySpecValue(f).entries()).map(([specValue, options]) => (
+                                                                        <div key={specValue} className="space-y-0.5">
+                                                                            <p className="text-xs font-medium text-muted-foreground">
+                                                                                {variantLabel(f.specFieldKey, specValue)}
+                                                                            </p>
+                                                                            {options.map((o) => (
+                                                                                <div
+                                                                                    key={`${o.specValue}-${o.materialId}`}
+                                                                                    className="grid grid-cols-[1fr_auto] items-center gap-2 text-xs"
+                                                                                >
+                                                                                    <span className="truncate">{o.label}</span>
+                                                                                    <span className="whitespace-nowrap text-muted-foreground">
+                                                                                        {formatArs(o.unitCost)}
+                                                                                        {o.isDefault && specValue === f.defaultSpecValue && " · con esta se calcula el costo"}
+                                                                                        {o.isDefault && specValue !== f.defaultSpecValue && " · default"}
+                                                                                    </span>
+                                                                                </div>
+                                                                            ))}
                                                                         </div>
                                                                     ))}
                                                                     <p className="text-xs text-muted-foreground">

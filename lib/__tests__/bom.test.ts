@@ -64,6 +64,20 @@ describe("resolveBomLine", () => {
         expect(r.unmapped).toBe("led_color=neutro")
     })
 
+    it("cuando un color tiene varios materiales, usa el marcado como default", () => {
+        const line = tiraLed({
+            options: [
+                { specValue: "calido", materialId: 11, label: "Cálida A" },
+                { specValue: "calido", materialId: 110, label: "Cálida B", isDefault: true },
+                { specValue: "blanco", materialId: 10, label: "Blanca" },
+            ],
+        })
+        const r = resolveBomLine(line, { led_color: "calido" })
+        expect(r.materialId).toBe(110)
+        expect(r.label).toBe("Cálida B")
+        expect(r.substituted).toBe(true)
+    })
+
     it("avisa también si la línea declara un campo pero no tiene ninguna variante cargada", () => {
         const r = resolveBomLine(tiraLed({ options: [] }), { led_color: "calido" })
         expect(r.materialId).toBe(10)

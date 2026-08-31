@@ -10,19 +10,29 @@
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useListNavigation } from "@/hooks/use-list-navigation"
 import { Loader2, Plus, X } from "lucide-react"
 import { consumeOrderMaterials, searchInventoryMaterials } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import type { MaterialNeed } from "@/lib/orders"
 
+interface Alternative {
+    material_id: number
+    label: string
+    available: number | null
+}
+
 interface Row {
+    key: string
     material_id: number
     label: string
     qty: string
     available: number | null
     /** Lo que pide el pedido. null en las filas agregadas a mano. */
     pending: number | null
+    /** Opciones cuando la línea viene de una familia con varios materiales por color. */
+    alternatives: Alternative[]
 }
 
 function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEstan: number[] }) {
@@ -64,7 +74,7 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
         onSelect: (i) => {
             const r = opciones[i]
             if (!r) return
-            onPick({ ...r, qty: "1", pending: null })
+            onPick({ key: `extra:${r.material_id}`, ...r, qty: "1", pending: null, alternatives: [] })
             setQuery("")
             setAbierto(false)
         },
@@ -110,7 +120,7 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
                                     nav.active === i ? "bg-muted" : ""
                                 }`}
                                 onClick={() => {
-                                    onPick({ ...r, qty: "1", pending: null })
+                                    onPick({ key: `extra:${r.material_id}`, ...r, qty: "1", pending: null, alternatives: [] })
                                     setQuery("")
                                     setAbierto(false)
                                 }}
@@ -146,14 +156,19 @@ export function ConsumeMaterialsForm({
         setRows(
             needs
                 .filter((n) => n.material_id !== null && n.pending > 0)
-                .map((n) => ({
-                    material_id: n.material_id!,
-                    label: n.label,
-                    // Sugerimos lo pendiente, sin pasarnos de lo que hay.
-                    qty: String(Math.min(n.pending, n.available ?? n.pending)),
-                    available: n.available,
-                    pending: n.pending,
-                })),
+                .map((n) => {
+                    const key = n.family_id !== null ? `fam:${n.family_id}:${n.spec_value}` : `mat:${n.material_id}`
+                    return {
+                        key,
+                        material_id: n.material_id!,
+                        label: n.label,
+                        // Sugerimos lo pendiente, sin pasarnos de lo que hay.
+                        qty: String(Math.min(n.pending, n.available ?? n.pending)),
+                        available: n.available,
+                        pending: n.pending,
+                        alternatives: n.alternatives,
+                    }
+                }),
         )
     }, [needs])
 
@@ -205,8 +220,9 @@ export function ConsumeMaterialsForm({
             <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
                 {rows.map((r, idx) => {
                     const error = errorDe(r)
+                    const showSelector = r.alternatives.length > 1
                     return (
-                        <div key={r.material_id} className="flex items-start gap-3">
+                        <div key={r.key} className="flex items-start gap-3">
                             <div className="w-20 shrink-0">
                                 <Input
                                     type="number"
@@ -222,7 +238,43 @@ export function ConsumeMaterialsForm({
                             </div>
 
                             <div className="min-w-0 flex-1">
-                                <div className="text-base truncate">{r.label}</div>
+                                {showSelector ? (
+                                    <Select
+                                        value={String(r.material_id)}
+                                        onValueChange={(v) => {
+                                            const selected = r.alternatives.find((a) => a.material_id === Number(v))
+                                            if (!selected) return
+                                            setRows((rs) =>
+                                                rs.map((x, i) =>
+                                                    i === idx
+                                                        ? {
+                                                              ...x,
+                                                              material_id: selected.material_id,
+                                                              label: selected.label,
+                                                              available: selected.available,
+                                                          }
+                                                        : x,
+                                                ),
+                                            )
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-9 text-base">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {r.alternatives.map((a) => (
+                                                <SelectItem key={a.material_id} value={String(a.material_id)}>
+                                                    <span className="truncate">{a.label}</span>
+                                                    <span className="ml-2 text-xs text-muted-foreground">
+                                                        hay {a.available ?? "—"}
+                                                    </span>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <div className="text-base truncate">{r.label}</div>
+                                )}
                                 {error ? (
                                     <div className="text-sm text-destructive">{error}</div>
                                 ) : (

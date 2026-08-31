@@ -10,10 +10,14 @@ export interface BomOption {
     specValue: string
     materialId: number | null
     label: string
+    /** Cuando un color tiene varios materiales, indica cuál se usa por defecto. */
+    isDefault?: boolean
 }
 
 export interface BomLine {
     id: number
+    // Familia de materiales a la que pertenece la línea. null = mapeo propio.
+    familyId?: number | null
     // Material de REFERENCIA: el que define el costo de la línea en la hoja y el
     // que se usa cuando la variante no aplica o no está mapeada.
     materialId: number | null
@@ -35,6 +39,9 @@ export interface ResolvedBomLine {
     // material de referencia (que puede ser el equivocado), así que la línea del
     // pedido queda marcada para revisión en vez de descontar en silencio.
     unmapped: string | null
+    // Origen de la alternativa, para reconstruir las opciones al consumir stock.
+    familyId?: number | null
+    specValue?: string | null
 }
 
 // Devuelve el material real de una línea. El orden de las reglas importa:
@@ -51,10 +58,14 @@ export function resolveBomLine(line: BomLine, specs: Record<string, unknown>): R
     }
 
     const value = String(raw)
-    const match = line.options.find((o) => o.specValue === value)
-    if (!match) {
+    const matches = line.options.filter((o) => o.specValue === value)
+    if (matches.length === 0) {
         return { ...base, substituted: false, unmapped: `${line.specFieldKey}=${value}` }
     }
+
+    // Si un color tiene varios materiales, usa el marcado como default; si no hay
+    // marca, cae al primero para no romper el contrato anterior.
+    const match = matches.find((o) => o.isDefault) ?? matches[0]
 
     return {
         materialId: match.materialId,
@@ -62,6 +73,8 @@ export function resolveBomLine(line: BomLine, specs: Record<string, unknown>): R
         qty: line.qty,
         substituted: true,
         unmapped: null,
+        familyId: line.familyId ?? null,
+        specValue: value,
     }
 }
 

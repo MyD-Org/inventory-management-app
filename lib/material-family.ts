@@ -13,6 +13,8 @@ export interface MaterialFamilyOption {
     label: string // materials.name, siempre en vivo
     unitCost: number
     barcode: string
+    /** Indica cuál material representa al color para costeo y BOM por defecto. */
+    isDefault?: boolean
 }
 
 export interface MaterialFamily {
@@ -36,11 +38,29 @@ export interface FamilyLineFields {
     options: Array<{ specValue: string; materialId: number | null; label: string }>
 }
 
-// La variante con la que se costea. Cae a la primera si la predeterminada no
-// existe (familia recién creada, o el valor quedó fuera del vocabulario): es
-// mejor costear con algo cargado que dejar la línea en cero.
+// Agrupa las opciones de una familia por valor de spec. Un color puede tener
+// varios materiales; este helper es el punto único donde se maneja ese agrupamiento.
+export function optionsBySpecValue(family: MaterialFamily): Map<string, MaterialFamilyOption[]> {
+    const groups = new Map<string, MaterialFamilyOption[]>()
+    for (const o of family.options) {
+        const list = groups.get(o.specValue) ?? []
+        list.push(o)
+        groups.set(o.specValue, list)
+    }
+    return groups
+}
+
+// La variante con la que se costea. Si el color tiene varios materiales, usa el
+// marcado como default; si no hay marca, cae al primero. Cae a la primera opción
+// de la familia si la predeterminada no existe: es mejor costear con algo cargado
+// que dejar la línea en cero.
 export function defaultOption(family: MaterialFamily): MaterialFamilyOption | undefined {
-    return family.options.find((o) => o.specValue === family.defaultSpecValue) ?? family.options[0]
+    const bySpec = optionsBySpecValue(family)
+    const candidates = family.defaultSpecValue ? bySpec.get(family.defaultSpecValue) : undefined
+    if (candidates && candidates.length > 0) {
+        return candidates.find((o) => o.isDefault) ?? candidates[0]
+    }
+    return family.options[0]
 }
 
 // Elegir una familia arma la línea entera: nombre general, campo que la hace

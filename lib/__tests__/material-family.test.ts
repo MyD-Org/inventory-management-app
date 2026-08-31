@@ -51,6 +51,17 @@ describe("defaultOption", () => {
     it("no rompe con una familia sin variantes", () => {
         expect(defaultOption(tiraLed({ options: [] }))).toBeUndefined()
     })
+
+    it("cuando un color tiene varios materiales, usa el marcado como default", () => {
+        const family = tiraLed({
+            options: [
+                { specValue: "calido", materialId: 11, label: "Tira LED cálida A", unitCost: 1000, barcode: "A11" },
+                { specValue: "calido", materialId: 111, label: "Tira LED cálida B", unitCost: 1050, barcode: "A111", isDefault: true },
+                { specValue: "blanco", materialId: 10, label: "Tira LED blanca", unitCost: 900, barcode: "A10" },
+            ],
+        })
+        expect(defaultOption(family)?.materialId).toBe(111)
+    })
 })
 
 describe("lineFromFamily", () => {

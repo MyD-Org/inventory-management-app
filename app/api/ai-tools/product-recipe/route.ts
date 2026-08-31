@@ -53,8 +53,8 @@ export async function GET(request: NextRequest) {
             LEFT JOIN material_families f ON f.id = bm.family_id
             LEFT JOIN LATERAL (
                 SELECT json_agg(
-                    json_build_object('spec_value', fo.spec_value, 'material_id', fo.material_id, 'label', fm.name)
-                    ORDER BY fo.id
+                    json_build_object('spec_value', fo.spec_value, 'material_id', fo.material_id, 'label', fm.name, 'is_default', fo.is_default)
+                    ORDER BY LOWER(fo.spec_value) ASC, fm.name ASC
                 ) AS options
                 FROM material_family_options fo
                 JOIN materials fm ON fm.id = fo.material_id
