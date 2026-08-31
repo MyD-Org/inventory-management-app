@@ -59,10 +59,6 @@ export function OrdersShell({
                 <div className="w-full px-8 flex items-center justify-between h-14 gap-4">
                     <Link href="/pedidos" className="flex items-center gap-2 min-w-0">
                         <span className="font-semibold shrink-0">Pedidos</span>
-                        <span className="text-muted-foreground hidden sm:inline">·</span>
-                        <span className="text-base text-muted-foreground truncate hidden sm:inline">
-                            Taller Avantec
-                        </span>
                     </Link>
 
                     <div className="flex items-center gap-1 shrink-0">

@@ -62,7 +62,7 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                         className={`h-3.5 w-3.5 transition-transform ${abierto ? "rotate-90" : ""}`}
                     />
                     <span className="font-display text-base font-semibold text-foreground">
-                        Qué buscar al depósito
+                        Materiales a utilizar
                     </span>
                     <span className="font-mono text-xs text-muted-foreground/80">({needs.length})</span>
                 </button>

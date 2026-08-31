@@ -256,7 +256,7 @@ export default async function OrderDetailPage({
                         />
                     </section>
 
-                    {/* 2. Qué buscar al depósito, con su estado de stock */}
+                    {/* 2. Materiales a utilizar, con su estado de stock */}
                     <OrderMaterials orderId={order.id} needs={needs} />
 
                     {/* 3. Quién hizo qué, y las notas del taller */}
