@@ -690,13 +690,6 @@ export function BudgetEditor({
                                                                                     <span className="truncate">{o.label}</span>
                                                                                     <span className="whitespace-nowrap text-muted-foreground">
                                                                                         {formatArs(o.unitCost)}
-                                                                                        {/* isDefault marca, dentro de una variante, con qué
-                                                                                            material se trabaja si se elige esa variante. Y la
-                                                                                            variante predeterminada es la que la línea trae
-                                                                                            puesta. Ninguna de las dos define ya el costo: eso lo
-                                                                                            dice la cabecera. */}
-                                                                                        {o.isDefault && specValue === f.defaultSpecValue && " · el que usa esta línea"}
-                                                                                        {o.isDefault && specValue !== f.defaultSpecValue && " · el principal de la variante"}
                                                                                     </span>
                                                                                 </div>
                                                                             ))}
