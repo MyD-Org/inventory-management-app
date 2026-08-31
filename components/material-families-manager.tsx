@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ConfirmDialog } from "@/components/confirm-dialog"
-import { Layers, Loader2, Pencil, Plus, Trash2 } from "lucide-react"
+import { ChevronDown, Layers, Loader2, Pencil, Plus, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { formatArs } from "@/lib/format"
@@ -334,20 +334,23 @@ export function MaterialFamiliesManager({
                     {families.map((f) => {
                         const specCount = new Set(f.options.map((o) => o.specValue)).size
                         return (
-                            <div key={f.id} className="rounded-md border p-3">
+                            <details key={f.id} className="group rounded-md border p-3">
                                 <div className="flex items-start justify-between gap-2">
-                                    <div className="min-w-0">
-                                        <p className="flex items-center gap-1.5 font-medium">
-                                            <Layers className="h-4 w-4 shrink-0 text-primary" />
-                                            <span className="truncate">{f.name}</span>
-                                        </p>
-                                        <p className="mt-0.5 text-xs text-muted-foreground">
-                                            Varía según {fieldLabel(f.specFieldKey)} · {specCount}{" "}
-                                            {specCount === 1 ? "variante" : "variantes"} · {f.options.length}{" "}
-                                            {f.options.length === 1 ? "material" : "materiales"}
-                                            {f.defaultSpecValue === null && " · falta elegir con cuál se calcula el costo"}
-                                        </p>
-                                    </div>
+                                    <summary className="flex flex-1 cursor-pointer list-none items-start gap-2">
+                                        <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                                        <div className="min-w-0">
+                                            <p className="flex items-center gap-1.5 font-medium">
+                                                <Layers className="h-4 w-4 shrink-0 text-primary" />
+                                                <span className="truncate">{f.name}</span>
+                                            </p>
+                                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                                Varía según {fieldLabel(f.specFieldKey)} · {specCount}{" "}
+                                                {specCount === 1 ? "variante" : "variantes"} · {f.options.length}{" "}
+                                                {f.options.length === 1 ? "material" : "materiales"}
+                                                {f.defaultSpecValue === null && " · falta elegir con cuál se calcula el costo"}
+                                            </p>
+                                        </div>
+                                    </summary>
                                     <div className="flex shrink-0 gap-1">
                                         <Button variant="ghost" size="icon" onClick={() => openEdit(f)} title="Editar">
                                             <Pencil className="h-4 w-4" />
@@ -373,7 +376,7 @@ export function MaterialFamiliesManager({
                                         ))}
                                     </div>
                                 )}
-                            </div>
+                            </details>
                         )
                     })}
                 </div>
