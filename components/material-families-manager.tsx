@@ -392,8 +392,7 @@ export function MaterialFamiliesManager({
                                     <div className="mt-2 space-y-1 border-t pt-2">
                                         {f.defaultSpecValue !== null && (
                                             <p className="mb-2 text-xs font-medium text-muted-foreground">
-                                                Costo por {valueLabel(f.specFieldKey, f.defaultSpecValue)} ·{" "}
-                                                {costStrategyLabel(f.costStrategy)} · {formatArs(familyUnitCost(f))}
+                                                Costo · {costStrategyLabel(f.costStrategy)} · {formatArs(familyUnitCost(f))}
                                             </p>
                                         )}
                                         {f.options.map((o) => (
@@ -471,67 +470,10 @@ export function MaterialFamiliesManager({
 
                             {draft.fieldKey !== "" && (
                                 <div className="space-y-2">
-                                    <Label>Qué material sale para cada variante</Label>
-                                    <p className="text-xs text-muted-foreground">
-                                        Podés asociar varios materiales a un mismo color. El primero de cada color sale
-                                        por defecto al retirar stock; el costeo se define más abajo.
-                                    </p>
-                                    {draft.options.length === 0 ? (
-                                        <p className="text-xs text-muted-foreground">
-                                            Ese campo no tiene opciones cargadas. Agregalas en{" "}
-                                            <Link href="/pedidos/opciones" className="underline">
-                                                opciones de pedidos
-                                            </Link>
-                                            .
-                                        </p>
-                                    ) : (
+                                    {draft.options.length > 0 && (
                                         <>
-                                            {/* La pregunta se hace UNA vez arriba de la columna: repetirla en cada
-                                                fila obliga a una etiqueta corta que no se entiende sola. */}
-                                            {Array.from(groupBySpecValue(draft.options).entries()).map(([specValue, rows]) => {
-                                                const specLabel = valueLabel(draft.fieldKey, specValue)
-                                                return (
-                                                <div key={specValue} className="space-y-1 rounded-md border p-2">
-                                                    <p className="text-xs font-medium text-muted-foreground">
-                                                        {specLabel}
-                                                    </p>
-                                                    {rows.map((o) => (
-                                                        <div
-                                                            key={o.key}
-                                                            className="grid grid-cols-[1fr_auto] items-center gap-2"
-                                                        >
-                                                            <MaterialLineAutocomplete
-                                                                value={o.label}
-                                                                catalog={catalog}
-                                                                linked={o.materialId !== null}
-                                                                onPick={(m) => pickRowMaterial(o.key, m)}
-                                                                onText={(t) => updateRow(o.key, { materialId: null, label: t })}
-                                                            />
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-8 w-8"
-                                                                disabled={o.materialId === null && o.label === ""}
-                                                                onClick={() => clearRow(o.key)}
-                                                                title="Vaciar esta opción"
-                                                            >
-                                                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                                            </Button>
-                                                        </div>
-                                                    ))}
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-7 w-full justify-start text-xs text-muted-foreground hover:text-foreground"
-                                                        onClick={() => addMaterialToSpec(specValue)}
-                                                    >
-                                                        <Plus className="mr-1.5 h-3.5 w-3.5" />
-                                                        Agregar otro material
-                                                    </Button>
-                                                </div>
-                                                )
-                                            })}
-                                            <div className="grid gap-3 pt-1 sm:grid-cols-2">
+                                            <Label>Cómo se calcula el costo</Label>
+                                            <div className="grid gap-3 sm:grid-cols-2">
                                                 <div className="space-y-1">
                                                     <p className="text-xs text-muted-foreground">Variante de costo</p>
                                                     <Select
@@ -620,6 +562,71 @@ export function MaterialFamiliesManager({
                                                     </Select>
                                                 </div>
                                             )}
+                                        </>
+                                    )}
+
+                                    <Label className={draft.options.length > 0 ? "pt-2" : undefined}>
+                                        Qué material sale para cada variante
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Podés asociar varios materiales a un mismo color. El primero de cada color sale
+                                        por defecto al retirar stock.
+                                    </p>
+                                    {draft.options.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground">
+                                            Ese campo no tiene opciones cargadas. Agregalas en{" "}
+                                            <Link href="/pedidos/opciones" className="underline">
+                                                opciones de pedidos
+                                            </Link>
+                                            .
+                                        </p>
+                                    ) : (
+                                        <>
+                                            {/* La pregunta se hace UNA vez arriba de la columna: repetirla en cada
+                                                fila obliga a una etiqueta corta que no se entiende sola. */}
+                                            {Array.from(groupBySpecValue(draft.options).entries()).map(([specValue, rows]) => {
+                                                const specLabel = valueLabel(draft.fieldKey, specValue)
+                                                return (
+                                                <div key={specValue} className="space-y-1 rounded-md border p-2">
+                                                    <p className="text-xs font-medium text-muted-foreground">
+                                                        {specLabel}
+                                                    </p>
+                                                    {rows.map((o) => (
+                                                        <div
+                                                            key={o.key}
+                                                            className="grid grid-cols-[1fr_auto] items-center gap-2"
+                                                        >
+                                                            <MaterialLineAutocomplete
+                                                                value={o.label}
+                                                                catalog={catalog}
+                                                                linked={o.materialId !== null}
+                                                                onPick={(m) => pickRowMaterial(o.key, m)}
+                                                                onText={(t) => updateRow(o.key, { materialId: null, label: t })}
+                                                            />
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8"
+                                                                disabled={o.materialId === null && o.label === ""}
+                                                                onClick={() => clearRow(o.key)}
+                                                                title="Vaciar esta opción"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-7 w-full justify-start text-xs text-muted-foreground hover:text-foreground"
+                                                        onClick={() => addMaterialToSpec(specValue)}
+                                                    >
+                                                        <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                                        Agregar otro material
+                                                    </Button>
+                                                </div>
+                                                )
+                                            })}
                                         </>
                                     )}
                                 </div>
