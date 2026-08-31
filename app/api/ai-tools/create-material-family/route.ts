@@ -41,7 +41,10 @@ export async function POST(request: NextRequest) {
     const name = typeof b.name === "string" ? b.name.trim() : ""
     const specFieldKey = typeof b.spec_field_key === "string" ? b.spec_field_key.trim() : ""
     const defaultSpecValue = typeof b.default_spec_value === "string" ? b.default_spec_value.trim() : null
-    const costStrategy = (typeof b.cost_strategy === "string" ? b.cost_strategy : "default") as CostStrategy
+    // 'average' y no 'default': la migración 24 sacó 'default' del CHECK de la
+    // columna, así que omitir cost_strategy —que es lo que hace el agente cuando
+    // no le importa— terminaba en "Estrategia de costeo inválida".
+    const costStrategy = (typeof b.cost_strategy === "string" ? b.cost_strategy : "average") as CostStrategy
     const costMaterialId = Number(b.cost_material_id)
 
     if (!name) {
