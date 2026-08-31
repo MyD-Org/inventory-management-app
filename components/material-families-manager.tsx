@@ -433,7 +433,7 @@ export function MaterialFamiliesManager({
                     {draft !== null && (
                         <div className="space-y-4">
                             <div className="space-y-1.5">
-                                <Label htmlFor="family-name">Nombre general de la materia prima *</Label>
+                                <Label htmlFor="family-name">Nombre del grupo de materiales *</Label>
                                 <Input
                                     id="family-name"
                                     value={draft.name}
@@ -445,7 +445,7 @@ export function MaterialFamiliesManager({
 
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-1.5">
-                                    <Label>Varía según *</Label>
+                                    <Label>Característica que varía *</Label>
                                     <Select value={draft.fieldKey} onValueChange={setField}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Elegí el campo (color, óptica, grampa…)" />
@@ -462,7 +462,7 @@ export function MaterialFamiliesManager({
 
                                 {draft.fieldKey !== "" && draft.options.length > 0 && (
                                     <div className="space-y-1.5">
-                                        <Label>Cómo se calcula el costo</Label>
+                                        <Label>Método de costeo</Label>
                                         <Select
                                             value={draft.costStrategy}
                                             onValueChange={(v) =>
@@ -475,13 +475,13 @@ export function MaterialFamiliesManager({
                                             }
                                         >
                                             <SelectTrigger>
-                                                <SelectValue placeholder="Elegí cálculo" />
+                                                <SelectValue placeholder="Elegí método" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="default">Default</SelectItem>
-                                                <SelectItem value="average">Promedio de todos los materiales</SelectItem>
-                                                <SelectItem value="highest">Material más caro</SelectItem>
-                                                <SelectItem value="specific">Material específico</SelectItem>
+                                                <SelectItem value="default">Automático</SelectItem>
+                                                <SelectItem value="average">Promedio</SelectItem>
+                                                <SelectItem value="highest">Máximo</SelectItem>
+                                                <SelectItem value="specific">Manual</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
