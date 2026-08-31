@@ -438,10 +438,7 @@ export function MaterialFamiliesManager({
                                     placeholder="Placa 1 led"
                                     autoComplete="off"
                                 />
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    Así se va a llamar la línea en las hojas de costo. Sin el color ni la medida: eso son
-                                    las variantes.
-                                </p>
+
                             </div>
 
                             <div>
