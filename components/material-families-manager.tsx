@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -368,9 +369,11 @@ export function MaterialFamiliesManager({
                                                     {valueLabel(f.specFieldKey, o.specValue)}
                                                 </span>
                                                 <span className="truncate">{o.label}</span>
-                                                <span className="whitespace-nowrap text-muted-foreground">
+                                                <span className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
                                                     {formatArs(o.unitCost)}
-                                                    {o.isDefault && o.specValue === f.defaultSpecValue && " · usada para costear"}
+                                                    {o.isDefault && o.specValue === f.defaultSpecValue && (
+                                                        <Badge variant="secondary">Costeo</Badge>
+                                                    )}
                                                 </span>
                                             </div>
                                         ))}
