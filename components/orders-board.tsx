@@ -5,9 +5,9 @@
 // ARRASTRANDO la tarjeta; el selector vive en el detalle del pedido.
 // Drag & drop con la HTML5 Drag and Drop API nativa, sin dependencias.
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { CalendarClock, PackageX, TriangleAlert } from "lucide-react"
+import { CalendarClock, Loader2, PackageX, TriangleAlert } from "lucide-react"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import { BOARD_STATUSES, orderNeedsReview, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
@@ -68,9 +68,17 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
     const [over, setOver] = useState<string | null>(null)
     // Estado optimista: la tarjeta salta de columna al soltar, sin esperar al server.
     const [moved, setMoved] = useState<Record<number, OrderStatus>>({})
+    // Pedidos con la emisión de factura y remito en curso en Alegra.
+    const [emitiendo, setEmitiendo] = useState<Record<number, boolean>>({})
+    const [refrescando, startRefresh] = useTransition()
     // Sin esto, soltar la tarjeta dispara el click y navega al detalle sin que
     // nadie lo haya pedido.
     const draggedRef = useRef(false)
+
+    // Los datos nuevos ya llegaron: lo que falte ahora falta de verdad.
+    useEffect(() => {
+        if (!refrescando) setEmitiendo({})
+    }, [refrescando])
 
     const statusOf = (c: BoardCard) => moved[c.id] ?? c.status
 
@@ -79,10 +87,11 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
             modified_at: c.modified_at,
             delivery_date_verified_at: c.delivery_date_verified_at,
         })
+    // Mientras Alegra responde no se afirma que falte nada: todavía no se sabe.
     const missingInvoice = (c: BoardCard) =>
-        statusOf(c) === "por_facturar" && !c.alegra_invoice_id
+        !emitiendo[c.id] && statusOf(c) === "por_facturar" && !c.alegra_invoice_id
     const missingRemission = (c: BoardCard) =>
-        statusOf(c) === "por_facturar" && !c.alegra_remission_id
+        !emitiendo[c.id] && statusOf(c) === "por_facturar" && !c.alegra_remission_id
     // La franja roja es una sola: lo que frena la salida es que FALTE un papel,
     // sin importar cuál. Cuál falta lo dicen las etiquetas de la tarjeta.
     const missingDoc = (c: BoardCard) => missingInvoice(c) || missingRemission(c)
@@ -94,10 +103,21 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
         if ((cards.find((c) => c.id === id)?.status ?? null) === status) return
 
         setMoved((m) => ({ ...m, [id]: status }))
+        // Mover a esta columna dispara la emisión de la factura y el remito en
+        // Alegra: dos llamadas de red que tardan. Sin esto la tarjeta se pintaba
+        // "Falta emitir la factura" mientras se estaba emitiendo, que es un error
+        // que se desmiente solo un segundo después.
+        if (status === "por_facturar") setEmitiendo((e) => ({ ...e, [id]: true }))
+
         const result = await updateOrderStatus(id, status)
         if (result.error) {
             setMoved((m) => {
                 const next = { ...m }
+                delete next[id]
+                return next
+            })
+            setEmitiendo((e) => {
+                const next = { ...e }
                 delete next[id]
                 return next
             })
@@ -109,7 +129,10 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
         } else {
             toast.success(`Pasó a ${STATUS_LABELS[status]}`)
         }
-        router.refresh()
+        // Dentro de la transición: así el cartel de "emitiendo" se apaga cuando
+        // llegan los datos nuevos y no antes. Apagarlo al volver de la acción
+        // dejaba una ventana con la tarjeta vieja y el aviso rojo otra vez.
+        startRefresh(() => router.refresh())
     }
 
     return (
@@ -227,6 +250,13 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                             {/* Siempre los primeros tres, así la tarjeta
                                                 dice algo del trabajo aunque el pedido sea
                                                 largo. El resto se cuenta y se ve al abrir. */}
+                                            {emitiendo[card.id] && (
+                                                <span className="inline-flex w-fit items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">
+                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                    Emitiendo factura y remito…
+                                                </span>
+                                            )}
+
                                             {missingInvoice(card) && (
                                                 <span
                                                     className="inline-flex w-fit items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive"

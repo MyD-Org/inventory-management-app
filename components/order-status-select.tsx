@@ -7,6 +7,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
+import { Loader2 } from "lucide-react"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import { ORDER_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
@@ -37,8 +38,14 @@ export function OrderStatusSelect({ id, status }: { id: number; status: OrderSta
         router.refresh()
     }
 
+    // Pasar a "Facturar y remitir" emite los dos documentos en Alegra: dos llamadas
+    // de red. Sin una señal, el desplegable se queda mudo y quieto varios segundos
+    // y parece que no pasó nada.
+    const emitiendo = saving && value === "por_facturar"
+
     return (
-        <Select value={value} onValueChange={change} disabled={saving}>
+        <div className="flex items-center gap-2">
+            <Select value={value} onValueChange={change} disabled={saving}>
             <SelectTrigger // w-fit: el control se ajusta al texto. Con w-full el recuadro tomaba
                 // toda la celda y parecía un campo vacío enorme.
                 // dark:bg-transparent: el Select de shadcn trae un relleno propio
@@ -58,6 +65,13 @@ export function OrderStatusSelect({ id, status }: { id: number; status: OrderSta
                     </SelectItem>
                 ))}
             </SelectContent>
-        </Select>
+            </Select>
+            {emitiendo && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Emitiendo factura y remito…
+                </span>
+            )}
+        </div>
     )
 }
