@@ -1,6 +1,10 @@
 "use client"
 
-// Editor del vocabulario que consume el bot del CRM (GET /api/specs).
+// Editor del vocabulario de variaciones de producto. Se monta en
+// /settings/variaciones —configuración del inventario— y lo consumen tres lugares:
+// las familias de materiales, las fichas de producto y el bot del CRM
+// (GET /api/specs).
+//
 // Las opciones se DESACTIVAN en vez de borrarse: salen de la lista que ve el bot
 // pero los pedidos históricos que las usaron siguen siendo legibles.
 

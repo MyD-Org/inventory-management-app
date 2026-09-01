@@ -181,7 +181,8 @@ export async function createSpecField(key: string, label: string, freeText = fal
 
         const [{ next }] = await sql`SELECT COALESCE(MAX(position), 0) + 1 AS next FROM spec_fields`;
         await sql`INSERT INTO spec_fields (key, label, free_text, position) VALUES (${cleanKey}, ${label.trim()}, ${freeText}, ${next})`;
-        revalidatePath('/pedidos/opciones');
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
         return { ok: true, key: cleanKey };
     } catch (error) {
         console.error('Error en createSpecField:', error);
@@ -204,7 +205,8 @@ export async function createSpecOption(fieldKey: string, value: string, label: s
         if (exists) {
             if (exists.active) return { error: `"${cleanValue}" ya está en la lista` };
             await sql`UPDATE spec_options SET active = TRUE WHERE id = ${exists.id}`;
-            revalidatePath('/pedidos/opciones');
+            revalidatePath('/settings/variaciones');
+            revalidatePath('/materials/familias');
             return { ok: true, reactivated: true };
         }
 
@@ -215,7 +217,8 @@ export async function createSpecOption(fieldKey: string, value: string, label: s
             INSERT INTO spec_options (field_key, value, label, position)
             VALUES (${fieldKey}, ${cleanValue}, ${label.trim() || cleanValue}, ${next})
         `;
-        revalidatePath('/pedidos/opciones');
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
         return { ok: true };
     } catch (error) {
         console.error('Error en createSpecOption:', error);
@@ -231,7 +234,8 @@ export async function toggleSpecOption(id: number, active: boolean) {
 
     try {
         await sql`UPDATE spec_options SET active = ${active} WHERE id = ${id}`;
-        revalidatePath('/pedidos/opciones');
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
         return { ok: true };
     } catch (error) {
         console.error('Error en toggleSpecOption:', error);
@@ -245,7 +249,8 @@ export async function toggleSpecField(key: string, active: boolean) {
 
     try {
         await sql`UPDATE spec_fields SET active = ${active} WHERE key = ${key}`;
-        revalidatePath('/pedidos/opciones');
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
         return { ok: true };
     } catch (error) {
         console.error('Error en toggleSpecField:', error);
@@ -540,7 +545,8 @@ export async function deleteSpecOption(id: number) {
 
     try {
         await sql`DELETE FROM spec_options WHERE id = ${id}`;
-        revalidatePath('/pedidos/opciones');
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
         return { ok: true };
     } catch (error) {
         console.error('Error en deleteSpecOption:', error);
@@ -564,7 +570,8 @@ export async function deleteSpecField(key: string) {
             WHERE budget_material_id IN (SELECT id FROM budget_materials WHERE spec_field_key = ${key})
         `;
         await sql`DELETE FROM spec_fields WHERE key = ${key}`;
-        revalidatePath('/pedidos/opciones');
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
         revalidatePath('/fichas');
         return { ok: true };
     } catch (error) {

@@ -412,8 +412,8 @@ export function MaterialFamiliesManager({
         return (
             <p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
                 Todavía no hay campos de variación cargados. Cargá el vocabulario en{" "}
-                <Link href="/pedidos/opciones" className="underline">
-                    opciones de pedidos
+                <Link href="/settings/variaciones" className="underline">
+                    variaciones de producto
                 </Link>{" "}
                 (color de LED, óptica, grampa…) y volvé para armar las familias.
             </p>
@@ -654,8 +654,8 @@ export function MaterialFamiliesManager({
                                     {draft.options.length === 0 ? (
                                         <p className="text-xs text-muted-foreground">
                                             Ese campo no tiene opciones cargadas. Agregalas en{" "}
-                                            <Link href="/pedidos/opciones" className="underline">
-                                                opciones de pedidos
+                                            <Link href="/settings/variaciones" className="underline">
+                                                variaciones de producto
                                             </Link>
                                             .
                                         </p>
