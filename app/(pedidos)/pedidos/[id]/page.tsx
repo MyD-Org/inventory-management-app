@@ -11,11 +11,13 @@ import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
 import { OrderItemsEditor } from "@/components/order-items-editor"
 import { InvoiceButton } from "@/components/invoice-button"
+import { RemissionButton } from "@/components/remission-button"
+import { DocumentStaleTag } from "@/components/document-stale-tag"
 import { OrderMaterials } from "@/components/order-materials"
 import { DateField, PriorityField, TextField } from "@/components/order-props-editor"
 import { OrderCustomerField } from "@/components/order-customer-field"
 import { OrderActivity } from "@/components/order-activity"
-import { listInvoiceDrift, listOrderEvents } from "@/lib/order-events"
+import { describeDrift, listDocumentDrift, listOrderEvents } from "@/lib/order-events"
 
 export const dynamic = 'force-dynamic';
 
@@ -98,13 +100,14 @@ export default async function OrderDetailPage({
 
     // Los productos del selector salen del CATÁLOGO de Alegra, no de las hojas
     // de costo: un producto existe porque se vende, y la hoja es opcional.
-    const [needs, vocab, products, events, invoiceDrift] = await Promise.all([
+    const [needs, vocab, products, events, invoiceDrift, remissionDrift] = await Promise.all([
         materialNeeds(id),
         getSpecs(),
         listSellableProducts(),
         listOrderEvents(id),
-        // Qué se tocó desde que la factura quedó al día. Vacío si está sincronizada.
-        order.invoice_stale ? listInvoiceDrift(id) : Promise.resolve([]),
+        // Qué se tocó desde que cada documento quedó al día. Vacío si está en hora.
+        order.invoice_stale ? listDocumentDrift(id, "invoice") : Promise.resolve([]),
+        order.remission_stale ? listDocumentDrift(id, "remission") : Promise.resolve([]),
     ])
 
     // Specs en el orden del vocabulario y solo los valores: "ámbar · grampa larga · 25°"
@@ -210,22 +213,30 @@ export default async function OrderDetailPage({
                     <Fact label="Factura">
                             {order.alegra_invoice_id ? (
                                 <div className="flex flex-col items-start gap-1.5">
-                                    <a
-                                        href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-                                    >
-                                        {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
-                                        <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                    {/* La acción vive en el aviso de abajo, no acá:
-                                        dos botones iguales en la misma pantalla
-                                        hacen dudar de si hacen lo mismo. */}
+                                    {/* El triángulo va pegado al número: es de esa
+                                        factura de lo que avisa. Abre el detalle de
+                                        qué cambió, y el botón queda debajo. Así el
+                                        aviso no se lleva puesta la columna del
+                                        trabajo, que es lo que el taller lee. */}
+                                    <div className="flex items-center gap-1.5">
+                                        <a
+                                            href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                                        >
+                                            {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
+                                            <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                        {order.invoice_stale && (
+                                            <DocumentStaleTag
+                                                label="Factura desactualizada"
+                                                changes={invoiceDrift.map(describeDrift)}
+                                            />
+                                        )}
+                                    </div>
                                     {order.invoice_stale && (
-                                        <span className="text-xs font-medium text-amber-600">
-                                            desactualizada
-                                        </span>
+                                        <InvoiceButton orderId={order.id} mode="actualizar" />
                                     )}
                                 </div>
                             ) : (
@@ -235,6 +246,36 @@ export default async function OrderDetailPage({
                                 // El server nunca miró el estado; el gate era solo acá.
                                 <InvoiceButton orderId={order.id} />
                             )}
+                    </Fact>
+                    {/* El remito es independiente de la factura y en cualquier
+                        orden: a veces sale primero uno, a veces el otro. */}
+                    <Fact label="Remito">
+                        {order.alegra_remission_id ? (
+                            <div className="flex flex-col items-start gap-1.5">
+                                <div className="flex items-center gap-1.5">
+                                    <a
+                                        href={`https://app.alegra.com/remission/view/id/${order.alegra_remission_id}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                                    >
+                                        {order.alegra_remission_number ?? `#${order.alegra_remission_id}`}
+                                        <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                    {order.remission_stale && (
+                                        <DocumentStaleTag
+                                            label="Remito desactualizado"
+                                            changes={remissionDrift.map(describeDrift)}
+                                        />
+                                    )}
+                                </div>
+                                {order.remission_stale && (
+                                    <RemissionButton orderId={order.id} mode="actualizar" />
+                                )}
+                            </div>
+                        ) : (
+                            <RemissionButton orderId={order.id} />
+                        )}
                     </Fact>
                 </dl>
             </header>
@@ -249,49 +290,6 @@ export default async function OrderDetailPage({
                     }) && (
                         <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
                             Pedido modificado desde el CRM. Revisá la fecha de entrega.
-                        </div>
-                    )}
-                    {/* El pedido cambió después de facturar. NO se actualiza solo:
-                        escribir en la contabilidad de fondo es la clase de cosa que
-                        se descubre tarde. Se avisa y se ofrece el botón; decide quien
-                        terminó de corregir. */}
-                    {order.invoice_stale && (
-                        <div className="no-print rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 space-y-2.5">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                                <span>
-                                    El pedido cambió después de facturar: la factura{" "}
-                                    <a
-                                        href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="font-medium underline underline-offset-2"
-                                    >
-                                        {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
-                                    </a>{" "}
-                                    quedó desactualizada.
-                                </span>
-                                <InvoiceButton orderId={order.id} mode="actualizar" />
-                            </div>
-                            {/* Qué cambió, no solo que cambió: sin esto hay que abrir
-                                el historial y deducirlo evento por evento. */}
-                            {invoiceDrift.length > 0 && (
-                                <ul className="space-y-0.5 text-xs">
-                                    {invoiceDrift.map((e) => (
-                                        <li key={e.id} className="flex gap-1.5">
-                                            <span aria-hidden className="opacity-50">
-                                                ·
-                                            </span>
-                                            <span>
-                                                {e.kind === "item_added" && `Se agregó ${e.new_value}`}
-                                                {e.kind === "item_removed" && `Se quitó ${e.old_value}`}
-                                                {e.kind === "item_updated" &&
-                                                    `${e.body ? `${e.body}: ` : ""}${e.old_value} → ${e.new_value}`}
-                                                <span className="opacity-70"> — {e.actor_name}</span>
-                                            </span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
                         </div>
                     )}
                     <section>

@@ -246,6 +246,11 @@ export interface Order {
     invoice_warnings: string[]
     /** El pedido cambió después de facturar y la factura todavía no se actualizó. */
     invoice_stale: boolean
+    /** Remito emitido en Alegra. null = todavía no se remitió. */
+    alegra_remission_id: number | null
+    alegra_remission_number: string | null
+    /** El pedido cambió después de remitir y el remito todavía no se actualizó. */
+    remission_stale: boolean
     items: OrderItem[]
     modified_at: string | null
     delivery_date_verified_at: string | null
@@ -272,14 +277,21 @@ export function normalizeOrigin(v: unknown): OrderOrigin {
     return isOrderOrigin(limpio) ? (limpio as OrderOrigin) : "manual"
 }
 
-// El pedido cambió después de facturar: la factura de Alegra quedó diciendo otra
+// El pedido cambió: los documentos ya emitidos en Alegra quedaron diciendo otra
 // cosa. La llaman los tres caminos que tocan ítems, tanto desde la web como desde
-// la API del CRM. No hace nada si el pedido todavía no se facturó, así que se
-// puede llamar sin preguntar antes.
-export async function markInvoiceStale(orderId: number): Promise<void> {
+// la API del CRM.
+//
+// MARCA CADA DOCUMENTO POR SEPARADO y solo si existe: un pedido puede tener la
+// factura al día y el remito viejo, o al revés, porque se emiten y se actualizan
+// independientemente. No hace nada si el pedido no tiene ninguno de los dos, así
+// que se puede llamar sin preguntar antes.
+export async function markDocumentsStale(orderId: number): Promise<void> {
     await sql`
-        UPDATE orders SET invoice_stale = TRUE
-        WHERE id = ${orderId} AND alegra_invoice_id IS NOT NULL
+        UPDATE orders SET
+            invoice_stale = (alegra_invoice_id IS NOT NULL),
+            remission_stale = (alegra_remission_id IS NOT NULL)
+        WHERE id = ${orderId}
+          AND (alegra_invoice_id IS NOT NULL OR alegra_remission_id IS NOT NULL)
     `
 }
 
@@ -292,6 +304,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
                delivery_date_estimate::text AS delivery_date_estimate,
                source_conversation, notes, invoice_terms, invoice_notes, created_at, updated_at,
                alegra_invoice_id, alegra_invoice_number, invoice_warnings, invoice_stale,
+               alegra_remission_id, alegra_remission_number, remission_stale,
                modified_at::text AS modified_at,
                delivery_date_verified_at::text AS delivery_date_verified_at
         FROM orders WHERE id = ${orderId}

@@ -84,37 +84,64 @@ export async function logOrderEvents(
 }
 
 /**
- * Qué se le tocó al pedido DESPUÉS de que la factura quedó al día. Es lo que el
- * aviso de "factura desactualizada" enumera, para no obligar a nadie a abrir el
- * historial y deducirlo.
+ * Qué se le tocó al pedido DESPUÉS de que el documento quedó al día. Es lo que el
+ * aviso de "desactualizada" enumera, para no obligar a nadie a abrir el historial
+ * y deducirlo evento por evento.
  *
- * Solo eventos de ítems: son los únicos que cambian lo que dice la factura. Un
- * cambio de prioridad no la desalinea y meterlo en la lista sería ruido.
+ * Solo eventos de ítems: son los únicos que cambian lo que dice el documento. Un
+ * cambio de prioridad no lo desalinea y meterlo en la lista sería ruido.
  *
- * El corte se hace EN SQL contra invoice_synced_at y no comparando fechas en JS:
- * las dos vienen de Postgres y compararlas allá evita el ida y vuelta de formatos.
+ * El corte se hace EN SQL contra la marca de sincronización y no comparando fechas
+ * en JS: las dos vienen de Postgres y compararlas allá evita el ida y vuelta de
+ * formatos. La consulta está escrita dos veces, una por documento, porque el
+ * template de Neon interpola VALORES y no nombres de columna.
  */
-export async function listInvoiceDrift(orderId: number): Promise<OrderEvent[]> {
+export async function listDocumentDrift(
+    orderId: number,
+    doc: "invoice" | "remission",
+): Promise<OrderEvent[]> {
     try {
-        const rows = await sql`
-            SELECT e.id, e.actor_name, e.actor_email, e.kind, e.field,
-                   e.old_value, e.new_value, e.body,
-                   e.created_at::text AS created_at
-            FROM order_events e
-            JOIN orders o ON o.id = e.order_id
-            WHERE e.order_id = ${orderId}
-              AND o.invoice_synced_at IS NOT NULL
-              AND e.created_at > o.invoice_synced_at
-              AND e.kind IN ('item_added', 'item_updated', 'item_removed')
-            ORDER BY e.created_at ASC, e.id ASC
-        `
+        const rows =
+            doc === "invoice"
+                ? await sql`
+                    SELECT e.id, e.actor_name, e.actor_email, e.kind, e.field,
+                           e.old_value, e.new_value, e.body,
+                           e.created_at::text AS created_at
+                    FROM order_events e
+                    JOIN orders o ON o.id = e.order_id
+                    WHERE e.order_id = ${orderId}
+                      AND o.invoice_synced_at IS NOT NULL
+                      AND e.created_at > o.invoice_synced_at
+                      AND e.kind IN ('item_added', 'item_updated', 'item_removed')
+                    ORDER BY e.created_at ASC, e.id ASC
+                `
+                : await sql`
+                    SELECT e.id, e.actor_name, e.actor_email, e.kind, e.field,
+                           e.old_value, e.new_value, e.body,
+                           e.created_at::text AS created_at
+                    FROM order_events e
+                    JOIN orders o ON o.id = e.order_id
+                    WHERE e.order_id = ${orderId}
+                      AND o.remission_synced_at IS NOT NULL
+                      AND e.created_at > o.remission_synced_at
+                      AND e.kind IN ('item_added', 'item_updated', 'item_removed')
+                    ORDER BY e.created_at ASC, e.id ASC
+                `
         return rows as OrderEvent[]
     } catch (error) {
         // Igual que la historia: si esto falla, el pedido se abre lo mismo. El
         // aviso pierde el detalle, no la advertencia.
-        console.error("No se pudo leer qué cambió desde la factura:", error)
+        console.error("No se pudo leer qué cambió desde la emisión:", error)
         return []
     }
+}
+
+/** El evento contado en una línea: "Se agregó 2 × Optic 1 — Dalila". */
+export function describeDrift(e: OrderEvent): string {
+    const quien = e.actor_name ? ` — ${e.actor_name}` : ""
+    if (e.kind === "item_added") return `Se agregó ${e.new_value}${quien}`
+    if (e.kind === "item_removed") return `Se quitó ${e.old_value}${quien}`
+    return `${e.body ? `${e.body}: ` : ""}${e.old_value} → ${e.new_value}${quien}`
 }
 
 export async function listOrderEvents(orderId: number): Promise<OrderEvent[]> {

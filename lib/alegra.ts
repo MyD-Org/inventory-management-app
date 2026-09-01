@@ -293,6 +293,76 @@ export interface CreatedInvoice {
     url: string
 }
 
+// ── Remitos ──────────────────────────────────────────────────────────────────
+
+export interface CreatedRemission {
+    id: number
+    number: string | null
+    url: string
+}
+
+// Reescribe las líneas de un remito YA EMITIDO, cuando el pedido cambió después.
+// Mismo criterio que updateInvoice: se manda el array completo de líneas y puede
+// fallar por motivos de negocio, no solo de formato.
+export async function updateRemission(
+    remissionId: number,
+    args: { lines: EstimateLine[]; observations?: string },
+): Promise<CreatedRemission> {
+    const body: Record<string, unknown> = { items: args.lines }
+    if (args.observations !== undefined) body.observations = args.observations
+
+    const rem = await alegraFetch<{ id: number; number?: string | number; numberTemplate?: { fullNumber?: string; number?: string | number } }>(
+        `/remissions/${remissionId}`,
+        { method: "PUT", body: JSON.stringify(body) },
+    )
+
+    const number = rem.numberTemplate?.fullNumber ?? rem.numberTemplate?.number ?? rem.number ?? null
+    return {
+        id: Number(rem.id),
+        number: number != null ? String(number) : null,
+        url: `https://app.alegra.com/remission/view/id/${rem.id}`,
+    }
+}
+
+// Emite un remito. ESCRIBE en la contabilidad real, igual que createInvoice.
+//
+// SIN NUMERACIÓN EXPLÍCITA: a diferencia de las facturas, acá no se manda
+// numberTemplate. Los remitos de la cuenta se numeran solos y meterse a elegir la
+// numeración sería inventar una decisión que nadie tomó.
+//
+// LAS LÍNEAS VAN EN CERO y eso lo decide quien llama, no esta función: acá se
+// manda lo que venga. Ver lib/remissions.ts para el porqué.
+export async function createRemission(args: {
+    clientId: number
+    lines: EstimateLine[]
+    observations?: string
+}): Promise<CreatedRemission> {
+    const today = new Date().toISOString().slice(0, 10)
+
+    const body: Record<string, unknown> = {
+        documentName: "remission",
+        client: args.clientId,
+        date: today,
+        // Alegra la exige. Un remito no vence: se manda la misma fecha para no
+        // inventar un plazo que el taller no maneja.
+        dueDate: today,
+        items: args.lines,
+    }
+    if (args.observations) body.observations = args.observations
+
+    const rem = await alegraFetch<{ id: number; number?: string | number; numberTemplate?: { fullNumber?: string; number?: string | number } }>(
+        `/remissions`,
+        { method: "POST", body: JSON.stringify(body) },
+    )
+
+    const number = rem.numberTemplate?.fullNumber ?? rem.numberTemplate?.number ?? rem.number ?? null
+    return {
+        id: Number(rem.id),
+        number: number != null ? String(number) : null,
+        url: `https://app.alegra.com/remission/view/id/${rem.id}`,
+    }
+}
+
 // Reescribe las líneas de una factura YA EMITIDA. Se usa cuando el pedido cambió
 // después de facturar: en vez de emitir una segunda factura, se corrige la que hay.
 //

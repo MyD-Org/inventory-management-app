@@ -259,7 +259,8 @@ export async function invoiceOrder(
     const notes = opts.notes?.trim() || null
 
     const [existing] = await sql`
-        SELECT alegra_invoice_id, alegra_invoice_number FROM orders WHERE id = ${orderId}
+        SELECT alegra_invoice_id, alegra_invoice_number, alegra_remission_number
+        FROM orders WHERE id = ${orderId}
     `
     if (existing?.alegra_invoice_id) {
         const preview = await previewInvoice(orderId)
@@ -289,10 +290,18 @@ export async function invoiceOrder(
 
     const numberTemplate = await resolveNumberTemplate(preview.clientName)
 
+    // Si el pedido ya se remitió, la factura lo nombra. Alegra tiene una relación
+    // nativa (POST /invoices con "remissions": [id]) que acá NO se usa: toma las
+    // líneas del remito tal cual, y como el remito va en cero la factura saldría
+    // en cero. Entre el vínculo automático y que la plata esté bien, gana la plata.
+    const observations = existing?.alegra_remission_number
+        ? `Pedido #${orderId} · Remito ${existing.alegra_remission_number}`
+        : `Pedido #${orderId}`
+
     const creada = await createInvoice({
         clientId: preview.clientId,
         lines: lineas,
-        observations: `Pedido #${orderId}`,
+        observations,
         numberTemplateId: numberTemplate?.id,
         terms,
         invoiceNotes: notes,
