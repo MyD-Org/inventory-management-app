@@ -8,9 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, Lock } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { signOut } from 'next-auth/react';
 import { useToast } from '@/hooks/use-toast';
 
-export function ChangePasswordForm() {
+export function ChangePasswordForm({ temporal = false }: { temporal?: boolean }) {
     const [state, dispatch] = useFormState(changePassword, undefined);
     const { toast } = useToast();
     const formRef = useRef<HTMLFormElement>(null);
@@ -21,6 +22,13 @@ export function ChangePasswordForm() {
                 description: state,
             });
             formRef.current?.reset();
+            // La marca de "contraseña temporal" viaja en el token, que se emitió al
+            // entrar: sin cerrar sesión el middleware seguiría rebotando a esta misma
+            // pantalla con la contraseña nueva ya guardada. Y de paso muere la sesión
+            // que se abrió con una clave que conocían dos personas.
+            if (temporal) {
+                signOut({ callbackUrl: '/login' });
+            }
         } else if (state) {
             toast("Error", {
                 description: state,
@@ -30,14 +38,16 @@ export function ChangePasswordForm() {
                 },
             });
         }
-    }, [state, toast]);
+    }, [state, toast, temporal]);
 
     return (
         <Card>
             <CardHeader>
                 <CardTitle>Cambiar Contraseña</CardTitle>
                 <CardDescription>
-                    Asegúrese de usar una contraseña segura.
+                    {temporal
+                        ? 'Tu contraseña actual es temporal: la puso un administrador y la conocen dos personas. Elegí una nueva para poder usar el sistema.'
+                        : 'Asegúrese de usar una contraseña segura.'}
                 </CardDescription>
             </CardHeader>
             <CardContent>
