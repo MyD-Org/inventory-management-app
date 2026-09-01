@@ -2,8 +2,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { PackageX } from "lucide-react"
 
-// Qué se ve al abrir un pedido que no está: borrado, o un número de más en la
-// dirección.
+// Qué se ve al abrir un pedido que no está.
 //
 // EXISTE PORQUE SIN ESTO NEXT MUESTRA SU 404 PELADO, que reemplaza la pantalla
 // entera: sin el shell del taller, sin navegación y sin forma de volver que no
@@ -18,7 +17,7 @@ export default function PedidoNoEncontrado() {
             <PackageX className="mx-auto h-10 w-10 text-muted-foreground" />
             <h1 className="mt-4 font-display text-2xl font-bold">Ese pedido no existe</h1>
             <p className="mt-2 text-base text-muted-foreground">
-                Puede que se haya borrado, o que el número de la dirección no sea el correcto.
+                Puede que se haya borrado.
             </p>
             <div className="mt-6 flex items-center justify-center gap-2">
                 <Button asChild>
