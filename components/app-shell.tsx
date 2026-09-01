@@ -164,7 +164,6 @@ function SidebarContent({
         {!collapsed && (
           <div className="min-w-0">
             <p className="text-base font-bold leading-tight">Sistema de Inventario</p>
-            <p className="text-xs text-sidebar-foreground/60">Materias Primas</p>
           </div>
         )}
       </Link>
