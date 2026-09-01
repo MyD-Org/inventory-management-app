@@ -17,7 +17,7 @@ import {
     diffSpecs,
     getSpecs,
     listSellableProducts,
-    markInvoiceStale,
+    markDocumentsStale,
     materialNeeds,
     ORDER_PRIORITIES,
     ORDER_STATUSES,
@@ -418,7 +418,7 @@ export async function updateOrderItem(
 
     const result = await updateOrderItemInternal(itemId, patch);
     if (result.ok) {
-        await markInvoiceStale(item.order_id);
+        await markDocumentsStale(item.order_id);
         const cambioCantidad =
             patch.quantity !== undefined && Number(patch.quantity) !== Number(item.quantity);
 
@@ -456,7 +456,7 @@ export async function deleteOrderItem(itemId: number): Promise<import('@/lib/ord
 
     const result = await deleteOrderItemInternal(itemId);
     if (result.ok) {
-        await markInvoiceStale(item.order_id);
+        await markDocumentsStale(item.order_id);
         await logOrderEvent(item.order_id, {
             kind: 'item_removed',
             oldValue: `${item.quantity} × ${item.product}`,
@@ -478,7 +478,7 @@ export async function addOrderItem(
 
     const result = await addOrderItemInternal(orderId, payload);
     if (result.ok) {
-        await markInvoiceStale(orderId);
+        await markDocumentsStale(orderId);
         await logOrderEvent(orderId, {
             kind: 'item_added',
             newValue: `${payload.quantity} × ${payload.product}`,

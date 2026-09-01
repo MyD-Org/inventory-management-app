@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
-import { addOrderItemInternal, markInvoiceStale, missingMaterials, readOrder } from "@/lib/orders"
+import { addOrderItemInternal, markDocumentsStale, missingMaterials, readOrder } from "@/lib/orders"
 import { isApiEditable } from "@/lib/order-statuses"
 import { apiActor, logOrderEvent } from "@/lib/order-events"
 
@@ -63,7 +63,7 @@ export async function POST(
             SET modified_at = NOW(), delivery_date_verified_at = NULL
             WHERE id = ${id}
         `
-        await markInvoiceStale(id)
+        await markDocumentsStale(id)
 
         await logOrderEvent(id, {
             kind: "item_added",

@@ -19,7 +19,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { Loader2, Truck, TriangleAlert } from "lucide-react"
+import { Loader2, RefreshCw, Truck, TriangleAlert } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface Linea {
@@ -36,7 +36,15 @@ interface Preview {
     clientId: number | null
 }
 
-export function RemissionButton({ orderId }: { orderId: number }) {
+export function RemissionButton({
+    orderId,
+    mode = "emitir",
+}: {
+    orderId: number
+    /** "actualizar" = ya hay remito y el pedido cambió después. */
+    mode?: "emitir" | "actualizar"
+}) {
+    const actualizando = mode === "actualizar"
     const router = useRouter()
     const { toast } = useToast()
     const [open, setOpen] = useState(false)
@@ -65,23 +73,28 @@ export function RemissionButton({ orderId }: { orderId: number }) {
     async function emitir() {
         setEmitiendo(true)
         try {
-            const res = await fetch(`/api/pedidos/${orderId}/remito`, { method: "POST" })
+            const res = await fetch(`/api/pedidos/${orderId}/remito`, {
+                method: actualizando ? "PUT" : "POST",
+            })
             const data = await res.json()
             if (!res.ok) {
-                toast.error("No se pudo emitir el remito", { description: data.error })
+                toast.error(actualizando ? "No se pudo actualizar el remito" : "No se pudo emitir el remito", {
+                    description: data.error,
+                })
                 return
             }
+            const verbo = actualizando ? "actualizado" : "emitido"
             if (data.warnings?.length > 0) {
-                toast.warning(`Remito ${data.remissionNumber ?? data.remissionId} emitido`, {
+                toast.warning(`Remito ${data.remissionNumber ?? data.remissionId} ${verbo}`, {
                     description: data.warnings.join(" "),
                 })
             } else {
-                toast.success(`Remito ${data.remissionNumber ?? data.remissionId} emitido`)
+                toast.success(`Remito ${data.remissionNumber ?? data.remissionId} ${verbo}`)
             }
             setOpen(false)
             router.refresh()
         } catch {
-            toast.error("No se pudo emitir el remito")
+            toast.error(actualizando ? "No se pudo actualizar el remito" : "No se pudo emitir el remito")
         } finally {
             setEmitiendo(false)
         }
@@ -95,16 +108,21 @@ export function RemissionButton({ orderId }: { orderId: number }) {
             <Button variant="outline" size="sm" onClick={abrir} disabled={cargando} className="no-print">
                 {cargando ? (
                     <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                ) : actualizando ? (
+                    <RefreshCw className="mr-2 h-3.5 w-3.5" />
                 ) : (
                     <Truck className="mr-2 h-3.5 w-3.5" />
                 )}
-                Emitir remito
+                {actualizando ? "Actualizar remito" : "Emitir remito"}
             </Button>
 
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="max-w-2xl w-[calc(100%-2rem)] overflow-hidden">
                     <DialogHeader>
-                        <DialogTitle>Remito para {preview?.clientName ?? "el cliente"}</DialogTitle>
+                        <DialogTitle>
+                            {actualizando ? "Actualizar remito de " : "Remito para "}
+                            {preview?.clientName ?? "el cliente"}
+                        </DialogTitle>
                     </DialogHeader>
 
                     {preview && (
@@ -154,7 +172,7 @@ export function RemissionButton({ orderId }: { orderId: number }) {
                         </Button>
                         <Button onClick={emitir} disabled={emitiendo || sinCliente || sinLineas}>
                             {emitiendo && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                            Emitir en Alegra
+                            {actualizando ? "Actualizar en Alegra" : "Emitir en Alegra"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

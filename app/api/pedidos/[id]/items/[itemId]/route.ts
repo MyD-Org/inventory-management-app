@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
-import { deleteOrderItemInternal, diffSpecs, markInvoiceStale, readOrder, updateOrderItemInternal } from "@/lib/orders"
+import { deleteOrderItemInternal, diffSpecs, markDocumentsStale, readOrder, updateOrderItemInternal } from "@/lib/orders"
 import { isApiEditable } from "@/lib/order-statuses"
 import { apiActor, logOrderEvent } from "@/lib/order-events"
 
@@ -20,9 +20,9 @@ async function markModified(orderId: number) {
         SET modified_at = NOW(), delivery_date_verified_at = NULL
         WHERE id = ${orderId}
     `
-    // Si el pedido ya estaba facturado, la factura quedó vieja. El CRM edita por
-    // acá, así que sin esto un cambio del CRM desalinea la factura sin avisar.
-    await markInvoiceStale(orderId)
+    // Si el pedido ya tenía factura o remito, quedaron viejos. El CRM edita por
+    // acá, así que sin esto un cambio del CRM los desalinea sin avisar.
+    await markDocumentsStale(orderId)
 }
 
 export async function PATCH(

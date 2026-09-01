@@ -1,5 +1,5 @@
 import { sql } from "@/lib/database"
-import { createRemission, type EstimateLine } from "@/lib/alegra"
+import { createRemission, updateRemission, type EstimateLine } from "@/lib/alegra"
 import { previewInvoice, type InvoicePreview } from "@/lib/invoicing"
 
 // Remito del pedido en Alegra: qué mercadería sale del depósito.
@@ -126,6 +126,7 @@ export async function remitOrder(orderId: number): Promise<RemissionResult> {
             alegra_remission_id = ${creado.id},
             alegra_remission_number = ${creado.number},
             alegra_remitted_at = NOW(),
+            remission_synced_at = NOW(),
             remission_warnings = ${JSON.stringify(preview.warnings)}::jsonb
         WHERE id = ${orderId}
     `
@@ -136,6 +137,64 @@ export async function remitOrder(orderId: number): Promise<RemissionResult> {
         remissionId: creado.id,
         remissionNumber: creado.number,
         remissionUrl: creado.url,
+        dryRun: false,
+    }
+}
+
+/**
+ * Poner al día el remito de un pedido que cambió después de emitirse.
+ *
+ * Espejo exacto de updateOrderInvoice: edita el MISMO remito, no emite otro, y es
+ * manual a propósito. Lo único distinto es que acá no hay importes que recalcular.
+ */
+export async function updateOrderRemission(orderId: number): Promise<RemissionResult> {
+    const [existing] = await sql`
+        SELECT alegra_remission_id, alegra_remission_number, alegra_invoice_number
+        FROM orders WHERE id = ${orderId}
+    `
+    if (!existing?.alegra_remission_id) {
+        throw new Error("El pedido no tiene remito emitido: no hay nada que actualizar.")
+    }
+
+    const preview = await previewInvoice(orderId)
+    if (preview.lines.length === 0) {
+        throw new Error("El pedido no tiene ninguna línea remitible: el remito no se tocó.")
+    }
+
+    const lineas: EstimateLine[] = preview.lines.map((l) => ({
+        id: l.alegraItemId,
+        description: l.description,
+        price: 0,
+        quantity: l.quantity,
+    }))
+
+    const actualizado = await updateRemission(Number(existing.alegra_remission_id), {
+        lines: lineas,
+        // La referencia a la factura se rehace acá: puede haberse emitido después
+        // del remito, y en ese caso el remito todavía no la nombraba.
+        observations: existing.alegra_invoice_number
+            ? `Pedido #${orderId} · Factura ${existing.alegra_invoice_number}`
+            : `Pedido #${orderId}`,
+    })
+
+    // Recién con Alegra confirmando se baja la bandera.
+    await sql`
+        UPDATE orders SET
+            remission_warnings = ${JSON.stringify(preview.warnings)}::jsonb,
+            remission_stale = FALSE,
+            remission_synced_at = NOW()
+        WHERE id = ${orderId}
+    `
+
+    return {
+        orderId,
+        clientId: preview.clientId,
+        clientName: preview.clientName,
+        lines: toRemissionLines(preview),
+        warnings: preview.warnings,
+        remissionId: actualizado.id,
+        remissionNumber: actualizado.number ?? ((existing.alegra_remission_number as string) ?? null),
+        remissionUrl: actualizado.url,
         dryRun: false,
     }
 }

@@ -301,6 +301,29 @@ export interface CreatedRemission {
     url: string
 }
 
+// Reescribe las líneas de un remito YA EMITIDO, cuando el pedido cambió después.
+// Mismo criterio que updateInvoice: se manda el array completo de líneas y puede
+// fallar por motivos de negocio, no solo de formato.
+export async function updateRemission(
+    remissionId: number,
+    args: { lines: EstimateLine[]; observations?: string },
+): Promise<CreatedRemission> {
+    const body: Record<string, unknown> = { items: args.lines }
+    if (args.observations !== undefined) body.observations = args.observations
+
+    const rem = await alegraFetch<{ id: number; number?: string | number; numberTemplate?: { fullNumber?: string; number?: string | number } }>(
+        `/remissions/${remissionId}`,
+        { method: "PUT", body: JSON.stringify(body) },
+    )
+
+    const number = rem.numberTemplate?.fullNumber ?? rem.numberTemplate?.number ?? rem.number ?? null
+    return {
+        id: Number(rem.id),
+        number: number != null ? String(number) : null,
+        url: `https://app.alegra.com/remission/view/id/${rem.id}`,
+    }
+}
+
 // Emite un remito. ESCRIBE en la contabilidad real, igual que createInvoice.
 //
 // SIN NUMERACIÓN EXPLÍCITA: a diferencia de las facturas, acá no se manda
