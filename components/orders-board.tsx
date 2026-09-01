@@ -35,6 +35,8 @@ export interface BoardCard {
     // null = aún no se emitió. Se usa para marcar tarjetas en la columna
     // "por_facturar" que todavía necesitan la factura antes de salir.
     alegra_invoice_id: string | null
+    // Lo mismo para el remito: los dos documentos frenan la salida del pedido.
+    alegra_remission_id: string | null
     modified_at: string | null
     delivery_date_verified_at: string | null
 }
@@ -79,6 +81,11 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
         })
     const missingInvoice = (c: BoardCard) =>
         statusOf(c) === "por_facturar" && !c.alegra_invoice_id
+    const missingRemission = (c: BoardCard) =>
+        statusOf(c) === "por_facturar" && !c.alegra_remission_id
+    // La franja roja es una sola: lo que frena la salida es que FALTE un papel,
+    // sin importar cuál. Cuál falta lo dicen las etiquetas de la tarjeta.
+    const missingDoc = (c: BoardCard) => missingInvoice(c) || missingRemission(c)
 
     // Las tarjetas llegan filtradas desde OrdersView.
     const visible = cards
@@ -179,7 +186,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                                 // salida del pedido. Que falten materiales es parte del
                                                 // trabajo normal del taller: se marca con el glifo de
                                                 // arriba, no pintando la tarjeta entera.
-                                                missingInvoice(card)
+                                                missingDoc(card)
                                                     ? "border-l-[3px] border-l-destructive pl-3 pr-3.5"
                                                     : needsDateReview(card)
                                                       ? "border-l-[3px] border-l-amber-500 pl-3 pr-3.5"
@@ -223,10 +230,20 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                             {missingInvoice(card) && (
                                                 <span
                                                     className="inline-flex w-fit items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive"
-                                                    title="El pedido está por facturar pero falta emitir la factura"
+                                                    title="El pedido está para facturar y remitir, pero falta emitir la factura"
                                                 >
                                                     <TriangleAlert className="h-3 w-3" />
                                                     Falta emitir la factura
+                                                </span>
+                                            )}
+
+                                            {missingRemission(card) && (
+                                                <span
+                                                    className="inline-flex w-fit items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive"
+                                                    title="El pedido está para facturar y remitir, pero falta emitir el remito"
+                                                >
+                                                    <TriangleAlert className="h-3 w-3" />
+                                                    Falta emitir el remito
                                                 </span>
                                             )}
 

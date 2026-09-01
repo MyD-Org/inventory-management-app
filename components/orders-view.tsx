@@ -68,11 +68,14 @@ export function OrdersView({
     // El tablero excluye los cancelados y la lista no, así que los números
     // acompañan a lo que tenés delante en vez de contar algo que no ves.
     const isLate = (c: BoardCard) => isOverdue(c.delivery_date_estimate, c.status)
-    const missingInvoice = (c: BoardCard) => c.status === "por_facturar" && !c.alegra_invoice_id
+    // Un pedido cuenta UNA vez aunque le falten los dos papeles: el contador mide
+    // cuántos pedidos están frenados, no cuántos documentos hay que emitir.
+    const missingDoc = (c: BoardCard) =>
+        c.status === "por_facturar" && (!c.alegra_invoice_id || !c.alegra_remission_id)
     const counts = {
         vencidos: cards.filter(isLate).length,
         sinMateriales: cards.filter((c) => c.needs_review).length,
-        sinFactura: cards.filter(missingInvoice).length,
+        sinDocumentos: cards.filter(missingDoc).length,
         estaSemana: cards.filter((c) => isDueWithinAWeek(c.delivery_date_estimate, c.status)).length,
         activos: cards.length,
     }
@@ -104,7 +107,7 @@ export function OrdersView({
                     active={filter === "vencidos"}
                     onClick={() => setFilter((f) => (f === "vencidos" ? null : "vencidos"))}
                 />
-                <Stat label="Falta facturar" value={counts.sinFactura} />
+                <Stat label="Faltan papeles" value={counts.sinDocumentos} />
                 <Stat label="Entregan esta semana" value={counts.estaSemana} />
                 <Stat label={lista ? "Pedidos" : "Activos"} value={counts.activos} />
             </div>

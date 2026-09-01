@@ -10,6 +10,7 @@ import { auth } from '@/auth';
 import { logOrderEvent, logOrderEvents } from '@/lib/order-events';
 import { sql } from '@/lib/database';
 import { invoiceOrder } from '@/lib/invoicing';
+import { remitOrder } from '@/lib/remissions';
 import {
     addOrderItemInternal,
     createOrder,
@@ -98,13 +99,16 @@ export async function updateOrderStatus(id: number, status: string) {
             });
         }
 
-        // Al pasar a 'por_facturar' intentamos emitir el borrador en Alegra de
-        // forma automática. Si falla, el estado cambia igual y queda visible el
-        // botón manual para reintentar.
+        // Al pasar a 'por_facturar' intentamos emitir los DOS documentos en Alegra
+        // de forma automática: la factura y el remito. Si alguno falla, el estado
+        // cambia igual y queda visible el botón manual para reintentar.
+        //
+        // SE EMITE LO QUE FALTE, no lo que no haya: cualquiera de los dos puede
+        // haberse emitido antes desde el botón, en cualquier orden, y no se pisa.
         let warning: string | null = null;
         if (status === 'por_facturar') {
             const [order] = await sql`
-                SELECT alegra_invoice_id, invoice_terms, invoice_notes
+                SELECT alegra_invoice_id, alegra_remission_id, invoice_terms, invoice_notes
                 FROM orders WHERE id = ${id}
             `;
             if (!order?.alegra_invoice_id) {
@@ -133,6 +137,28 @@ export async function updateOrderStatus(id: number, status: string) {
                 } catch (err) {
                     console.error('Error facturando automáticamente:', err);
                     warning = err instanceof Error ? err.message : 'Error al facturar automáticamente.';
+                }
+            }
+
+            // El remito, con el mismo criterio. Va DESPUÉS de la factura a propósito:
+            // así, cuando los dos salen juntos, el remito ya puede nombrarla en sus
+            // observaciones —al revés la factura no tendría a quién nombrar—.
+            if (!order?.alegra_remission_id) {
+                try {
+                    const result = await remitOrder(id);
+                    if (result.remissionId != null) {
+                        await logOrderEvent(id, {
+                            kind: 'invoice',
+                            field: 'remito',
+                            newValue: result.remissionNumber ?? String(result.remissionId),
+                            actor: { name: 'Sistema' },
+                        });
+                    }
+                } catch (err) {
+                    // El aviso de la factura no se pisa: si las dos fallaron, la que
+                    // frena la salida del pedido es la factura.
+                    console.error('Error remitiendo automáticamente:', err);
+                    warning = warning ?? (err instanceof Error ? err.message : 'Error al emitir el remito automáticamente.');
                 }
             }
         }
