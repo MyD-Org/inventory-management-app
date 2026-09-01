@@ -467,7 +467,7 @@ export async function previewInvoiceLink(orderId: number, ref: string): Promise<
     const invoice = await resolveInvoiceRef(ref)
     if (!invoice) {
         throw new Error(
-            "No se encontró esa factura. Si es vieja, abrila en Alegra y pegá la URL: el número solo se busca entre las más recientes.",
+            "No se encontró esa factura. Abrila en Alegra y copiá la dirección del navegador.",
         )
     }
 

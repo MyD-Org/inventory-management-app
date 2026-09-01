@@ -9,6 +9,11 @@
 // SE BUSCA ANTES DE VINCULAR, siempre. Vincular la factura equivocada no rompe
 // nada en Alegra, pero deja al pedido diciendo que se cobró algo que no se cobró,
 // y eso se descubre tarde. Primero se muestra de quién es, de cuándo y por cuánto.
+//
+// SE PIDE LA URL Y NADA MÁS. El server también resuelve un número suelto, pero
+// pedir "número o URL" obliga a explicar en qué se diferencian y con qué límite se
+// busca cada uno. La URL sale de abrir la factura en Alegra, siempre funciona y no
+// necesita aclaración.
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
@@ -114,7 +119,7 @@ export function LinkInvoiceButton({ orderId }: { orderId: number }) {
                     <div className="space-y-3">
                         <div className="space-y-1.5">
                             <Label htmlFor="ref-factura" className="text-sm">
-                                Número o URL de la factura
+                                URL de la factura
                             </Label>
                             <div className="flex gap-2">
                                 <Input
@@ -130,20 +135,13 @@ export function LinkInvoiceButton({ orderId }: { orderId: number }) {
                                             buscar()
                                         }
                                     }}
-                                    placeholder="1612, L533 o https://app.alegra.com/invoice/view/id/2618"
+                                    placeholder="https://app.alegra.com/invoice/view/id/2618"
                                 />
                                 <Button onClick={buscar} disabled={buscando || !ref.trim()}>
                                     {buscando && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
                                     Buscar
                                 </Button>
                             </div>
-                            {/* El número solo se busca entre las recientes: se dice
-                                acá, antes de que alguien pruebe con una de 2019 y
-                                concluya que el buscador no anda. */}
-                            <p className="text-xs text-muted-foreground">
-                                El número se busca entre las facturas más recientes. Si es vieja,
-                                abrila en Alegra y pegá la URL.
-                            </p>
                         </div>
 
                         {encontrada && (
