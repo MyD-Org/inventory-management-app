@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Plus, Loader2, Eye, EyeOff, X, Trash2 } from "lucide-react"
 import {
@@ -22,6 +23,7 @@ import {
     deleteSpecField,
     deleteSpecOption,
     toggleSpecField,
+    toggleSpecFieldOffered,
     toggleSpecOption,
 } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -40,6 +42,8 @@ export interface SpecFieldRow {
     free_text: boolean
     kind: "list" | "text" | "boolean"
     active: boolean
+    /** false = variación interna: el bot del CRM no se la ofrece al cliente. */
+    offered_to_customer: boolean
     options: SpecOptionRow[]
 }
 
@@ -173,6 +177,30 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                             </Button>
                         </div>
                     </div>
+
+                    {/* Dos preguntas distintas, dos controles: arriba si el campo
+                        existe, acá si el cliente lo elige. Un campo interno lo
+                        define el taller —se completa igual, lo completa el
+                        taller— y el bot no lo pregunta. */}
+                    <label className="mb-3 flex items-center gap-2.5 text-sm cursor-pointer w-fit">
+                        <Switch
+                            checked={field.offered_to_customer}
+                            disabled={busy}
+                            onCheckedChange={(v) =>
+                                run(
+                                    () => toggleSpecFieldOffered(field.key, v),
+                                    v
+                                        ? "El asistente se lo ofrece al cliente"
+                                        : "Variación interna: el asistente no la pregunta",
+                                )
+                            }
+                        />
+                        <span className={field.offered_to_customer ? "" : "text-muted-foreground"}>
+                            {field.offered_to_customer
+                                ? "Se le ofrece al cliente"
+                                : "Interna: la define el taller"}
+                        </span>
+                    </label>
 
                     {field.kind === "text" ? (
                         <p className="text-base text-muted-foreground">

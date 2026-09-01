@@ -4,6 +4,7 @@ import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { ChevronRight } from "lucide-react"
 import { SpecsManager, type SpecFieldRow } from "@/components/specs-manager"
+import { isFixedSpecField } from "@/lib/order-statuses"
 
 export const dynamic = "force-dynamic"
 
@@ -23,6 +24,7 @@ export default async function VariacionesPage() {
 
     const rows = await sql`
         SELECT f.key, f.label, f.free_text, f.kind, f.active AS field_active,
+               f.offered_to_customer,
                o.id AS option_id, o.value, o.label AS option_label, o.active AS option_active
         FROM spec_fields f
         LEFT JOIN spec_options o ON o.field_key = f.key
@@ -31,6 +33,9 @@ export default async function VariacionesPage() {
 
     const byKey = new Map<string, SpecFieldRow>()
     for (const r of rows as any[]) {
+        // Los campos fijos no se listan: no se administran, y mostrarlos sin
+        // controles solo invita a preguntar por qué no se pueden tocar.
+        if (isFixedSpecField(r.key)) continue
         if (!byKey.has(r.key)) {
             byKey.set(r.key, {
                 key: r.key,
@@ -38,6 +43,7 @@ export default async function VariacionesPage() {
                 free_text: r.free_text,
                 kind: r.kind ?? (r.free_text ? "text" : "list"),
                 active: r.field_active,
+                offered_to_customer: r.offered_to_customer,
                 options: [],
             })
         }

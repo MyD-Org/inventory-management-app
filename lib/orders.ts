@@ -55,8 +55,27 @@ export {
 // Vocabulario vigente: { clamp: { label: "Grampa", options: ["larga","corta"] } }.
 // Solo campos y opciones activas — desactivar una opción la saca del vocabulario
 // sin romper los pedidos históricos que la usaron.
-export async function getSpecs(): Promise<Record<string, SpecField>> {
-    const rows = await sql`
+/**
+ * El vocabulario de variaciones.
+ *
+ * `soloCliente` deja afuera las variaciones INTERNAS —las que define el taller y
+ * el cliente no elige—. Lo usa únicamente GET /api/specs, que es lo que consulta
+ * el bot del CRM. Todo lo demás —la validación, el editor de ítems, las familias—
+ * tiene que seguir viendo todos los campos: un campo interno igual se completa, lo
+ * completa el taller.
+ */
+export async function getSpecs(
+    opts: { soloCliente?: boolean } = {},
+): Promise<Record<string, SpecField>> {
+    const rows = opts.soloCliente
+        ? await sql`
+            SELECT f.key, f.label, f.free_text, f.kind, o.value, o.label AS option_label
+            FROM spec_fields f
+            LEFT JOIN spec_options o ON o.field_key = f.key AND o.active = TRUE
+            WHERE f.active = TRUE AND f.offered_to_customer = TRUE
+            ORDER BY f.position ASC, f.key ASC, o.position ASC, o.value ASC
+        `
+        : await sql`
         SELECT f.key, f.label, f.free_text, f.kind, o.value, o.label AS option_label
         FROM spec_fields f
         LEFT JOIN spec_options o ON o.field_key = f.key AND o.active = TRUE
