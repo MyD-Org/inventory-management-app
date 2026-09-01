@@ -94,6 +94,13 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                                 </span>
                             )}
 
+                            {o.status === "por_facturar" && !o.alegra_remission_id && (
+                                <span className="inline-flex items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive shrink-0 whitespace-nowrap">
+                                    <TriangleAlert className="h-3 w-3" />
+                                    Falta remito
+                                </span>
+                            )}
+
                             <span className="text-sm text-muted-foreground hidden md:block shrink-0 w-24 truncate">
                                 {STATUS_LABELS[o.status]}
                             </span>

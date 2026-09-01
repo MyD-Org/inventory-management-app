@@ -23,7 +23,7 @@ export default async function OrdersPage({
         SELECT o.id, o.order_number, o.external_id, o.customer_name, o.customer_external_id,
                o.status, o.priority, o.origin, o.source_conversation,
                o.delivery_date_estimate::text AS delivery_date_estimate, o.created_at,
-               o.alegra_invoice_id,
+               o.alegra_invoice_id, o.alegra_remission_id,
                o.modified_at::text AS modified_at,
                o.delivery_date_verified_at::text AS delivery_date_verified_at,
                COALESCE(SUM(i.quantity), 0) AS units,
@@ -68,6 +68,7 @@ export default async function OrdersPage({
         needs_review: Boolean(r.needs_review),
         has_unmapped: Boolean(r.has_unmapped),
         alegra_invoice_id: r.alegra_invoice_id ? String(r.alegra_invoice_id) : null,
+        alegra_remission_id: r.alegra_remission_id ? String(r.alegra_remission_id) : null,
     }))
 
     return (
