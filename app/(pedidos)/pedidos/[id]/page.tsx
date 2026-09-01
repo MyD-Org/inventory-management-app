@@ -11,6 +11,7 @@ import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
 import { OrderItemsEditor } from "@/components/order-items-editor"
 import { InvoiceButton } from "@/components/invoice-button"
+import { RemissionButton } from "@/components/remission-button"
 import { OrderMaterials } from "@/components/order-materials"
 import { DateField, PriorityField, TextField } from "@/components/order-props-editor"
 import { OrderCustomerField } from "@/components/order-customer-field"
@@ -235,6 +236,23 @@ export default async function OrderDetailPage({
                                 // El server nunca miró el estado; el gate era solo acá.
                                 <InvoiceButton orderId={order.id} />
                             )}
+                    </Fact>
+                    {/* El remito es independiente de la factura y en cualquier
+                        orden: a veces sale primero uno, a veces el otro. */}
+                    <Fact label="Remito">
+                        {order.alegra_remission_id ? (
+                            <a
+                                href={`https://app.alegra.com/remission/view/id/${order.alegra_remission_id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                            >
+                                {order.alegra_remission_number ?? `#${order.alegra_remission_id}`}
+                                <ExternalLink className="h-3 w-3" />
+                            </a>
+                        ) : (
+                            <RemissionButton orderId={order.id} />
+                        )}
                     </Fact>
                 </dl>
             </header>

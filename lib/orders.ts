@@ -246,6 +246,9 @@ export interface Order {
     invoice_warnings: string[]
     /** El pedido cambió después de facturar y la factura todavía no se actualizó. */
     invoice_stale: boolean
+    /** Remito emitido en Alegra. null = todavía no se remitió. */
+    alegra_remission_id: number | null
+    alegra_remission_number: string | null
     items: OrderItem[]
     modified_at: string | null
     delivery_date_verified_at: string | null
@@ -292,6 +295,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
                delivery_date_estimate::text AS delivery_date_estimate,
                source_conversation, notes, invoice_terms, invoice_notes, created_at, updated_at,
                alegra_invoice_id, alegra_invoice_number, invoice_warnings, invoice_stale,
+               alegra_remission_id, alegra_remission_number,
                modified_at::text AS modified_at,
                delivery_date_verified_at::text AS delivery_date_verified_at
         FROM orders WHERE id = ${orderId}
