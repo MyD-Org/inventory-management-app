@@ -70,7 +70,6 @@ export function NewOrderPage({
     // romperlo; repartiendo el resto, entra siempre.
     const anchoCol = (kind: string) => (kind === "boolean" ? "w-[80px]" : "")
 
-    const listo = customer !== null && lines.length > 0
 
     function setSpec(idx: number, key: string, value: string | null) {
         setLines((ls) =>
@@ -85,15 +84,26 @@ export function NewOrderPage({
     }
 
     async function crear() {
-        if (!listo) return
+        // Se valida al apretar y NO apagando el botón. Un botón deshabilitado no
+        // dice qué le falta: hay que recorrer el formulario adivinando cuál de los
+        // dos datos es el que lo tiene trabado. Acá se nombra el que falta.
+        if (!customer) {
+            toast.error("Falta el cliente", { description: "Elegí para quién es el pedido." })
+            return
+        }
+        if (lines.length === 0) {
+            toast.error("Falta el producto", { description: "Agregá al menos un producto al pedido." })
+            return
+        }
+
         setSaving(true)
         const result = await createOrderManual({
             external_id: "",
             origin: "manual",
             customer: {
-                external_id: customer!.external_id,
-                name: customer!.name,
-                phone: customer!.phone,
+                external_id: customer.external_id,
+                name: customer.name,
+                phone: customer.phone,
             },
             items: lines,
             delivery_date_estimate: eta || null,
@@ -415,17 +425,10 @@ export function NewOrderPage({
                                 Cancelar
                             </Button>
                         </Link>
-                        <Button size="sm" onClick={crear} disabled={!listo || saving}>
+                        <Button size="sm" onClick={crear} disabled={saving}>
                             {saving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
                             Crear pedido
                         </Button>
-                        {!listo && (
-                            <span className="text-sm text-muted-foreground">
-                                {customer === null
-                                    ? "Elegí un cliente para poder crearlo"
-                                    : "Agregá al menos un producto"}
-                            </span>
-                        )}
                     </div>
                 </div>
 
