@@ -543,10 +543,15 @@ export async function explodeBom(
 export async function createOrder(payload: OrderPayload) {
     const externalId = payload.external_id.trim()
 
-    // Los pedidos del bot pasan por revisión humana antes de entrar al flujo (lo
-    // sugiere el doc del CRM). Los cargados a mano ya los revisó quien los tipeó.
+    // TODOS los pedidos entran por revisión, venga de donde venga el pedido.
+    //
+    // Antes los manuales arrancaban en "recibido" con el argumento de que ya los
+    // había revisado quien los tipeó. No se sostiene: revisar no es haber tipeado,
+    // es confirmar la fecha de entrega, que las variantes existan y que el cliente
+    // sea el que corresponde. Y una columna que a veces se saltea deja de ser un
+    // paso del flujo para pasar a ser una casualidad del origen.
     const origin = normalizeOrigin(payload.origin)
-    const initialStatus = origin === "manual" ? "recibido" : "por_revisar"
+    const initialStatus = "por_revisar"
 
     const inserted = await sql`
         INSERT INTO orders (

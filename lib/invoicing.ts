@@ -1,5 +1,14 @@
 import { sql } from "@/lib/database"
-import { createInvoice, listNumberTemplates, updateInvoice, type EstimateLine, type NumberTemplate } from "@/lib/alegra"
+import {
+    createInvoice,
+    findInvoiceByNumber,
+    getInvoice,
+    listNumberTemplates,
+    updateInvoice,
+    type EstimateLine,
+    type ExistingInvoice,
+    type NumberTemplate,
+} from "@/lib/alegra"
 import { normalizeVariant } from "@/lib/alegra-sync"
 
 // Facturar un pedido en Alegra.
@@ -385,4 +394,134 @@ export async function updateOrderInvoice(orderId: number): Promise<InvoiceResult
         invoiceUrl: actualizada.url,
         dryRun: false,
     }
+}
+
+// ── Vincular una factura que YA estaba en Alegra ─────────────────────────────
+//
+// Pasa seguido: la factura se hizo en Alegra antes de que el pedido existiera en
+// la app. Emitir otra sería facturarle dos veces al cliente, así que lo que hace
+// falta no es emitir sino apuntar a la que ya está.
+
+export interface LinkedInvoice extends ExistingInvoice {
+    /** El cliente de la factura no es el del pedido. No bloquea: avisa. */
+    clienteDistinto: boolean
+    /** Nombre del cliente del pedido, para poder contar la diferencia. */
+    orderClientName: string | null
+}
+
+/**
+ * De lo que se pega a una factura concreta. Acepta las tres formas en que alguien
+ * tiene la factura a mano:
+ *   - la URL de Alegra   https://app.alegra.com/invoice/view/id/2618
+ *   - el id              2618
+ *   - el número          1612, L533, G-430
+ *
+ * La URL es la vía directa —el id está en la barra de direcciones— y la única que
+ * sirve para una factura vieja: el número se busca recorriendo las más recientes.
+ */
+export async function resolveInvoiceRef(ref: string): Promise<ExistingInvoice | null> {
+    const limpio = ref.trim()
+    if (!limpio) return null
+
+    // URL de Alegra: .../invoice/view/id/2618 (con o sin barra o query al final).
+    //
+    // SOLO facturas: la URL de un remito —/remission/view/id/1027— tiene la misma
+    // forma, y tomarle el id llevaría a buscar la factura 1027, que es otro
+    // documento y probablemente exista. Se falla con un mensaje en vez de vincular
+    // en silencio la equivocada.
+    const esUrlDeAlegra = /alegra\.com\//i.test(limpio)
+    if (esUrlDeAlegra) {
+        const enUrl = limpio.match(/alegra\.com\/invoice\/.*?\/id\/(\d+)/i)
+        if (!enUrl) {
+            throw new Error(
+                "Esa URL de Alegra no es de una factura. Abrí la factura y copiá la dirección: tiene que decir /invoice/.",
+            )
+        }
+        return getInvoice(Number(enUrl[1]))
+    }
+
+    // Un número pelado es ambiguo: puede ser el id o el número de la factura. Se
+    // prueba primero como número —es lo que la gente tiene a mano, lo que está
+    // impreso— y recién si no aparece se prueba como id.
+    if (/^\d+$/.test(limpio)) {
+        return (await findInvoiceByNumber(limpio)) ?? (await getInvoice(Number(limpio)))
+    }
+
+    // Con prefijo (L533, G-430) solo puede ser un número.
+    return findInvoiceByNumber(limpio)
+}
+
+/** Qué factura es y si su cliente coincide con el del pedido. No escribe nada. */
+export async function previewInvoiceLink(orderId: number, ref: string): Promise<LinkedInvoice> {
+    const [order] = await sql`
+        SELECT customer_external_id, customer_name, alegra_invoice_id, alegra_invoice_number
+        FROM orders WHERE id = ${orderId}
+    `
+    if (!order) throw new Error("El pedido no existe")
+    if (order.alegra_invoice_id) {
+        throw new Error(
+            `El pedido ya tiene la factura ${order.alegra_invoice_number ?? order.alegra_invoice_id}. Desvinculala antes de apuntar a otra.`,
+        )
+    }
+
+    const invoice = await resolveInvoiceRef(ref)
+    if (!invoice) {
+        throw new Error(
+            "No se encontró esa factura. Si es vieja, abrila en Alegra y pegá la URL: el número solo se busca entre las más recientes.",
+        )
+    }
+
+    const externalId = String(order.customer_external_id ?? "")
+    const clientIdPedido = externalId.startsWith("alegra:") ? Number(externalId.slice(7)) : null
+
+    return {
+        ...invoice,
+        // Solo se compara cuando el pedido tiene cliente de Alegra: si es un cliente
+        // de mostrador no hay con qué comparar y no se afirma nada.
+        clienteDistinto:
+            clientIdPedido != null && invoice.clientId != null && clientIdPedido !== invoice.clientId,
+        orderClientName: (order.customer_name as string) ?? null,
+    }
+}
+
+/**
+ * Apunta el pedido a una factura que ya existía en Alegra.
+ *
+ * NO EMITE NADA y no toca la factura: solo guarda a cuál apunta este pedido. La
+ * factura se hizo antes y con su propio criterio —puede tener otras líneas, otro
+ * precio, varios pedidos adentro— y reescribirla para que coincida con el pedido
+ * sería romper algo que ya estaba bien.
+ *
+ * Por eso queda SINCRONIZADA al vincular (invoice_stale = FALSE): decir que está
+ * desactualizada respecto de un pedido que ni existía cuando se emitió no aporta
+ * nada. Los cambios que vengan DESPUÉS sí la marcan, como con cualquier otra.
+ */
+export async function linkExistingInvoice(orderId: number, ref: string): Promise<LinkedInvoice> {
+    const invoice = await previewInvoiceLink(orderId, ref)
+
+    await sql`
+        UPDATE orders SET
+            alegra_invoice_id = ${invoice.id},
+            alegra_invoice_number = ${invoice.number},
+            alegra_invoiced_at = ${invoice.date ? `${invoice.date}T00:00:00Z` : null},
+            invoice_synced_at = NOW(),
+            invoice_stale = FALSE,
+            invoice_warnings = '[]'::jsonb
+        WHERE id = ${orderId}
+    `
+
+    return invoice
+}
+
+/** Suelta la factura del pedido. No toca nada en Alegra: la factura sigue ahí. */
+export async function unlinkInvoice(orderId: number): Promise<void> {
+    await sql`
+        UPDATE orders SET
+            alegra_invoice_id = NULL,
+            alegra_invoice_number = NULL,
+            alegra_invoiced_at = NULL,
+            invoice_synced_at = NULL,
+            invoice_stale = FALSE
+        WHERE id = ${orderId}
+    `
 }

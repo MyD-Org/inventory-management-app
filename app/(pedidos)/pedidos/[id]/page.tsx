@@ -11,6 +11,7 @@ import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
 import { OrderItemsEditor } from "@/components/order-items-editor"
 import { InvoiceButton } from "@/components/invoice-button"
+import { LinkInvoiceButton } from "@/components/link-invoice-button"
 import { RemissionButton } from "@/components/remission-button"
 import { DocumentStaleTag } from "@/components/document-stale-tag"
 import { OrderMaterials } from "@/components/order-materials"
@@ -244,7 +245,14 @@ export default async function OrderDetailPage({
                                 // facturar antes de estar "Por facturar" (seña, pago
                                 // adelantado) y también después, si la automática falló.
                                 // El server nunca miró el estado; el gate era solo acá.
-                                <InvoiceButton orderId={order.id} />
+                                //
+                                // Y al lado, vincular una que ya esté en Alegra: pasa
+                                // seguido que la factura se hizo antes que el pedido, y
+                                // ahí emitir otra sería cobrarle dos veces al cliente.
+                                <div className="flex flex-wrap items-center gap-1">
+                                    <InvoiceButton orderId={order.id} />
+                                    <LinkInvoiceButton orderId={order.id} />
+                                </div>
                             )}
                     </Fact>
                     {/* El remito es independiente de la factura y en cualquier
