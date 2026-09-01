@@ -16,13 +16,12 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Plus, Loader2, Eye, EyeOff, X, Trash2 } from "lucide-react"
+import { Plus, Loader2, X, Trash2 } from "lucide-react"
 import {
     createSpecField,
     createSpecOption,
     deleteSpecField,
     deleteSpecOption,
-    toggleSpecField,
     toggleSpecFieldOffered,
     toggleSpecOption,
 } from "@/lib/order-actions"
@@ -140,31 +139,12 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                             )}
                         </div>
 
-                        {/* Las dos acciones juntas a la derecha, y la destructiva
-                            al final: si no, el tacho quedaba suelto en el medio. */}
+                        {/* El interruptor Visible/Oculto está apagado por ahora: se
+                            pisaba con el de "se le ofrece al cliente", que es la
+                            pregunta que el taller realmente se hace. La acción
+                            toggleSpecField sigue existiendo para cuando se decida
+                            qué significa cada uno. */}
                         <div className="flex items-center gap-1 shrink-0">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={busy}
-                                title={
-                                    field.active
-                                        ? "El asistente lo está ofreciendo"
-                                        : "Oculto para el asistente"
-                                }
-                                onClick={() =>
-                                    run(
-                                        () => toggleSpecField(field.key, !field.active),
-                                        field.active ? "Campo oculto para el asistente" : "Campo visible",
-                                    )
-                                }
-                            >
-                                {field.active ? (
-                                    <><Eye className="mr-2 h-4 w-4" />Visible</>
-                                ) : (
-                                    <><EyeOff className="mr-2 h-4 w-4" />Oculto</>
-                                )}
-                            </Button>
                             <Button
                                 variant="ghost"
                                 size="icon"
