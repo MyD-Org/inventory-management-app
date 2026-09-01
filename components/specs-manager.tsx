@@ -144,7 +144,32 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                             pregunta que el taller realmente se hace. La acción
                             toggleSpecField sigue existiendo para cuando se decida
                             qué significa cada uno. */}
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-3 shrink-0">
+                            {/* Arriba a la derecha, en la fila del título: es una
+                                propiedad del campo, no un renglón más de su
+                                contenido. Un campo interno lo define el taller
+                                —se completa igual— y el bot no lo pregunta. */}
+                            {/* La etiqueta NO cambia con el estado: el interruptor ya
+                                dice sí o no, y un texto que se reescribe al tocarlo
+                                obliga a releerlo para saber qué quedó. Apagado
+                                significa que la variación la define el taller. */}
+                            <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                                <span className={field.offered_to_customer ? "" : "text-muted-foreground"}>
+                                    Lo elige el cliente
+                                </span>
+                                <Switch
+                                    checked={field.offered_to_customer}
+                                    disabled={busy}
+                                    onCheckedChange={(v) =>
+                                        run(
+                                            () => toggleSpecFieldOffered(field.key, v),
+                                            v
+                                                ? "Lo elige el cliente: el asistente lo va a ofrecer"
+                                                : "Lo define el taller: el asistente no lo pregunta",
+                                        )
+                                    }
+                                />
+                            </label>
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -157,30 +182,6 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                             </Button>
                         </div>
                     </div>
-
-                    {/* Dos preguntas distintas, dos controles: arriba si el campo
-                        existe, acá si el cliente lo elige. Un campo interno lo
-                        define el taller —se completa igual, lo completa el
-                        taller— y el bot no lo pregunta. */}
-                    <label className="mb-3 flex items-center gap-2.5 text-sm cursor-pointer w-fit">
-                        <Switch
-                            checked={field.offered_to_customer}
-                            disabled={busy}
-                            onCheckedChange={(v) =>
-                                run(
-                                    () => toggleSpecFieldOffered(field.key, v),
-                                    v
-                                        ? "El asistente se lo ofrece al cliente"
-                                        : "Variación interna: el asistente no la pregunta",
-                                )
-                            }
-                        />
-                        <span className={field.offered_to_customer ? "" : "text-muted-foreground"}>
-                            {field.offered_to_customer
-                                ? "Se le ofrece al cliente"
-                                : "Interna: la define el taller"}
-                        </span>
-                    </label>
 
                     {field.kind === "text" ? (
                         <p className="text-base text-muted-foreground">
