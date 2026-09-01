@@ -60,16 +60,7 @@ export default async function VariacionesPage() {
                 <ChevronRight className="h-3.5 w-3.5" />
                 <span className="text-foreground">Variaciones de producto</span>
             </div>
-            <h1 className="text-2xl font-bold mb-1">Variaciones de producto</h1>
-            {/* Se nombran los tres lugares donde pega un cambio acá: es una pantalla
-                de la que cuelgan cosas y no se ve desde ella qué se rompe. */}
-            <p className="text-base text-muted-foreground mb-6">
-                Cómo puede variar un producto: color de LED, óptica, grampa, estaca. Se usa en tres
-                lugares — las familias de materiales deciden qué material sale por cada variante, las
-                fichas de producto explotan la lista de materiales, y el asistente del CRM ofrece
-                estas opciones al tomar un pedido. Si una opción no está acá, no existe para ninguno
-                de los tres.
-            </p>
+            <h1 className="text-2xl font-bold mb-6">Variaciones de producto</h1>
             <SpecsManager fields={Array.from(byKey.values())} />
         </div>
     )
