@@ -211,6 +211,25 @@ export async function saveBudget(id: number | null, payload: BudgetPayload) {
     const userName = session.user.name || session.user.email || 'Desconocido';
 
     try {
+        // Una ficha por producto. El nombre es la clave con la que el resto del
+        // sistema encuentra el producto —resolveProduct() del módulo de pedidos y
+        // las tools de IA buscan la hoja de costo por nombre—, y con dos fichas
+        // iguales se queda con la más nueva sin avisar. El índice único de
+        // scripts/25-unique-budget-name.sql lo impide igual; esto es para que se
+        // vea un mensaje y no un error de base.
+        const repetido = await sql`
+            SELECT id FROM budgets
+            WHERE lower(name) = lower(${payload.name.trim()})
+              AND (${id}::int IS NULL OR id <> ${id}::int)
+            LIMIT 1
+        `;
+        if (repetido.length > 0) {
+            return {
+                error: `Ya hay una ficha de "${payload.name.trim()}". Abrila y editala en vez de crear otra.`,
+                existingId: repetido[0].id as number,
+            };
+        }
+
         let budgetId = id;
         if (budgetId == null) {
             const [row] = await sql`

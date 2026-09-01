@@ -536,10 +536,21 @@ export function BudgetEditor({
         const result = await saveBudget(budget?.id ?? null, payload)
         setSaving(false)
         if (result.error) {
-            toast.error("Error", { description: result.error })
+            // Si el nombre ya tiene ficha, el error viene con su id: se ofrece
+            // abrirla en vez de dejar a la persona buscándola en el listado con
+            // el formulario lleno.
+            toast.error("Error", {
+                description: result.error,
+                action: result.existingId
+                    ? {
+                          label: "Abrir la ficha",
+                          onClick: () => router.push(`/fichas/${result.existingId}`),
+                      }
+                    : undefined,
+            })
             return
         }
-        toast.success("Cálculo de costo guardado")
+        toast.success("Ficha guardada")
         router.push("/fichas")
         router.refresh()
     }
