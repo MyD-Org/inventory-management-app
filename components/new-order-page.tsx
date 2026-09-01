@@ -144,11 +144,9 @@ export function NewOrderPage({
                                                 <span className="block truncate">{field.label}</span>
                                             </th>
                                         ))}
-                                        {/* 80px y no 44: la tabla es table-fixed, y en la
-                                            fila que se está cargando esta columna tiene el
-                                            botón "Listo", que no entra en el ancho de un
-                                            icono y se desbordaba fuera del recuadro. */}
-                                        <th className="w-[80px]" />
+                                        {/* Solo el tacho de quitar: la tabla es table-fixed
+                                            y esta columna se ajusta al ancho de un icono. */}
+                                        <th className="w-[44px]" />
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -283,9 +281,24 @@ export function NewOrderPage({
                                                         onCancel={() =>
                                                             lines.length > 0 && setAgregando(false)
                                                         }
-                                                        onPick={(product) =>
-                                                            setBorrador((b) => ({ ...b, product }))
-                                                        }
+                                                        onPick={(product) => {
+                                                            // La fila se suma sola al elegir el
+                                                            // producto: sin producto no hay línea y
+                                                            // con producto ya es una, así que
+                                                            // confirmarla a mano no decide nada.
+                                                            //
+                                                            // Además cerraba un agujero: crear()
+                                                            // manda `lines`, y una fila a medio
+                                                            // cargar en el borrador se perdía sin
+                                                            // aviso al apretar "Crear pedido".
+                                                            //
+                                                            // La cantidad y las specs que se hayan
+                                                            // tipeado antes de elegir el producto se
+                                                            // llevan con la fila.
+                                                            setLines((ls) => [...ls, { ...borrador, product }])
+                                                            setBorrador({ product: "", quantity: 1, specs: {} })
+                                                            setAgregando(false)
+                                                        }}
                                                     />
                                                 )}
                                             </td>
@@ -365,20 +378,7 @@ export function NewOrderPage({
                                                 </td>
                                             ))}
 
-                                            <td className="px-2 py-2 text-right">
-                                                <Button
-                                                    size="sm"
-                                                    className="h-8"
-                                                    disabled={!borrador.product || borrador.quantity <= 0}
-                                                    onClick={() => {
-                                                        setLines((ls) => [...ls, borrador])
-                                                        setBorrador({ product: "", quantity: 1, specs: {} })
-                                                        setAgregando(false)
-                                                    }}
-                                                >
-                                                    Listo
-                                                </Button>
-                                            </td>
+                                            <td className="px-2 py-2" />
                                         </tr>
                                     )}
 
