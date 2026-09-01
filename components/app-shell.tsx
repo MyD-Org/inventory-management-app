@@ -9,8 +9,6 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   Package,
-  PanelLeftClose,
-  PanelLeftOpen,
   PlusCircle,
   FileSpreadsheet,
   BarChart3,
@@ -23,6 +21,8 @@ import {
   LogOut,
   LayoutDashboard,
   BellRing,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   ExternalLink,
   type LucideIcon,
@@ -312,15 +312,7 @@ function SidebarContent({
   )
 }
 
-function TopBar({
-  onMenuClick,
-  collapsed,
-  onToggleSidebar,
-}: {
-  onMenuClick: () => void
-  collapsed: boolean
-  onToggleSidebar: () => void
-}) {
+function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
   const [date, setDate] = useState("")
 
   useEffect(() => {
@@ -338,16 +330,6 @@ function TopBar({
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-card px-4">
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick} title="Abrir menú">
         <Menu className="h-5 w-5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="hidden lg:inline-flex"
-        onClick={onToggleSidebar}
-        title={collapsed ? "Expandir menú" : "Plegar menú"}
-        aria-label={collapsed ? "Expandir menú" : "Plegar menú"}
-      >
-        {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
       </Button>
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{date}</p>
       <div className="flex-1" />
@@ -394,6 +376,18 @@ export function AppShell({ user, materials, flags, defaultCollapsed = false, chi
         }`}
       >
         <SidebarContent user={user} materials={materials} flags={flags} collapsed={collapsed} />
+        {/* Montado sobre la línea divisoria del sidebar y no en la barra de
+            arriba: ahí era un ícono más entre otros y había que buscarlo. Acá
+            está en el borde que mueve, que es donde uno lo va a tocar. */}
+        <button
+          type="button"
+          onClick={toggle}
+          title={collapsed ? "Expandir menú" : "Plegar menú"}
+          aria-label={collapsed ? "Expandir menú" : "Plegar menú"}
+          className="absolute -right-3 top-7 flex h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground/70 shadow-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        >
+          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+        </button>
       </aside>
 
       {/* Sidebar como drawer en mobile */}
@@ -420,7 +414,7 @@ export function AppShell({ user, materials, flags, defaultCollapsed = false, chi
       )}
 
       <div className={`transition-[padding] duration-200 ${collapsed ? "lg:pl-16" : "lg:pl-64"}`}>
-        <TopBar onMenuClick={() => setMobileOpen(true)} collapsed={collapsed} onToggleSidebar={toggle} />
+        <TopBar onMenuClick={() => setMobileOpen(true)} />
         {children}
       </div>
     </div>
