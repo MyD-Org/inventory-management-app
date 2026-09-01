@@ -1,6 +1,4 @@
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { PackageX } from "lucide-react"
+import { NotFoundScreen } from "@/components/not-found-screen"
 
 // Qué se ve al abrir un pedido que no está.
 //
@@ -10,20 +8,15 @@ import { PackageX } from "lucide-react"
 // app, y no tiene que parecerlo.
 //
 // Al vivir en este segmento se dibuja DENTRO del layout de (pedidos), así que la
-// barra y el resto de la app siguen ahí.
+// barra y el resto de la app siguen ahí. Lo único propio es a dónde se vuelve:
+// al tablero, que es de donde vino.
 export default function PedidoNoEncontrado() {
     return (
-        <div className="mx-auto w-full max-w-md px-8 py-20 text-center">
-            <PackageX className="mx-auto h-10 w-10 text-muted-foreground" />
-            <h1 className="mt-4 font-display text-2xl font-bold">Pedido no encontrado</h1>
-            <p className="mt-2 text-base text-muted-foreground">
-                Puede que se haya borrado o que la URL sea incorrecta.
-            </p>
-            <div className="mt-6">
-                <Button asChild>
-                    <Link href="/pedidos">Volver al tablero</Link>
-                </Button>
-            </div>
-        </div>
+        <NotFoundScreen
+            title="Pedido no encontrado"
+            description="Puede que se haya borrado o que la URL sea incorrecta."
+            actionLabel="Volver al tablero"
+            actionHref="/pedidos"
+        />
     )
 }
