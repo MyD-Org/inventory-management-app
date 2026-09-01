@@ -293,6 +293,82 @@ export interface CreatedInvoice {
     url: string
 }
 
+export interface ExistingInvoice {
+    id: number
+    number: string | null
+    clientId: number | null
+    clientName: string | null
+    date: string | null
+    total: number | null
+    status: string | null
+}
+
+function toExistingInvoice(inv: any): ExistingInvoice {
+    const nt = inv.numberTemplate ?? {}
+    const number = nt.fullNumber ?? nt.number ?? inv.number ?? null
+    return {
+        id: Number(inv.id),
+        number: number != null ? String(number) : null,
+        clientId: inv.client?.id != null ? Number(inv.client.id) : null,
+        clientName: inv.client?.name ?? null,
+        date: inv.date ?? null,
+        total: inv.total != null ? Number(inv.total) : null,
+        status: inv.status ?? null,
+    }
+}
+
+/** Una factura puntual por su id de Alegra. null si no existe. */
+export async function getInvoice(invoiceId: number): Promise<ExistingInvoice | null> {
+    try {
+        const inv = await alegraFetch<any>(`/invoices/${invoiceId}`)
+        if (inv?.id == null) return null
+        return toExistingInvoice(inv)
+    } catch (error) {
+        // 404 = no existe, y eso no es un error del sistema: es la respuesta.
+        if (error instanceof AlegraError && error.status === 404) return null
+        throw error
+    }
+}
+
+/**
+ * Busca una factura por su NÚMERO (el que se lee en el papel: 1612, L533, G-430).
+ *
+ * RECORRE PÁGINAS de la más nueva a la más vieja, porque la API no filtra por
+ * número: se probaron `query`, `number` y `numberTemplate.number` y las tres
+ * devuelven el listado completo, ignorando el filtro. Se corta en la primera
+ * coincidencia.
+ *
+ * El tope existe para no barrer las 2600 facturas históricas cuando el número no
+ * existe o está mal tipeado. Una factura que se está vinculando a un pedido es
+ * reciente por definición, así que en la práctica aparece en la primera página
+ * (~1 s). Quien tenga una vieja puede pegar la URL de Alegra en vez del número.
+ */
+export async function findInvoiceByNumber(
+    numero: string,
+    maxPages = 12,
+): Promise<ExistingInvoice | null> {
+    const buscado = numero.trim().toLowerCase()
+    if (!buscado) return null
+    const PAGE = 30
+
+    for (let page = 0; page < maxPages; page++) {
+        const rows = await alegraFetch<any[]>(
+            `/invoices?limit=${PAGE}&start=${page * PAGE}&order_field=id&order_direction=DESC`,
+        )
+        if (!Array.isArray(rows) || rows.length === 0) return null
+
+        for (const inv of rows) {
+            const nt = inv.numberTemplate ?? {}
+            const candidatos = [nt.fullNumber, nt.number, inv.number]
+                .filter((v) => v != null)
+                .map((v) => String(v).trim().toLowerCase())
+            if (candidatos.includes(buscado)) return toExistingInvoice(inv)
+        }
+        if (rows.length < PAGE) return null
+    }
+    return null
+}
+
 // ── Remitos ──────────────────────────────────────────────────────────────────
 
 export interface CreatedRemission {
