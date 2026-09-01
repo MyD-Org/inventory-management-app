@@ -1,6 +1,10 @@
 "use client"
 
-// Editor del vocabulario que consume el bot del CRM (GET /api/specs).
+// Editor del vocabulario de variaciones de producto. Se monta en
+// /settings/variaciones —configuración del inventario— y lo consumen tres lugares:
+// las familias de materiales, las fichas de producto y el bot del CRM
+// (GET /api/specs).
+//
 // Las opciones se DESACTIVAN en vez de borrarse: salen de la lista que ve el bot
 // pero los pedidos históricos que las usaron siguen siendo legibles.
 
@@ -10,14 +14,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Plus, Loader2, Eye, EyeOff, X, Trash2 } from "lucide-react"
+import { Plus, Loader2, X, Trash2 } from "lucide-react"
 import {
     createSpecField,
     createSpecOption,
     deleteSpecField,
     deleteSpecOption,
-    toggleSpecField,
+    toggleSpecFieldOffered,
     toggleSpecOption,
 } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -36,6 +41,8 @@ export interface SpecFieldRow {
     free_text: boolean
     kind: "list" | "text" | "boolean"
     active: boolean
+    /** false = variación interna: el bot del CRM no se la ofrece al cliente. */
+    offered_to_customer: boolean
     options: SpecOptionRow[]
 }
 
@@ -132,31 +139,38 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                             )}
                         </div>
 
-                        {/* Las dos acciones juntas a la derecha, y la destructiva
-                            al final: si no, el tacho quedaba suelto en el medio. */}
-                        <div className="flex items-center gap-1 shrink-0">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={busy}
-                                title={
-                                    field.active
-                                        ? "El asistente lo está ofreciendo"
-                                        : "Oculto para el asistente"
-                                }
-                                onClick={() =>
-                                    run(
-                                        () => toggleSpecField(field.key, !field.active),
-                                        field.active ? "Campo oculto para el asistente" : "Campo visible",
-                                    )
-                                }
-                            >
-                                {field.active ? (
-                                    <><Eye className="mr-2 h-4 w-4" />Visible</>
-                                ) : (
-                                    <><EyeOff className="mr-2 h-4 w-4" />Oculto</>
-                                )}
-                            </Button>
+                        {/* El interruptor Visible/Oculto está apagado por ahora: se
+                            pisaba con el de "se le ofrece al cliente", que es la
+                            pregunta que el taller realmente se hace. La acción
+                            toggleSpecField sigue existiendo para cuando se decida
+                            qué significa cada uno. */}
+                        <div className="flex items-center gap-3 shrink-0">
+                            {/* Arriba a la derecha, en la fila del título: es una
+                                propiedad del campo, no un renglón más de su
+                                contenido. Un campo interno lo define el taller
+                                —se completa igual— y el bot no lo pregunta. */}
+                            {/* Apagado dice qué pasa a ser el campo, no la negación
+                                de lo otro: "interna" es el estado real y se lee sin
+                                tener que mirar el interruptor. */}
+                            <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                                <span className={field.offered_to_customer ? "" : "text-muted-foreground"}>
+                                    {field.offered_to_customer
+                                        ? "Lo elige el cliente"
+                                        : "Interna: la define el taller"}
+                                </span>
+                                <Switch
+                                    checked={field.offered_to_customer}
+                                    disabled={busy}
+                                    onCheckedChange={(v) =>
+                                        run(
+                                            () => toggleSpecFieldOffered(field.key, v),
+                                            v
+                                                ? "Lo elige el cliente: el asistente lo va a ofrecer"
+                                                : "Lo define el taller: el asistente no lo pregunta",
+                                        )
+                                    }
+                                />
+                            </label>
                             <Button
                                 variant="ghost"
                                 size="icon"

@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation"
 import { signOut } from "next-auth/react"
 import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
-import { ArrowLeftRight, LogOut, Monitor, MoonStar, MoreVertical, Plus, Settings, Sun } from "lucide-react"
+import { ArrowLeftRight, LogOut, Monitor, MoonStar, MoreVertical, Plus, Settings, SlidersHorizontal, Sun } from "lucide-react"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -89,6 +89,17 @@ export function OrdersShell({
                                         <Link href="/pedidos/opciones">
                                             <Settings className="mr-2 h-4 w-4" />
                                             Opciones de pedido
+                                        </Link>
+                                    </DropdownMenuItem>
+                                )}
+                                {/* El vocabulario se editaba desde acá y ahora vive en
+                                    configuración del inventario. El atajo se queda: es
+                                    donde la costumbre lo busca. */}
+                                {isAdmin && (
+                                    <DropdownMenuItem asChild>
+                                        <Link href="/settings/variaciones">
+                                            <SlidersHorizontal className="mr-2 h-4 w-4" />
+                                            Variaciones de producto
                                         </Link>
                                     </DropdownMenuItem>
                                 )}

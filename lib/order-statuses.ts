@@ -62,3 +62,17 @@ export function orderNeedsReview(order: {
     if (!order.delivery_date_verified_at) return true
     return new Date(order.modified_at) > new Date(order.delivery_date_verified_at)
 }
+
+// Campos de variación que NO se administran: existen siempre y no se pueden
+// borrar, ocultar ni volver a crear.
+//
+// 'other' —"Otras indicaciones"— es el texto libre del pedido: donde va lo que no
+// entra en ninguna lista. Sin él no hay dónde escribir un pedido raro, y un pedido
+// raro entra igual: se escribe en cualquier lado o se pierde. Que dependa de que
+// nadie lo haya borrado es una fragilidad sin ninguna contrapartida —no hay motivo
+// para querer sacarlo—.
+export const FIXED_SPEC_FIELDS = ["other"] as const
+
+export function isFixedSpecField(key: string): boolean {
+    return (FIXED_SPEC_FIELDS as readonly string[]).includes(key)
+}

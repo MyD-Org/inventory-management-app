@@ -25,6 +25,7 @@ import {
     validateOrderPayload,
     type OrderPayload,
 } from '@/lib/orders';
+import { isFixedSpecField } from '@/lib/order-statuses';
 
 export async function createOrderManual(payload: OrderPayload) {
     const session = await auth();
@@ -179,9 +180,15 @@ export async function createSpecField(key: string, label: string, freeText = fal
         const [exists] = await sql`SELECT key FROM spec_fields WHERE key = ${cleanKey}`;
         if (exists) return { error: `Ya existe un campo con la clave "${cleanKey}"` };
 
+        // 'other' y compañía existen siempre: no se re-crean a mano.
+        if (isFixedSpecField(cleanKey)) {
+            return { error: `"${cleanKey}" es un campo fijo del pedido: ya existe y no se administra desde acá` };
+        }
+
         const [{ next }] = await sql`SELECT COALESCE(MAX(position), 0) + 1 AS next FROM spec_fields`;
         await sql`INSERT INTO spec_fields (key, label, free_text, position) VALUES (${cleanKey}, ${label.trim()}, ${freeText}, ${next})`;
-        revalidatePath('/pedidos/opciones');
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
         return { ok: true, key: cleanKey };
     } catch (error) {
         console.error('Error en createSpecField:', error);
@@ -204,7 +211,8 @@ export async function createSpecOption(fieldKey: string, value: string, label: s
         if (exists) {
             if (exists.active) return { error: `"${cleanValue}" ya está en la lista` };
             await sql`UPDATE spec_options SET active = TRUE WHERE id = ${exists.id}`;
-            revalidatePath('/pedidos/opciones');
+            revalidatePath('/settings/variaciones');
+            revalidatePath('/materials/familias');
             return { ok: true, reactivated: true };
         }
 
@@ -215,7 +223,8 @@ export async function createSpecOption(fieldKey: string, value: string, label: s
             INSERT INTO spec_options (field_key, value, label, position)
             VALUES (${fieldKey}, ${cleanValue}, ${label.trim() || cleanValue}, ${next})
         `;
-        revalidatePath('/pedidos/opciones');
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
         return { ok: true };
     } catch (error) {
         console.error('Error en createSpecOption:', error);
@@ -231,7 +240,8 @@ export async function toggleSpecOption(id: number, active: boolean) {
 
     try {
         await sql`UPDATE spec_options SET active = ${active} WHERE id = ${id}`;
-        revalidatePath('/pedidos/opciones');
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
         return { ok: true };
     } catch (error) {
         console.error('Error en toggleSpecOption:', error);
@@ -243,12 +253,35 @@ export async function toggleSpecField(key: string, active: boolean) {
     const session = await auth();
     if (session?.user?.role !== 'admin') return { error: 'Solo un admin puede editar el vocabulario' };
 
+    // Un campo fijo no se oculta: la app asume que está.
+    if (isFixedSpecField(key)) return { error: 'Es un campo fijo del pedido: no se puede ocultar' };
+
     try {
         await sql`UPDATE spec_fields SET active = ${active} WHERE key = ${key}`;
-        revalidatePath('/pedidos/opciones');
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
         return { ok: true };
     } catch (error) {
         console.error('Error en toggleSpecField:', error);
+        return { error: 'No se pudo cambiar el campo' };
+    }
+}
+
+// ¿El asistente del CRM le ofrece elegir este campo al cliente?
+//
+// DISTINTO DE `active`: un campo interno sigue existiendo, se sigue completando en
+// el pedido y las familias lo siguen usando para elegir material. Lo único que
+// cambia es que el bot no lo pregunta. Ver scripts/30-variaciones-internas.sql.
+export async function toggleSpecFieldOffered(key: string, offered: boolean) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') return { error: 'Solo un admin puede editar esto' };
+
+    try {
+        await sql`UPDATE spec_fields SET offered_to_customer = ${offered} WHERE key = ${key}`;
+        revalidatePath('/settings/variaciones');
+        return { ok: true };
+    } catch (error) {
+        console.error('Error en toggleSpecFieldOffered:', error);
         return { error: 'No se pudo cambiar el campo' };
     }
 }
@@ -540,7 +573,8 @@ export async function deleteSpecOption(id: number) {
 
     try {
         await sql`DELETE FROM spec_options WHERE id = ${id}`;
-        revalidatePath('/pedidos/opciones');
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
         return { ok: true };
     } catch (error) {
         console.error('Error en deleteSpecOption:', error);
@@ -554,6 +588,8 @@ export async function deleteSpecField(key: string) {
     const session = await auth();
     if (session?.user?.role !== 'admin') return { error: 'Solo un admin puede editar el vocabulario' };
 
+    if (isFixedSpecField(key)) return { error: 'Es un campo fijo del pedido: no se puede borrar' };
+
     try {
         // Las variantes cuelgan de la LÍNEA de la hoja de costo, no del campo, así
         // que el ON DELETE SET NULL de budget_materials.spec_field_key las dejaría
@@ -564,7 +600,8 @@ export async function deleteSpecField(key: string) {
             WHERE budget_material_id IN (SELECT id FROM budget_materials WHERE spec_field_key = ${key})
         `;
         await sql`DELETE FROM spec_fields WHERE key = ${key}`;
-        revalidatePath('/pedidos/opciones');
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
         revalidatePath('/fichas');
         return { ok: true };
     } catch (error) {
