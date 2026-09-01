@@ -17,6 +17,7 @@ import {
     diffSpecs,
     getSpecs,
     listSellableProducts,
+    markInvoiceStale,
     materialNeeds,
     ORDER_PRIORITIES,
     ORDER_STATUSES,
@@ -401,6 +402,10 @@ export async function updateOrderFields(
 // la hoja de costo cambió desde que se tomó, el BOM queda actualizado, no como
 // estaba. Es el precio de poder corregir la variante; la alternativa —dejar el
 // material equivocado— es peor. Si el pedido ya descontó stock no se toca nada.
+// Los ítems se pueden editar AUNQUE el pedido ya esté facturado. Antes las tres
+// acciones (editar, quitar, agregar) se negaban si había alegra_invoice_id, para
+// que la factura no quedara desalineada. Se sacó a pedido del taller: la corrección
+// tiene que poder hacerse acá y la factura se ajusta a mano en Alegra.
 export async function updateOrderItem(
     itemId: number,
     patch: { quantity?: number; specs?: Record<string, string> },
@@ -411,13 +416,9 @@ export async function updateOrderItem(
     const [item] = await sql`SELECT order_id, product, quantity, specs FROM order_items WHERE id = ${itemId}`;
     if (!item) return { ok: false, error: 'La línea no existe' };
 
-    const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${item.order_id}`;
-    if (order?.alegra_invoice_id) {
-        return { ok: false, error: 'El pedido ya fue facturado: no se pueden modificar ítems' };
-    }
-
     const result = await updateOrderItemInternal(itemId, patch);
     if (result.ok) {
+        await markInvoiceStale(item.order_id);
         const cambioCantidad =
             patch.quantity !== undefined && Number(patch.quantity) !== Number(item.quantity);
 
@@ -453,13 +454,9 @@ export async function deleteOrderItem(itemId: number): Promise<import('@/lib/ord
     const [item] = await sql`SELECT order_id, product, quantity FROM order_items WHERE id = ${itemId}`;
     if (!item) return { ok: false, error: 'La línea no existe' };
 
-    const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${item.order_id}`;
-    if (order?.alegra_invoice_id) {
-        return { ok: false, error: 'El pedido ya fue facturado: no se pueden quitar ítems' };
-    }
-
     const result = await deleteOrderItemInternal(itemId);
     if (result.ok) {
+        await markInvoiceStale(item.order_id);
         await logOrderEvent(item.order_id, {
             kind: 'item_removed',
             oldValue: `${item.quantity} × ${item.product}`,
@@ -479,13 +476,9 @@ export async function addOrderItem(
     const session = await auth();
     if (!session?.user) return { ok: false, error: 'No autenticado' };
 
-    const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${orderId}`;
-    if (order?.alegra_invoice_id) {
-        return { ok: false, error: 'El pedido ya fue facturado: no se pueden agregar ítems' };
-    }
-
     const result = await addOrderItemInternal(orderId, payload);
     if (result.ok) {
+        await markInvoiceStale(orderId);
         await logOrderEvent(orderId, {
             kind: 'item_added',
             newValue: `${payload.quantity} × ${payload.product}`,

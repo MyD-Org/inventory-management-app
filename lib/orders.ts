@@ -244,6 +244,8 @@ export interface Order {
     alegra_invoice_number: string | null
     /** Qué no se pudo facturar, si la factura salió incompleta. */
     invoice_warnings: string[]
+    /** El pedido cambió después de facturar y la factura todavía no se actualizó. */
+    invoice_stale: boolean
     items: OrderItem[]
     modified_at: string | null
     delivery_date_verified_at: string | null
@@ -270,6 +272,17 @@ export function normalizeOrigin(v: unknown): OrderOrigin {
     return isOrderOrigin(limpio) ? (limpio as OrderOrigin) : "manual"
 }
 
+// El pedido cambió después de facturar: la factura de Alegra quedó diciendo otra
+// cosa. La llaman los tres caminos que tocan ítems, tanto desde la web como desde
+// la API del CRM. No hace nada si el pedido todavía no se facturó, así que se
+// puede llamar sin preguntar antes.
+export async function markInvoiceStale(orderId: number): Promise<void> {
+    await sql`
+        UPDATE orders SET invoice_stale = TRUE
+        WHERE id = ${orderId} AND alegra_invoice_id IS NOT NULL
+    `
+}
+
 export async function readOrder(orderId: number): Promise<Order | null> {
     const overrides = await getCustomerStatusMap()
     const [order] = await sql`
@@ -278,7 +291,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
                -- ::text para no arrastrar corrimiento de zona: es una fecha, no un instante
                delivery_date_estimate::text AS delivery_date_estimate,
                source_conversation, notes, invoice_terms, invoice_notes, created_at, updated_at,
-               alegra_invoice_id, alegra_invoice_number, invoice_warnings,
+               alegra_invoice_id, alegra_invoice_number, invoice_warnings, invoice_stale,
                modified_at::text AS modified_at,
                delivery_date_verified_at::text AS delivery_date_verified_at
         FROM orders WHERE id = ${orderId}

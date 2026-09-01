@@ -1,11 +1,17 @@
 "use client"
 
-// Emitir la factura del pedido en Alegra. Solo lo monta el admin.
+// Emitir la factura del pedido en Alegra, o poner al día la que ya se emitió.
+//
+// DOS MODOS, UN SOLO COMPONENTE: "emitir" crea la factura (POST) y "actualizar"
+// reescribe las líneas de la que ya existe (PUT), sin cambiar el número. La
+// pantalla es la misma porque la pregunta es la misma —"¿esto es lo que va a
+// decir la factura?"— y lo único que cambia es el verbo.
 //
 // SIEMPRE muestra antes qué se va a facturar. Emitir es irreversible del lado de
 // Alegra —una factura se anula, no se borra— así que el paso de simulación no es
 // opcional: se ve el detalle de cada renglón, el total y qué quedó afuera, y
-// recién ahí se confirma.
+// recién ahí se confirma. La simulación (GET) se calcula con el estado ACTUAL del
+// pedido, así que en modo actualizar muestra exactamente lo que va a quedar.
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -20,7 +26,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { FileText, Loader2, TriangleAlert } from "lucide-react"
+import { FileText, Loader2, RefreshCw, TriangleAlert } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { formatArs } from "@/components/budget-editor"
 import { updateOrderFields } from "@/lib/order-actions"
@@ -48,7 +54,15 @@ interface Preview {
     notes: string | null
 }
 
-export function InvoiceButton({ orderId }: { orderId: number }) {
+export function InvoiceButton({
+    orderId,
+    mode = "emitir",
+}: {
+    orderId: number
+    /** "actualizar" = ya hay factura y el pedido cambió después. */
+    mode?: "emitir" | "actualizar"
+}) {
+    const actualizando = mode === "actualizar"
     const router = useRouter()
     const { toast } = useToast()
     const [open, setOpen] = useState(false)
@@ -94,19 +108,23 @@ export function InvoiceButton({ orderId }: { orderId: number }) {
     async function emitir() {
         setEmitiendo(true)
         try {
-            // Aseguramos que el último valor quede guardado antes de emitir.
+            // Aseguramos que el último valor quede guardado antes de emitir. En
+            // modo actualizar el server los lee del pedido, así que este guardado
+            // no es cosmético: es de dónde salen los que van a la factura.
             await updateOrderFields(orderId, {
                 invoice_terms: terms.trim() || null,
                 invoice_notes: notes.trim() || null,
             })
             const res = await fetch(`/api/pedidos/${orderId}/facturar`, {
-                method: "POST",
+                method: actualizando ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ terms, notes }),
             })
             const data = await res.json()
             if (!res.ok) {
-                toast.error("No se pudo emitir", { description: data.error })
+                toast.error(actualizando ? "No se pudo actualizar" : "No se pudo emitir", {
+                    description: data.error,
+                })
                 return
             }
             if (data.invoiceId == null) {
@@ -114,17 +132,18 @@ export function InvoiceButton({ orderId }: { orderId: number }) {
                 return
             }
             // Salió con avisos: se emitió, pero algo quedó afuera y hay que mirarlo.
+            const verbo = actualizando ? "actualizada" : "emitida"
             if (data.warnings?.length > 0) {
-                toast.warning(`Factura ${data.invoiceNumber ?? data.invoiceId} emitida`, {
+                toast.warning(`Factura ${data.invoiceNumber ?? data.invoiceId} ${verbo}`, {
                     description: data.warnings.join(" "),
                 })
             } else {
-                toast.success(`Factura ${data.invoiceNumber ?? data.invoiceId} emitida`)
+                toast.success(`Factura ${data.invoiceNumber ?? data.invoiceId} ${verbo}`)
             }
             setOpen(false)
             router.refresh()
         } catch {
-            toast.error("No se pudo emitir la factura")
+            toast.error(actualizando ? "No se pudo actualizar la factura" : "No se pudo emitir la factura")
         } finally {
             setEmitiendo(false)
         }
@@ -136,14 +155,23 @@ export function InvoiceButton({ orderId }: { orderId: number }) {
     return (
         <>
             <Button variant="outline" size="sm" onClick={abrir} disabled={cargando} className="no-print">
-                {cargando ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-2 h-3.5 w-3.5" />}
-                Emitir factura
+                {cargando ? (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                ) : actualizando ? (
+                    <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                ) : (
+                    <FileText className="mr-2 h-3.5 w-3.5" />
+                )}
+                {actualizando ? "Actualizar factura" : "Emitir factura"}
             </Button>
 
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="max-w-2xl w-[calc(100%-2rem)] overflow-hidden">
                     <DialogHeader className="flex flex-row items-start justify-between gap-4">
-                        <DialogTitle>Factura para {preview?.clientName ?? "el cliente"}</DialogTitle>
+                        <DialogTitle>
+                            {actualizando ? "Actualizar factura de " : "Factura para "}
+                            {preview?.clientName ?? "el cliente"}
+                        </DialogTitle>
                         {preview?.numberTemplate && (
                             <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
                                 N: {preview.numberTemplate.name}
@@ -236,7 +264,7 @@ export function InvoiceButton({ orderId }: { orderId: number }) {
                         </Button>
                         <Button onClick={emitir} disabled={emitiendo || sinCliente || sinLineas}>
                             {emitiendo && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                            Emitir en Alegra
+                            {actualizando ? "Actualizar en Alegra" : "Emitir en Alegra"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -3,7 +3,7 @@ import { auth } from "@/auth"
 import { logOrderEvent } from "@/lib/order-events"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
 import { isAlegraConfigured } from "@/lib/alegra"
-import { invoiceOrder, previewInvoice } from "@/lib/invoicing"
+import { invoiceOrder, previewInvoice, updateOrderInvoice } from "@/lib/invoicing"
 
 // Facturar un pedido en Alegra.
 //
@@ -11,6 +11,8 @@ import { invoiceOrder, previewInvoice } from "@/lib/invoicing"
 //         qué precio, sin tocar Alegra. Es la forma de probar contra pedidos
 //         reales sin emitir nada en la contabilidad.
 // POST -> EMITE de verdad. Solo admin.
+// PUT  -> ACTUALIZA la factura ya emitida, cuando el pedido cambió después. Edita
+//         la misma factura de Alegra: no emite una segunda ni cambia el número.
 //
 // Emitir una factura es irreversible del lado de Alegra (se anula, no se borra),
 // así que el permiso es de admin y no de cualquier usuario con sesión.
@@ -92,6 +94,40 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         return NextResponse.json(resultado)
     } catch (error) {
         console.error("Error facturando:", error)
+        return NextResponse.json({ error: error instanceof Error ? error.message : "Error" }, { status: 502 })
+    }
+}
+
+
+// Poner al día la factura de un pedido que se modificó después de emitirse.
+//
+// El permiso es el mismo que para emitir: si alguien del taller puede corregir el
+// pedido, tiene que poder dejar la factura acorde. Lo contrario —poder desalinearla
+// pero no arreglarla— es peor que las dos opciones.
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+    const session = await auth()
+    if (!session?.user) {
+        return NextResponse.json({ error: "No autenticado" }, { status: 401 })
+    }
+    if (!isAlegraConfigured()) {
+        return NextResponse.json({ error: "Alegra no está configurado" }, { status: 503 })
+    }
+
+    const orderId = Number.parseInt(params.id, 10)
+    if (!Number.isFinite(orderId)) return NextResponse.json({ error: "Pedido inválido" }, { status: 400 })
+
+    try {
+        const resultado = await updateOrderInvoice(orderId)
+        await logOrderEvent(orderId, {
+            kind: "invoice",
+            field: "actualizada",
+            newValue: resultado.invoiceNumber ?? String(resultado.invoiceId),
+        })
+        return NextResponse.json(resultado)
+    } catch (error) {
+        // El mensaje de Alegra se pasa tal cual: "Se ha excedido la cantidad
+        // disponible" le dice al taller qué hacer; "Error 400" no.
+        console.error("Error actualizando factura:", error)
         return NextResponse.json({ error: error instanceof Error ? error.message : "Error" }, { status: 502 })
     }
 }

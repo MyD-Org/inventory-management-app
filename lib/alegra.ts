@@ -293,6 +293,40 @@ export interface CreatedInvoice {
     url: string
 }
 
+// Reescribe las líneas de una factura YA EMITIDA. Se usa cuando el pedido cambió
+// después de facturar: en vez de emitir una segunda factura, se corrige la que hay.
+//
+// SE MANDA EL ARRAY COMPLETO de líneas, no un delta: Alegra reemplaza los ítems por
+// lo que reciba. Y no fusiona repetidos —el mismo ítem dos veces quedan dos
+// renglones—, que es justo lo que hace falta para las variantes de un producto.
+//
+// PUEDE FALLAR POR MOTIVOS DE NEGOCIO, no solo de formato: si el ítem no tiene
+// stock suficiente, Alegra responde 400 "Se ha excedido la cantidad disponible".
+// Y una factura ya timbrada electrónicamente no se puede modificar —hoy esta cuenta
+// no timbra, pero el día que lo haga esto empieza a devolver error, no a romperse
+// en silencio. Quien llame tiene que estar preparado para el AlegraError.
+export async function updateInvoice(
+    invoiceId: number,
+    args: { lines: EstimateLine[]; terms?: string | null; invoiceNotes?: string | null },
+): Promise<CreatedInvoice> {
+    const body: Record<string, unknown> = { items: args.lines }
+    // null borra el campo en Alegra; undefined lo deja como estaba.
+    if (args.terms !== undefined) body.paymentTerms = args.terms
+    if (args.invoiceNotes !== undefined) body.invoiceNotes = args.invoiceNotes
+
+    const inv = await alegraFetch<{ id: number; numberTemplate?: { fullNumber?: string; number?: string | number } }>(
+        `/invoices/${invoiceId}`,
+        { method: "PUT", body: JSON.stringify(body) },
+    )
+
+    const number = inv.numberTemplate?.fullNumber ?? inv.numberTemplate?.number ?? null
+    return {
+        id: Number(inv.id),
+        number: number != null ? String(number) : null,
+        url: `https://app.alegra.com/invoice/view/id/${inv.id}`,
+    }
+}
+
 // Emite una factura. ESCRIBE en la contabilidad real: todo lo que la llama tiene
 // que poder correrse antes en modo simulación (ver lib/invoicing.ts).
 export async function createInvoice(args: {

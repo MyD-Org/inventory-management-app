@@ -1,5 +1,5 @@
 import { sql } from "@/lib/database"
-import { createInvoice, listNumberTemplates, type EstimateLine, type NumberTemplate } from "@/lib/alegra"
+import { createInvoice, listNumberTemplates, updateInvoice, type EstimateLine, type NumberTemplate } from "@/lib/alegra"
 import { normalizeVariant } from "@/lib/alegra-sync"
 
 // Facturar un pedido en Alegra.
@@ -303,6 +303,7 @@ export async function invoiceOrder(
             alegra_invoice_id = ${creada.id},
             alegra_invoice_number = ${creada.number},
             alegra_invoiced_at = NOW(),
+            invoice_synced_at = NOW(),
             invoice_warnings = ${JSON.stringify(preview.warnings)}::jsonb,
             invoice_terms = ${terms},
             invoice_notes = ${notes}
@@ -314,6 +315,65 @@ export async function invoiceOrder(
         invoiceId: creada.id,
         invoiceNumber: creada.number,
         invoiceUrl: creada.url,
+        dryRun: false,
+    }
+}
+
+
+// Poner al día la factura de un pedido que cambió después de emitirse.
+//
+// NO EMITE UNA SEGUNDA FACTURA: edita la misma, con las líneas recalculadas desde
+// el estado actual del pedido. El número no cambia.
+//
+// ES MANUAL A PROPÓSITO. Se decidió no dispararlo solo al editar un ítem: escribir
+// en la contabilidad de fondo, sin que nadie lo pida, es la clase de cosa que se
+// descubre tarde y mal. El pedido queda marcado (invoice_stale) y alguien aprieta
+// el botón cuando terminó de corregir, no en cada tecla.
+export async function updateOrderInvoice(orderId: number): Promise<InvoiceResult> {
+    const [existing] = await sql`
+        SELECT alegra_invoice_id, alegra_invoice_number, invoice_terms, invoice_notes
+        FROM orders WHERE id = ${orderId}
+    `
+    if (!existing?.alegra_invoice_id) {
+        throw new Error("El pedido no tiene factura emitida: no hay nada que actualizar.")
+    }
+
+    const preview = await previewInvoice(orderId)
+
+    // Vaciar una factura no es una actualización, es un error de otra cosa. Se para
+    // acá antes de mandarle a Alegra una factura sin renglones.
+    if (preview.lines.length === 0) {
+        throw new Error("El pedido no tiene ninguna línea facturable: la factura no se tocó.")
+    }
+
+    const lineas: EstimateLine[] = preview.lines.map((l) => ({
+        id: l.alegraItemId,
+        description: l.description,
+        price: l.price,
+        quantity: l.quantity,
+    }))
+
+    const actualizada = await updateInvoice(Number(existing.alegra_invoice_id), {
+        lines: lineas,
+        terms: (existing.invoice_terms as string | null) ?? null,
+        invoiceNotes: (existing.invoice_notes as string | null) ?? null,
+    })
+
+    // Recién con Alegra confirmando se baja la bandera: si el PUT falla, el pedido
+    // tiene que seguir avisando que la factura está desactualizada.
+    await sql`
+        UPDATE orders SET
+            invoice_warnings = ${JSON.stringify(preview.warnings)}::jsonb,
+            invoice_stale = FALSE,
+            invoice_synced_at = NOW()
+        WHERE id = ${orderId}
+    `
+
+    return {
+        ...preview,
+        invoiceId: actualizada.id,
+        invoiceNumber: actualizada.number ?? ((existing.alegra_invoice_number as string) ?? null),
+        invoiceUrl: actualizada.url,
         dryRun: false,
     }
 }

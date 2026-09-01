@@ -83,6 +83,40 @@ export async function logOrderEvents(
     for (const e of events) await logOrderEvent(orderId, e)
 }
 
+/**
+ * Qué se le tocó al pedido DESPUÉS de que la factura quedó al día. Es lo que el
+ * aviso de "factura desactualizada" enumera, para no obligar a nadie a abrir el
+ * historial y deducirlo.
+ *
+ * Solo eventos de ítems: son los únicos que cambian lo que dice la factura. Un
+ * cambio de prioridad no la desalinea y meterlo en la lista sería ruido.
+ *
+ * El corte se hace EN SQL contra invoice_synced_at y no comparando fechas en JS:
+ * las dos vienen de Postgres y compararlas allá evita el ida y vuelta de formatos.
+ */
+export async function listInvoiceDrift(orderId: number): Promise<OrderEvent[]> {
+    try {
+        const rows = await sql`
+            SELECT e.id, e.actor_name, e.actor_email, e.kind, e.field,
+                   e.old_value, e.new_value, e.body,
+                   e.created_at::text AS created_at
+            FROM order_events e
+            JOIN orders o ON o.id = e.order_id
+            WHERE e.order_id = ${orderId}
+              AND o.invoice_synced_at IS NOT NULL
+              AND e.created_at > o.invoice_synced_at
+              AND e.kind IN ('item_added', 'item_updated', 'item_removed')
+            ORDER BY e.created_at ASC, e.id ASC
+        `
+        return rows as OrderEvent[]
+    } catch (error) {
+        // Igual que la historia: si esto falla, el pedido se abre lo mismo. El
+        // aviso pierde el detalle, no la advertencia.
+        console.error("No se pudo leer qué cambió desde la factura:", error)
+        return []
+    }
+}
+
 export async function listOrderEvents(orderId: number): Promise<OrderEvent[]> {
     try {
         const rows = await sql`
