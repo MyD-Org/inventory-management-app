@@ -213,23 +213,30 @@ export default async function OrderDetailPage({
                     <Fact label="Factura">
                             {order.alegra_invoice_id ? (
                                 <div className="flex flex-col items-start gap-1.5">
-                                    <a
-                                        href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-                                    >
-                                        {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
-                                        <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                    {/* La marca abre el detalle de qué cambió y el
-                                        botón queda al lado: el aviso no se lleva
-                                        puesta la columna del trabajo. */}
+                                    {/* El triángulo va pegado al número: es de esa
+                                        factura de lo que avisa. Abre el detalle de
+                                        qué cambió, y el botón queda debajo. Así el
+                                        aviso no se lleva puesta la columna del
+                                        trabajo, que es lo que el taller lee. */}
+                                    <div className="flex items-center gap-1.5">
+                                        <a
+                                            href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                                        >
+                                            {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
+                                            <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                        {order.invoice_stale && (
+                                            <DocumentStaleTag
+                                                label="Factura desactualizada"
+                                                changes={invoiceDrift.map(describeDrift)}
+                                            />
+                                        )}
+                                    </div>
                                     {order.invoice_stale && (
-                                        <div className="flex flex-wrap items-center gap-1.5">
-                                            <DocumentStaleTag changes={invoiceDrift.map(describeDrift)} />
-                                            <InvoiceButton orderId={order.id} mode="actualizar" />
-                                        </div>
+                                        <InvoiceButton orderId={order.id} mode="actualizar" />
                                     )}
                                 </div>
                             ) : (
@@ -245,23 +252,25 @@ export default async function OrderDetailPage({
                     <Fact label="Remito">
                         {order.alegra_remission_id ? (
                             <div className="flex flex-col items-start gap-1.5">
-                                <a
-                                    href={`https://app.alegra.com/remission/view/id/${order.alegra_remission_id}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-                                >
-                                    {order.alegra_remission_number ?? `#${order.alegra_remission_id}`}
-                                    <ExternalLink className="h-3 w-3" />
-                                </a>
-                                {order.remission_stale && (
-                                    <div className="flex flex-wrap items-center gap-1.5">
+                                <div className="flex items-center gap-1.5">
+                                    <a
+                                        href={`https://app.alegra.com/remission/view/id/${order.alegra_remission_id}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                                    >
+                                        {order.alegra_remission_number ?? `#${order.alegra_remission_id}`}
+                                        <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                    {order.remission_stale && (
                                         <DocumentStaleTag
-                                            label="desactualizado"
+                                            label="Remito desactualizado"
                                             changes={remissionDrift.map(describeDrift)}
                                         />
-                                        <RemissionButton orderId={order.id} mode="actualizar" />
-                                    </div>
+                                    )}
+                                </div>
+                                {order.remission_stale && (
+                                    <RemissionButton orderId={order.id} mode="actualizar" />
                                 )}
                             </div>
                         ) : (

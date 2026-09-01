@@ -1,23 +1,29 @@
 "use client"
 
-// La marca de "desactualizada" en la ficha del pedido, con el detalle adentro.
+// El aviso de documento desactualizado en la ficha del pedido, con el detalle adentro.
 //
 // POR QUÉ UN POPOVER Y NO UN CARTEL: esto vivía arriba de todo, en la columna del
 // trabajo, y le ganaba el lugar a lo que el taller necesita leer —qué hay que
-// armar—. Que la factura quedó vieja importa, pero no más que el pedido. Acá la
-// marca ocupa una palabra al lado del número y el detalle aparece solo si se lo
-// pide.
+// armar—. Que la factura quedó vieja importa, pero no más que el pedido. Acá el
+// aviso ocupa un ícono al lado del número y el detalle aparece solo si se lo pide.
+//
+// EL MISMO TRIÁNGULO ÁMBAR que ya avisa en los diálogos de emitir factura y remito:
+// es el lenguaje de avisos de la app y no hace falta leer una palabra para
+// entenderlo. El texto está en el aria-label, que es donde lo necesita quien no
+// puede ver el ícono.
 //
 // SE ABRE CON CLICK Y NO CON HOVER a propósito: la mitad del taller lo mira desde
 // el teléfono, y ahí el hover no existe.
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { TriangleAlert } from "lucide-react"
 
 export function DocumentStaleTag({
-    label = "desactualizada",
+    label,
     changes,
 }: {
-    label?: string
+    /** Para el lector de pantalla y el title: "Factura desactualizada". */
+    label: string
     /** Qué cambió desde que el documento quedó al día, ya redactado. */
     changes: string[]
 }) {
@@ -26,13 +32,15 @@ export function DocumentStaleTag({
             <PopoverTrigger asChild>
                 <button
                     type="button"
-                    className="no-print rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 underline decoration-dotted underline-offset-2 hover:bg-amber-200 dark:bg-amber-950/60 dark:text-amber-300"
+                    aria-label={label}
+                    title={label}
+                    className="no-print rounded p-0.5 text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-950/60"
                 >
-                    {label}
+                    <TriangleAlert className="h-4 w-4" />
                 </button>
             </PopoverTrigger>
             <PopoverContent align="start" className="w-80 text-sm">
-                <p className="font-medium mb-2">El pedido cambió después de emitirlo</p>
+                <p className="font-medium mb-2">{label}: el pedido cambió después de emitirlo</p>
                 {changes.length > 0 ? (
                     <ul className="space-y-1 text-xs text-muted-foreground">
                         {changes.map((c, i) => (
