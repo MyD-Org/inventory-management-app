@@ -79,6 +79,45 @@ export async function deleteUser(userId: number) {
 
 import { auth } from '@/auth';
 
+// Restablece la contraseña de OTRO usuario. Es para el caso de "me la olvidé":
+// changePassword exige la actual, así que sin esto la única salida era borrar al
+// usuario y volver a crearlo.
+//
+// La contraseña temporal la genera el sistema y se muestra UNA vez: que la elija
+// el admin termina en "el nombre del taller + 123" para todos. Queda marcada como
+// temporal (must_change_password), así que el usuario no puede usar la app hasta
+// cambiarla — una contraseña que conocen dos personas no puede quedar viva.
+const ALFABETO_TEMPORAL = 'abcdefghijkmnpqrstuvwxyz23456789'; // sin l/o/0/1: se confunden al dictarla
+
+export async function resetUserPassword(userId: number) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
+
+    const sql = neon(process.env.DATABASE_URL!);
+
+    try {
+        const [user] = await sql`SELECT id, name, email FROM users WHERE id = ${userId}`;
+        if (!user) return { error: 'El usuario no existe' };
+
+        const bytes = crypto.getRandomValues(new Uint8Array(10));
+        const temporal = Array.from(bytes, (b) => ALFABETO_TEMPORAL[b % ALFABETO_TEMPORAL.length]).join('');
+
+        await sql`
+            UPDATE users
+            SET password = ${await bcrypt.hash(temporal, 10)}, must_change_password = TRUE
+            WHERE id = ${userId}
+        `;
+
+        revalidatePath('/settings/users');
+        return { success: true, temporaryPassword: temporal, email: user.email as string };
+    } catch (error) {
+        console.error('Error reseteando la contraseña:', error);
+        return { error: 'No se pudo restablecer la contraseña' };
+    }
+}
+
 export async function changePassword(prevState: string | undefined, formData: FormData) {
     const session = await auth();
     if (!session?.user?.email) {
@@ -121,7 +160,7 @@ export async function changePassword(prevState: string | undefined, formData: Fo
 
         await sql`
             UPDATE users 
-            SET password = ${hashedPassword} 
+            SET password = ${hashedPassword}, must_change_password = FALSE
             WHERE email = ${session.user.email}
         `;
 
