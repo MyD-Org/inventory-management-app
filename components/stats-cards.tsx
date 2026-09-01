@@ -58,9 +58,15 @@ async function getInventoryStats() {
   }
 }
 
+// El valor del inventario está APAGADO por pedido: por ahora no se muestra a
+// nadie, admin incluido. Poner en true para volver a mostrárselo a los admins
+// (a los operadores nunca se les mostró: es información sensible).
+const MOSTRAR_VALOR_INVENTARIO = false
+
 export async function StatsCards() {
   const [stats, session] = await Promise.all([getInventoryStats(), auth()])
   const isAdmin = session?.user?.role === "admin"
+  const mostrarValor = MOSTRAR_VALOR_INVENTARIO && isAdmin
 
   const cards = [
     {
@@ -76,7 +82,7 @@ export async function StatsCards() {
       description: "Unidades en inventario",
     },
     // Valor de inventario: información sensible, solo visible para admins
-    ...(isAdmin
+    ...(mostrarValor
       ? [
           {
             title: "Valor de Inventario",
@@ -104,7 +110,7 @@ export async function StatsCards() {
   return (
     <div
       className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${
-        isAdmin ? "lg:grid-cols-5" : "lg:grid-cols-4"
+        mostrarValor ? "lg:grid-cols-5" : "lg:grid-cols-4"
       }`}
     >
       {cards.map((card, index) => (
