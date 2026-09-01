@@ -17,7 +17,7 @@ export default function PedidoNoEncontrado() {
             <PackageX className="mx-auto h-10 w-10 text-muted-foreground" />
             <h1 className="mt-4 font-display text-2xl font-bold">Pedido no encontrado</h1>
             <p className="mt-2 text-base text-muted-foreground">
-                Puede que se haya borrado.
+                Puede que se haya borrado o que la URL sea incorrecta.
             </p>
             <div className="mt-6 flex items-center justify-center gap-2">
                 <Button asChild>
