@@ -96,16 +96,16 @@ export default async function EditCostPage({ params }: { params: { id: string } 
                         Inicio
                     </Link>
                     <ChevronRight className="w-3.5 h-3.5" />
-                    <Link href="/costos" className="hover:text-foreground transition-colors">
-                        Costos
+                    <Link href="/fichas" className="hover:text-foreground transition-colors">
+                        Fichas de producto
                     </Link>
                     <ChevronRight className="w-3.5 h-3.5" />
                     <span className="text-foreground font-medium truncate max-w-[50vw]">{row.name}</span>
                 </nav>
 
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold">Editar Cálculo de Costo</h1>
-                    <p className="text-sm text-muted-foreground">Calculado el {calcDate}</p>
+                    <h1 className="text-2xl font-bold">Ficha de producto</h1>
+                    <p className="text-sm text-muted-foreground">{row.name} · creada el {calcDate}</p>
                 </div>
                 <BudgetEditor
                     budget={budget}

@@ -10,7 +10,6 @@ import {
   ArrowUpFromLine,
   Package,
   PlusCircle,
-  Calculator,
   FileSpreadsheet,
   BarChart3,
   ArrowLeftRight,
@@ -88,7 +87,7 @@ const sections: NavSection[] = [
       // Materias primas que vienen en variantes (tira LED por color, grampa por
       // largo): el mapeo variante -> material que usan las hojas de costo.
       { label: "Familias de Materiales", href: "/materials/familias", icon: Layers, adminOnly: true },
-      { label: "Calcular Costos", href: "/costos", icon: Calculator, activePrefixes: ["/costos/"] },
+      { label: "Fichas de producto", href: "/fichas", icon: ClipboardList, activePrefixes: ["/fichas/"] },
       { label: "Mano de Obra", href: "/settings/recursos", icon: HardHat, adminOnly: true },
       // Presupuestos oculto temporalmente (del menú y de la IA). Para reactivar, descomentar
       // esta línea y las tools/prompt de presupuestos en components/ai-assistant.tsx.

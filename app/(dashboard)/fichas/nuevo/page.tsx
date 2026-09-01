@@ -32,14 +32,14 @@ export default async function NewCostPage() {
                         Inicio
                     </Link>
                     <ChevronRight className="w-3.5 h-3.5" />
-                    <Link href="/costos" className="hover:text-foreground transition-colors">
-                        Costos
+                    <Link href="/fichas" className="hover:text-foreground transition-colors">
+                        Fichas de producto
                     </Link>
                     <ChevronRight className="w-3.5 h-3.5" />
                     <span className="text-foreground font-medium">Nuevo</span>
                 </nav>
 
-                <h1 className="text-2xl font-bold mb-6">Nuevo Cálculo de Costo</h1>
+                <h1 className="text-2xl font-bold mb-6">Nueva ficha de producto</h1>
                 <BudgetEditor
                     budget={null}
                     resources={resources.map(r => ({

@@ -264,7 +264,7 @@ export async function saveBudget(id: number | null, payload: BudgetPayload) {
             `;
         }
 
-        revalidatePath('/costos');
+        revalidatePath('/fichas');
         return { success: true, id: budgetId };
     } catch (error) {
         console.error('Error saving budget:', error);
@@ -278,7 +278,7 @@ export async function deleteBudget(id: number) {
 
     try {
         await sql`DELETE FROM budgets WHERE id = ${id}`; // líneas caen por CASCADE
-        revalidatePath('/costos');
+        revalidatePath('/fichas');
         return { success: true };
     } catch (error) {
         console.error('Error deleting budget:', error);

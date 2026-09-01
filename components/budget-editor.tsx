@@ -540,7 +540,7 @@ export function BudgetEditor({
             return
         }
         toast.success("Cálculo de costo guardado")
-        router.push("/costos")
+        router.push("/fichas")
         router.refresh()
     }
 
@@ -555,7 +555,7 @@ export function BudgetEditor({
         }
         setConfirmOpen(false)
         toast.success("Cálculo eliminado")
-        router.push("/costos")
+        router.push("/fichas")
         router.refresh()
     }
 

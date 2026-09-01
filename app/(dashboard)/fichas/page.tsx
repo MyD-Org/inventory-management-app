@@ -39,15 +39,15 @@ export default async function CostsPage() {
             <main className="container mx-auto px-4 py-6">
                 <div className="flex items-center justify-between mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold">Costos de Fabricación</h1>
+                        <h1 className="text-2xl font-bold">Fichas de producto</h1>
                         <p className="text-sm text-muted-foreground">
-                            Costo real de producción a partir del inventario, mano de obra y otros costos
+                            Materiales, mano de obra y precio de cada producto
                         </p>
                     </div>
-                    <Link href="/costos/nuevo">
+                    <Link href="/fichas/nuevo">
                         <Button>
                             <Plus className="mr-2 h-4 w-4" />
-                            Nuevo Cálculo
+                            Nueva ficha
                         </Button>
                     </Link>
                 </div>

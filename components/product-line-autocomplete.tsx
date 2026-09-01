@@ -4,7 +4,7 @@
 // productos costeados con búsqueda difusa (tolera acentos y typos). El presupuesto SOLO
 // admite productos ya costeados: si lo que se escribe no coincide con ninguno, la línea
 // queda marcada como inválida y no se puede guardar hasta elegir uno existente (o crearlo
-// en Calcular Costos).
+// en Fichas de producto).
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
@@ -104,7 +104,7 @@ export function ProductLineAutocomplete({
                     )}
                     {/* Presupuestos solo usa productos ya costeados: acceso directo a crearlo. */}
                     <Link
-                        href="/costos/nuevo"
+                        href="/fichas/nuevo"
                         className="flex items-center gap-2 border-t p-2.5 text-sm font-medium text-primary hover:bg-muted"
                         onClick={() => setOpen(false)}
                     >
