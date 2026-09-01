@@ -70,7 +70,6 @@ export function NewOrderPage({
     // romperlo; repartiendo el resto, entra siempre.
     const anchoCol = (kind: string) => (kind === "boolean" ? "w-[80px]" : "")
 
-    const listo = customer !== null && lines.length > 0
 
     function setSpec(idx: number, key: string, value: string | null) {
         setLines((ls) =>
@@ -85,15 +84,26 @@ export function NewOrderPage({
     }
 
     async function crear() {
-        if (!listo) return
+        // Se valida al apretar y NO apagando el botón. Un botón deshabilitado no
+        // dice qué le falta: hay que recorrer el formulario adivinando cuál de los
+        // dos datos es el que lo tiene trabado. Acá se nombra el que falta.
+        if (!customer) {
+            toast.error("Falta el cliente", { description: "Elegí para quién es el pedido." })
+            return
+        }
+        if (lines.length === 0) {
+            toast.error("Falta el producto", { description: "Agregá al menos un producto al pedido." })
+            return
+        }
+
         setSaving(true)
         const result = await createOrderManual({
             external_id: "",
             origin: "manual",
             customer: {
-                external_id: customer!.external_id,
-                name: customer!.name,
-                phone: customer!.phone,
+                external_id: customer.external_id,
+                name: customer.name,
+                phone: customer.phone,
             },
             items: lines,
             delivery_date_estimate: eta || null,
@@ -144,11 +154,9 @@ export function NewOrderPage({
                                                 <span className="block truncate">{field.label}</span>
                                             </th>
                                         ))}
-                                        {/* 80px y no 44: la tabla es table-fixed, y en la
-                                            fila que se está cargando esta columna tiene el
-                                            botón "Listo", que no entra en el ancho de un
-                                            icono y se desbordaba fuera del recuadro. */}
-                                        <th className="w-[80px]" />
+                                        {/* Solo el tacho de quitar: la tabla es table-fixed
+                                            y esta columna se ajusta al ancho de un icono. */}
+                                        <th className="w-[44px]" />
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -283,9 +291,24 @@ export function NewOrderPage({
                                                         onCancel={() =>
                                                             lines.length > 0 && setAgregando(false)
                                                         }
-                                                        onPick={(product) =>
-                                                            setBorrador((b) => ({ ...b, product }))
-                                                        }
+                                                        onPick={(product) => {
+                                                            // La fila se suma sola al elegir el
+                                                            // producto: sin producto no hay línea y
+                                                            // con producto ya es una, así que
+                                                            // confirmarla a mano no decide nada.
+                                                            //
+                                                            // Además cerraba un agujero: crear()
+                                                            // manda `lines`, y una fila a medio
+                                                            // cargar en el borrador se perdía sin
+                                                            // aviso al apretar "Crear pedido".
+                                                            //
+                                                            // La cantidad y las specs que se hayan
+                                                            // tipeado antes de elegir el producto se
+                                                            // llevan con la fila.
+                                                            setLines((ls) => [...ls, { ...borrador, product }])
+                                                            setBorrador({ product: "", quantity: 1, specs: {} })
+                                                            setAgregando(false)
+                                                        }}
                                                     />
                                                 )}
                                             </td>
@@ -365,20 +388,7 @@ export function NewOrderPage({
                                                 </td>
                                             ))}
 
-                                            <td className="px-2 py-2 text-right">
-                                                <Button
-                                                    size="sm"
-                                                    className="h-8"
-                                                    disabled={!borrador.product || borrador.quantity <= 0}
-                                                    onClick={() => {
-                                                        setLines((ls) => [...ls, borrador])
-                                                        setBorrador({ product: "", quantity: 1, specs: {} })
-                                                        setAgregando(false)
-                                                    }}
-                                                >
-                                                    Listo
-                                                </Button>
-                                            </td>
+                                            <td className="px-2 py-2" />
                                         </tr>
                                     )}
 
@@ -415,17 +425,10 @@ export function NewOrderPage({
                                 Cancelar
                             </Button>
                         </Link>
-                        <Button size="sm" onClick={crear} disabled={!listo || saving}>
+                        <Button size="sm" onClick={crear} disabled={saving}>
                             {saving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
                             Crear pedido
                         </Button>
-                        {!listo && (
-                            <span className="text-sm text-muted-foreground">
-                                {customer === null
-                                    ? "Elegí un cliente para poder crearlo"
-                                    : "Agregá al menos un producto"}
-                            </span>
-                        )}
                     </div>
                 </div>
 
