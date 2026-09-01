@@ -47,7 +47,7 @@ export interface QuoteEditorData {
     alegraContactId: number | null
 }
 
-// Producto costeado disponible para agregar (un cálculo de costo de /costos).
+// Producto costeado disponible para agregar (un cálculo de costo de /fichas).
 export interface CostedProduct {
     id: number
     name: string
@@ -199,7 +199,7 @@ export function QuoteEditor({
         const badItem = items.find((it) => it.label.trim() !== "" && it.budgetId === null)
         if (badItem) {
             toast.error("Producto inexistente", {
-                description: `"${badItem.label}" no es un producto costeado. Calculalo en Calcular Costos y elegilo de la lista antes de guardar.`,
+                description: `"${badItem.label}" no tiene ficha de producto. Armala en Fichas de producto y elegilo de la lista antes de guardar.`,
             })
             return
         }
@@ -296,7 +296,7 @@ export function QuoteEditor({
                     <CardContent className="space-y-3">
                         {products.length === 0 && (
                             <p className="text-xs text-muted-foreground">
-                                No hay productos costeados todavía. Calculá el costo de un producto en Calcular Costos
+                                No hay productos costeados todavía. Armá la ficha de un producto en Fichas de producto
                                 para elegirlo desde la lista (o cargá una línea manual escribiendo el nombre).
                             </p>
                         )}

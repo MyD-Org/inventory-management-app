@@ -7,7 +7,7 @@ import type { BudgetCard } from "@myd-org/ai-widget"
 import "@myd-org/ai-widget/styles"
 
 // Clave de sessionStorage donde se deja el borrador que genera la IA (BudgetCard)
-// para que /costos/nuevo lo precargue. Ver components/budget-editor.
+// para que /fichas/nuevo lo precargue. Ver components/budget-editor.
 export const BUDGET_DRAFT_KEY = "avantec-budget-draft"
 
 // Igual pero para COTIZACIONES a clientes (presupuestos). La misma card del widget se
@@ -81,14 +81,14 @@ export function AiAssistant() {
         const res = await fetch(`/api/budgets/find?name=${encodeURIComponent(card.title)}`)
         const data = await res.json()
         if (data?.id) {
-          router.push(`/costos/${data.id}`) // existe → abrir y agregar
+          router.push(`/fichas/${data.id}`) // existe → abrir y agregar
           notifyEditor("avantec:budget-draft")
           return
         }
       } catch {
         // si falla la búsqueda, seguimos con "nuevo"
       }
-      router.push("/costos/nuevo")
+      router.push("/fichas/nuevo")
       notifyEditor("avantec:budget-draft")
     },
     [router],

@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       `
 
       // Política "último precio pisa": si es una entrada con precio, actualizamos
-      // el unit_cost del material. Así el costo de fabricación en /costos usa el
+      // el unit_cost del material. Así el costo de fabricación en /fichas usa el
       // precio de la última compra sin que el usuario tenga que editar la ficha.
       // El histórico queda en stock_movements por si en el futuro cambiamos a
       // promedio ponderado o FIFO. Para salidas/ajustes no aplica: no representan

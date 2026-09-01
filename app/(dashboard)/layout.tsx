@@ -1,8 +1,9 @@
 import type { ReactNode } from "react"
+import { cookies } from "next/headers"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { getFlags } from "@/lib/feature-flags"
-import { AppShell } from "@/components/app-shell"
+import { AppShell, SIDEBAR_COOKIE } from "@/components/app-shell"
 
 async function getMaterials() {
   try {
@@ -23,8 +24,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const session = await auth()
   const [materials, flags] = await Promise.all([getMaterials(), getFlags()])
 
+  // El sidebar plegado se recuerda en una cookie y NO en localStorage: leerlo acá
+  // hace que el server ya pinte el ancho correcto. Con localStorage el primer
+  // render sale siempre expandido y se ve el salto en cada carga.
+  const collapsed = cookies().get(SIDEBAR_COOKIE)?.value === "1"
+
   return (
-    <AppShell user={session?.user} materials={materials} flags={flags}>
+    <AppShell user={session?.user} materials={materials} flags={flags} defaultCollapsed={collapsed}>
       {children}
     </AppShell>
   )

@@ -37,17 +37,15 @@ export default async function CostsPage() {
     return (
         <div className="bg-background">
             <main className="container mx-auto px-4 py-6">
+                {/* Sin bajada: la tabla de abajo ya dice qué es esto —una fila por
+                    producto, con su costo y su margen— y un subtítulo que repite las
+                    columnas es ruido. */}
                 <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold">Costos de Fabricación</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Costo real de producción a partir del inventario, mano de obra y otros costos
-                        </p>
-                    </div>
-                    <Link href="/costos/nuevo">
+                    <h1 className="text-2xl font-bold">Fichas de producto</h1>
+                    <Link href="/fichas/nuevo">
                         <Button>
                             <Plus className="mr-2 h-4 w-4" />
-                            Nuevo Cálculo
+                            Nueva ficha
                         </Button>
                     </Link>
                 </div>

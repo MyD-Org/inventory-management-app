@@ -46,7 +46,7 @@ export default async function QuotesPage() {
                     <div>
                         <h1 className="text-2xl font-bold">Presupuestos</h1>
                         <p className="text-sm text-muted-foreground">
-                            Cotizaciones para clientes a partir de los costos de fabricación
+                            Cotizaciones para clientes a partir de las fichas de producto
                         </p>
                     </div>
                     <Link href="/presupuestos/nuevo">

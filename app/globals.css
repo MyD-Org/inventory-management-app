@@ -142,6 +142,34 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Barras de scroll finas y del color del borde, en vez de la barra gris
+     gruesa del sistema. La de la tabla de inventario quedaba pegada abajo del
+     encabezado y pesaba más que los datos. Se ven solo cuando hay algo para
+     scrollear y no ocupan lugar de más: 8px contra los ~15 del default. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 20%, transparent) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--foreground) 20%, transparent);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, var(--foreground) 35%, transparent);
+  }
 }
 
 @layer utilities {

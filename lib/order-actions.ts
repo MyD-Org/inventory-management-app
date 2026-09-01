@@ -572,7 +572,7 @@ export async function deleteSpecField(key: string) {
         `;
         await sql`DELETE FROM spec_fields WHERE key = ${key}`;
         revalidatePath('/pedidos/opciones');
-        revalidatePath('/costos');
+        revalidatePath('/fichas');
         return { ok: true };
     } catch (error) {
         console.error('Error en deleteSpecField:', error);

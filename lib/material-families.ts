@@ -174,7 +174,7 @@ export async function insertMaterialFamily(
 
         revalidatePath('/materials/familias');
         // Las hojas de costo muestran las variantes de la familia en vivo.
-        revalidatePath('/costos');
+        revalidatePath('/fichas');
         return { success: true, id: familyId };
     } catch (error) {
         // El nombre es UNIQUE: dos familias "Tira LED" serían indistinguibles en
@@ -210,7 +210,7 @@ export async function deleteMaterialFamily(id: number) {
         `;
         await sql`DELETE FROM material_families WHERE id = ${id}`;
         revalidatePath('/materials/familias');
-        revalidatePath('/costos');
+        revalidatePath('/fichas');
         return { success: true, unlinked: (row?.n as number) ?? 0 };
     } catch (error) {
         console.error('Error deleting material family:', error);

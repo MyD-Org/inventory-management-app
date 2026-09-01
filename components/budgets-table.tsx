@@ -62,7 +62,7 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
                             <TableRow
                                 key={b.id}
                                 className="cursor-pointer"
-                                onClick={() => router.push(`/costos/${b.id}`)}
+                                onClick={() => router.push(`/fichas/${b.id}`)}
                             >
                                 <TableCell className="font-medium">{b.name}</TableCell>
                                 <TableCell>{new Date(b.created_at).toLocaleDateString("es-AR")}</TableCell>
