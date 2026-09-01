@@ -21,7 +21,7 @@ export default function PedidoNoEncontrado() {
             </p>
             <div className="mt-6 flex items-center justify-center gap-2">
                 <Button asChild>
-                    <Link href="/pedidos">Ver el tablero</Link>
+                    <Link href="/pedidos">Volver al tablero</Link>
                 </Button>
                 <Button variant="ghost" asChild>
                     <Link href="/pedidos?vista=lista">Ver la lista</Link>
