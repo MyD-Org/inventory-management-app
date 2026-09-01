@@ -19,12 +19,9 @@ export default function PedidoNoEncontrado() {
             <p className="mt-2 text-base text-muted-foreground">
                 Puede que se haya borrado o que la URL sea incorrecta.
             </p>
-            <div className="mt-6 flex items-center justify-center gap-2">
+            <div className="mt-6">
                 <Button asChild>
                     <Link href="/pedidos">Volver al tablero</Link>
-                </Button>
-                <Button variant="ghost" asChild>
-                    <Link href="/pedidos?vista=lista">Ver la lista</Link>
                 </Button>
             </div>
         </div>
