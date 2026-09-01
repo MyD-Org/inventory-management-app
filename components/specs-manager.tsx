@@ -149,13 +149,14 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                                 propiedad del campo, no un renglón más de su
                                 contenido. Un campo interno lo define el taller
                                 —se completa igual— y el bot no lo pregunta. */}
-                            {/* La etiqueta NO cambia con el estado: el interruptor ya
-                                dice sí o no, y un texto que se reescribe al tocarlo
-                                obliga a releerlo para saber qué quedó. Apagado
-                                significa que la variación la define el taller. */}
+                            {/* Apagado dice qué pasa a ser el campo, no la negación
+                                de lo otro: "interna" es el estado real y se lee sin
+                                tener que mirar el interruptor. */}
                             <label className="flex items-center gap-2.5 text-sm cursor-pointer">
                                 <span className={field.offered_to_customer ? "" : "text-muted-foreground"}>
-                                    Lo elige el cliente
+                                    {field.offered_to_customer
+                                        ? "Lo elige el cliente"
+                                        : "Interna: la define el taller"}
                                 </span>
                                 <Switch
                                     checked={field.offered_to_customer}
