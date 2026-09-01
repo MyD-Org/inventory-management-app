@@ -7,14 +7,26 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
-import { Loader2 } from "lucide-react"
+import { useOrderEmission } from "@/components/order-emission"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import { ORDER_STATUSES, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
 import { StatusIcon } from "@/components/order-glyphs"
 
-export function OrderStatusSelect({ id, status }: { id: number; status: OrderStatus }) {
+export function OrderStatusSelect({
+    id,
+    status,
+    hasInvoice = false,
+    hasRemission = false,
+}: {
+    id: number
+    status: OrderStatus
+    /** Qué documentos YA existen: define qué va a emitirse al pasar a facturar. */
+    hasInvoice?: boolean
+    hasRemission?: boolean
+}) {
     const router = useRouter()
+    const { setEmitiendo } = useOrderEmission()
     const { toast } = useToast()
     const [value, setValue] = useState<OrderStatus>(status)
     const [saving, setSaving] = useState(false)
@@ -23,10 +35,20 @@ export function OrderStatusSelect({ id, status }: { id: number; status: OrderSta
         const previous = value
         setValue(next as OrderStatus)
         setSaving(true)
+        // Pasar a "Facturar y remitir" emite en Alegra lo que falte. Se avisa en la
+        // celda de cada documento que se va a emitir —y solo en esa— mientras dura.
+        const emitiendo = { invoice: false, remission: false }
+        if (next === "por_facturar") {
+            emitiendo.invoice = !hasInvoice
+            emitiendo.remission = !hasRemission
+        }
+        setEmitiendo(emitiendo)
+
         const result = await updateOrderStatus(id, next)
         setSaving(false)
         if (result.error) {
             setValue(previous)
+            setEmitiendo({ invoice: false, remission: false })
             toast.error("No se pudo cambiar el estado", { description: result.error })
             return
         }
@@ -36,16 +58,14 @@ export function OrderStatusSelect({ id, status }: { id: number; status: OrderSta
             toast.success(`Pasó a ${STATUS_LABELS[next as OrderStatus]}`)
         }
         router.refresh()
+        // El aviso se apaga cuando el pedido vuelve a leerse con los documentos ya
+        // emitidos. router.refresh() no avisa cuándo terminó, así que lo apaga el
+        // remount: la celda se vuelve a montar con el número puesto.
+        setEmitiendo({ invoice: false, remission: false })
     }
 
-    // Pasar a "Facturar y remitir" emite los dos documentos en Alegra: dos llamadas
-    // de red. Sin una señal, el desplegable se queda mudo y quieto varios segundos
-    // y parece que no pasó nada.
-    const emitiendo = saving && value === "por_facturar"
-
     return (
-        <div className="flex items-center gap-2">
-            <Select value={value} onValueChange={change} disabled={saving}>
+        <Select value={value} onValueChange={change} disabled={saving}>
             <SelectTrigger // w-fit: el control se ajusta al texto. Con w-full el recuadro tomaba
                 // toda la celda y parecía un campo vacío enorme.
                 // dark:bg-transparent: el Select de shadcn trae un relleno propio
@@ -65,13 +85,6 @@ export function OrderStatusSelect({ id, status }: { id: number; status: OrderSta
                     </SelectItem>
                 ))}
             </SelectContent>
-            </Select>
-            {emitiendo && (
-                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Emitiendo factura y remito…
-                </span>
-            )}
-        </div>
+        </Select>
     )
 }

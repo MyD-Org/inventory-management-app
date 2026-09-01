@@ -68,8 +68,10 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
     const [over, setOver] = useState<string | null>(null)
     // Estado optimista: la tarjeta salta de columna al soltar, sin esperar al server.
     const [moved, setMoved] = useState<Record<number, OrderStatus>>({})
-    // Pedidos con la emisión de factura y remito en curso en Alegra.
-    const [emitiendo, setEmitiendo] = useState<Record<number, boolean>>({})
+    // Pedidos con una emisión en curso en Alegra, y QUÉ se está emitiendo: se emite
+    // solo lo que falta, así que decir "factura y remito" cuando la factura ya
+    // estaba es una mentira que se nota —el número está ahí mismo—.
+    const [emitiendo, setEmitiendo] = useState<Record<number, string>>({})
     const [refrescando, startRefresh] = useTransition()
     // Sin esto, soltar la tarjeta dispara el click y navega al detalle sin que
     // nadie lo haya pedido.
@@ -107,7 +109,14 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
         // Alegra: dos llamadas de red que tardan. Sin esto la tarjeta se pintaba
         // "Falta emitir la factura" mientras se estaba emitiendo, que es un error
         // que se desmiente solo un segundo después.
-        if (status === "por_facturar") setEmitiendo((e) => ({ ...e, [id]: true }))
+        if (status === "por_facturar") {
+            const card = cards.find((c) => c.id === id)
+            const falta: string[] = []
+            if (!card?.alegra_invoice_id) falta.push("factura")
+            if (!card?.alegra_remission_id) falta.push("remito")
+            // Sin nada que emitir no se avisa nada: el pedido solo cambia de columna.
+            if (falta.length > 0) setEmitiendo((e) => ({ ...e, [id]: falta.join(" y ") }))
+        }
 
         const result = await updateOrderStatus(id, status)
         if (result.error) {
@@ -253,7 +262,7 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
                                             {emitiendo[card.id] && (
                                                 <span className="inline-flex w-fit items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">
                                                     <Loader2 className="h-3 w-3 animate-spin" />
-                                                    Emitiendo factura y remito…
+                                                    Emitiendo {emitiendo[card.id]}…
                                                 </span>
                                             )}
 
