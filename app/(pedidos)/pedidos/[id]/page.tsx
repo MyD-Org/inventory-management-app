@@ -14,6 +14,7 @@ import { InvoiceButton } from "@/components/invoice-button"
 import { LinkInvoiceButton } from "@/components/link-invoice-button"
 import { RemissionButton } from "@/components/remission-button"
 import { DocumentStaleTag } from "@/components/document-stale-tag"
+import { EmissionSlot, OrderEmissionProvider } from "@/components/order-emission"
 import { OrderMaterials } from "@/components/order-materials"
 import { DateField, PriorityField, TextField } from "@/components/order-props-editor"
 import { OrderCustomerField } from "@/components/order-customer-field"
@@ -184,9 +185,19 @@ export default async function OrderDetailPage({
 
                 {/* Los cinco datos que se preguntan al abrir el pedido, en fila y
                     siempre visibles, en lugar de perdidos en una columna larga. */}
+                {/* El provider abarca la fila entera porque el que dispara la
+                    emisión (el selector de estado) y los que la informan (las
+                    celdas de Factura y Remito) son lugares distintos de la misma
+                    fila. */}
+                <OrderEmissionProvider>
                 <dl className="mt-5 flex flex-wrap rounded-lg border bg-muted/40 overflow-hidden">
                     <Fact label="Estado">
-                        <OrderStatusSelect id={order.id} status={order.status} />
+                        <OrderStatusSelect
+                            id={order.id}
+                            status={order.status}
+                            hasInvoice={Boolean(order.alegra_invoice_id)}
+                            hasRemission={Boolean(order.alegra_remission_id)}
+                        />
                     </Fact>
                     {/* Editable acá y en un solo lugar: antes estaba dos veces,
                         arriba de solo lectura y abajo en el aside para tocarla. */}
@@ -212,6 +223,7 @@ export default async function OrderDetailPage({
                         taller. Lo que sigue siendo del admin son los IMPORTES, y esos
                         los recorta el server en la simulación, no esta pantalla. */}
                     <Fact label="Factura">
+                        <EmissionSlot doc="invoice">
                             {order.alegra_invoice_id ? (
                                 <div className="flex flex-col items-start gap-1.5">
                                     {/* El triángulo va pegado al número: es de esa
@@ -254,11 +266,13 @@ export default async function OrderDetailPage({
                                     <LinkInvoiceButton orderId={order.id} />
                                 </div>
                             )}
+                        </EmissionSlot>
                     </Fact>
                     {/* El remito es independiente de la factura y en cualquier
                         orden: a veces sale primero uno, a veces el otro. */}
                     <Fact label="Remito">
-                        {order.alegra_remission_id ? (
+                        <EmissionSlot doc="remission">
+                            {order.alegra_remission_id ? (
                             <div className="flex flex-col items-start gap-1.5">
                                 <div className="flex items-center gap-1.5">
                                     <a
@@ -283,9 +297,11 @@ export default async function OrderDetailPage({
                             </div>
                         ) : (
                             <RemissionButton orderId={order.id} />
-                        )}
+                            )}
+                        </EmissionSlot>
                     </Fact>
                 </dl>
+                </OrderEmissionProvider>
             </header>
 
             <div className="orden-trabajo grid gap-8 lg:grid-cols-[1fr_250px] items-start">
