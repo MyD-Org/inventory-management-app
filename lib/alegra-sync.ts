@@ -166,8 +166,8 @@ export interface ReceivablesSyncResult {
     outstanding: number
 }
 
-// Cuentas por cobrar desde la API. Reemplaza al import manual del Excel
-// (importReceivables en lib/alegra-import.ts), que era la única parte del espejo
+// Cuentas por cobrar desde la API. Reemplazó al import manual del Excel, que ya fue
+// eliminado del importador (lib/alegra-import.ts): era la única parte del espejo
 // que no se refrescaba sola y por eso envejecía sin que nadie se enterara:
 // medido el 2026-09-02, la foto cargada tenía 47 días y declaraba $36.269.592
 // contra los $52.043.815 reales — el mayor deudor ni figuraba.
