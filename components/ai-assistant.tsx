@@ -157,8 +157,8 @@ export function AiAssistant() {
     <ChatDrawer
       config={config}
       branding={{
-        title: "Asistente New Avantec",
-        subtitle: "Inventario, costos y ventas",
+        title: "Asistente de IA",
+        subtitle: "Respuestas en segundos",
         // Dorado apagado: le da identidad propia al asistente contra el gris neutro de
         // la app, que en oscuro es acromático puro (todos sus tokens en croma cero).
         // Es un color CLARO, así que lleva tinta oscura encima: con blanco la burbuja
@@ -168,8 +168,8 @@ export function AiAssistant() {
         launcherPosition: "bottom-right",
       }}
       labels={{
-        headerTitle: "Asistente New Avantec",
-        emptyState: "Preguntame por stock, costos de fabricación, ventas o cobranzas.",
+        headerTitle: "Asistente de IA",
+        emptyState: "¿En qué te puedo ayudar?",
         useBudgetLabel: "Abrir en el editor",
       }}
       showActivity
