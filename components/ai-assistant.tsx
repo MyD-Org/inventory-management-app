@@ -2,6 +2,7 @@
 
 import { useMemo, useCallback, useRef } from "react"
 import { usePathname, useRouter } from "next/navigation"
+import { useTheme } from "next-themes"
 import { ChatDrawer } from "@myd-org/ai-widget/preset"
 import type { BudgetCard } from "@myd-org/ai-widget"
 import "@myd-org/ai-widget/styles"
@@ -43,6 +44,17 @@ export function AiAssistant() {
   // la leemos de un ref que se actualiza en cada render.
   const pathnameRef = useRef(pathname)
   pathnameRef.current = pathname
+
+  // Tema del widget. Hasta 0.2.0 el asistente se quedaba blanco sobre la app en oscuro
+  // y había que parchearle el CSS desde globals.css; 0.3.0 expone la prop `theme`.
+  //
+  // resolvedTheme es undefined hasta que next-themes monta en el cliente. En ese hueco
+  // pasamos "auto", que hace que el widget siga prefers-color-scheme: coincide con el
+  // defaultTheme="system" del ThemeProvider, así que no hay salto visible. Una vez
+  // montado mandamos el valor explícito, que es lo que cubre el caso de que el usuario
+  // haya elegido un tema distinto al del sistema.
+  const { resolvedTheme } = useTheme()
+  const widgetTheme = resolvedTheme === "dark" ? "dark" : resolvedTheme === "light" ? "light" : "auto"
 
   const config = useMemo(
     () => ({
@@ -157,6 +169,7 @@ export function AiAssistant() {
       }}
       showActivity
       enableHistory
+      theme={widgetTheme}
       onUseBudget={onUseBudget}
     />
   )
