@@ -158,6 +158,43 @@ export async function listPaymentsSince(since: string, maxPages = 120): Promise<
     return out
 }
 
+// Facturas ABIERTAS (con saldo). Es la fuente de verdad del POR COBRAR: cada
+// factura trae `balance` y `totalPaid` calculados por Alegra, así que no hay que
+// reconstruir nada — que era justo el motivo por el que el saldo se venía cargando
+// a mano desde el Excel "Cuentas por cobrar" (ver scripts/12-alegra-receivables.sql).
+//
+// No sirve derivarlo del espejo: listInvoicesSince() solo re-baja facturas desde un
+// cursor por fecha de emisión, así que un pago sobre una factura vieja nunca lo
+// actualiza. Las abiertas hay que pedirlas explícitamente.
+//
+// Medido 2026-09-02: 238 facturas, 8 páginas, ~6s.
+export async function listOpenInvoices(maxPages = 120): Promise<any[]> {
+    const PAGE = 30
+    const out: any[] = []
+    for (let page = 0; page < maxPages; page++) {
+        const rows = await fetchPageWithRetry(`/invoices?status=open&limit=${PAGE}&start=${page * PAGE}`)
+        out.push(...rows)
+        if (rows.length < PAGE) break
+    }
+    return out
+}
+
+// Las abiertas de UN cliente, para responder "cuánto debe X" contra Alegra en vivo
+// sin depender de cuándo corrió el cron. Filtrando por client_id es una sola página
+// (~770ms medido), contra los ~6s de traerlas todas.
+export async function listClientOpenInvoices(alegraClientId: number, maxPages = 20): Promise<any[]> {
+    const PAGE = 30
+    const out: any[] = []
+    for (let page = 0; page < maxPages; page++) {
+        const rows = await fetchPageWithRetry(
+            `/invoices?status=open&client_id=${alegraClientId}&limit=${PAGE}&start=${page * PAGE}`,
+        )
+        out.push(...rows)
+        if (rows.length < PAGE) break
+    }
+    return out
+}
+
 // Todos los productos, para el espejo. Sin filtro: el catálogo es de ~1700 ítems
 // (57 páginas), y no hay forma de pedir "los modificados desde tal fecha".
 export async function listAllItems(maxPages = 120): Promise<any[]> {

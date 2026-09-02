@@ -22,12 +22,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "No se recibió ningún archivo" }, { status: 400 })
         }
 
-        // CSV (facturas, NC, pagos) + XLSX (reporte de cuentas por cobrar, que Alegra
-        // solo exporta en Excel).
-        const supported = uploaded.filter((f) => /\.(csv|xlsx)$/i.test(f.name))
+        // Solo CSV: facturas, NC y pagos. Las cuentas por cobrar se sincronizan
+        // solas desde la API (ver lib/alegra-sync.ts), no se suben a mano.
+        const supported = uploaded.filter((f) => /\.csv$/i.test(f.name))
         if (supported.length === 0) {
             return NextResponse.json(
-                { error: "Subí los archivos .csv o .xlsx (descomprimí primero el .zip de Alegra)" },
+                { error: "Subí los archivos .csv (descomprimí primero el .zip de Alegra)" },
                 { status: 400 },
             )
         }

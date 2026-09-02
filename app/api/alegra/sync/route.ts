@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
 import { isAlegraConfigured } from "@/lib/alegra"
-import { syncContacts, syncInvoices, syncItems, syncPayments } from "@/lib/alegra-sync"
+import { syncContacts, syncInvoices, syncItems, syncPayments, syncReceivables } from "@/lib/alegra-sync"
 
 // Refresca el espejo de Alegra desde la API. Pensado para un cron (Vercel Cron o
 // el que sea) y para poder dispararlo a mano cuando hace falta.
@@ -11,7 +11,8 @@ import { syncContacts, syncInvoices, syncItems, syncPayments } from "@/lib/alegr
 //
 // POST y no GET porque escribe.
 //
-// ?only=contacts|items|invoices|payments  limita la corrida a una parte (para probar,
+// ?only=contacts|items|invoices|payments|receivables
+//                                   limita la corrida a una parte (para probar,
 //                                   o para correr contactos más seguido que el resto).
 // ?since=YYYY-MM-DD                 pisa el cursor incremental. Sin esto, arranca
 //                                   desde la fecha más nueva del espejo menos 7
@@ -51,6 +52,9 @@ export async function POST(request: NextRequest) {
         const items = run("items") ? await syncItems() : null
         const invoices = run("invoices") ? await syncInvoices(since) : null
         const payments = run("payments") ? await syncPayments(since) : null
+        // Último: reemplaza la foto de cuentas por cobrar y refresca la MV de
+        // balances, que agrega sobre los contactos ya actualizados arriba.
+        const receivables = run("receivables") ? await syncReceivables() : null
 
         return NextResponse.json({
             ok: true,
@@ -58,6 +62,7 @@ export async function POST(request: NextRequest) {
             items,
             invoices,
             payments,
+            receivables,
             duration_ms: Date.now() - startedAt,
         })
     } catch (error) {
