@@ -1,5 +1,5 @@
 import { sql } from "@/lib/database"
-import { listAllContacts, listAllItems, listInvoicesSince, listPaymentsSince } from "@/lib/alegra"
+import { listAllContacts, listAllItems, listInvoicesSince, listOpenInvoices, listPaymentsSince } from "@/lib/alegra"
 
 // Sync del espejo de Alegra contra la API.
 //
@@ -155,6 +155,79 @@ export interface DocSyncResult {
 //
 // NO cubre notas de crédito ni de débito: viven en otro endpoint (/credit-notes)
 // y las 31 que hay en el espejo siguen viniendo del CSV. Queda pendiente.
+export interface ReceivablesSyncResult {
+    fetched: number
+    inserted: number
+    /** Facturas abiertas cuyo cliente no está espejado: quedan con client_id NULL y
+     *  por lo tanto FUERA del balance por cliente. Debería ser siempre 0 porque
+     *  syncContacts() corre antes; si no lo es, hay un contacto sin espejar. */
+    orphans: number
+    debtors: number
+    outstanding: number
+}
+
+// Cuentas por cobrar desde la API. Reemplaza al import manual del Excel
+// (importReceivables en lib/alegra-import.ts), que era la única parte del espejo
+// que no se refrescaba sola y por eso envejecía sin que nadie se enterara:
+// medido el 2026-09-02, la foto cargada tenía 47 días y declaraba $36.269.592
+// contra los $52.043.815 reales — el mayor deudor ni figuraba.
+//
+// Sigue siendo una FOTO (DELETE + INSERT), igual que el Excel: una factura que se
+// cobra desaparece de /invoices?status=open, así que actualizar en vez de reemplazar
+// dejaría saldos fantasma. Por eso también hay que refrescar la MV al final.
+//
+// Corre DESPUÉS de syncContacts(): el cliente se matchea por alegra_id.
+export async function syncReceivables(): Promise<ReceivablesSyncResult> {
+    const invoices = await listOpenInvoices()
+    const result: ReceivablesSyncResult = {
+        fetched: invoices.length, inserted: 0, orphans: 0, debtors: 0, outstanding: 0,
+    }
+
+    // Mapa alegra_id → id local, de una sola query: son ~240 facturas y hacer un
+    // SELECT por cada una multiplicaría el tiempo del sync sin motivo.
+    const rows = await sql`SELECT id, alegra_id, name FROM alegra_clients WHERE alegra_id IS NOT NULL`
+    const byAlegraId = new Map<number, { id: number; name: string }>(
+        rows.map((r: any) => [Number(r.alegra_id), { id: r.id, name: r.name }]),
+    )
+
+    const perClient = new Map<number, number>()
+
+    await sql`DELETE FROM alegra_receivables`
+    for (const inv of invoices) {
+        const code = inv.numberTemplate?.fullNumber ?? inv.number ?? null
+        if (!code) continue
+
+        const alegraClientId = inv.client?.id != null ? Number(inv.client.id) : null
+        const local = alegraClientId != null ? byAlegraId.get(alegraClientId) : undefined
+        if (!local) result.orphans++
+
+        const clientName = local?.name ?? inv.client?.name ?? null
+        const outstanding = Number(inv.balance) || 0
+
+        await sql`
+            INSERT INTO alegra_receivables
+                (code, doc_label, client_id, client_name, client_name_normalized,
+                 total, collected, outstanding, issue_date, due_date, source_file)
+            VALUES (${code}, 'Factura', ${local?.id ?? null},
+                    ${clientName}, ${normalizeName(clientName ?? undefined)},
+                    ${Number(inv.total) || 0}, ${Number(inv.totalPaid) || 0}, ${outstanding},
+                    ${inv.date || null}, ${inv.dueDate || null}, 'api')
+        `
+        result.inserted++
+        result.outstanding += outstanding
+        if (local) perClient.set(local.id, (perClient.get(local.id) ?? 0) + outstanding)
+    }
+
+    result.outstanding = Math.round(result.outstanding * 100) / 100
+    result.debtors = [...perClient.values()].filter((v) => v > 0).length
+
+    // Sin esto el balance por cliente queda en la foto anterior. CONCURRENTLY para no
+    // bloquear las lecturas de las tools mientras se refresca (requiere el índice único).
+    await sql`REFRESH MATERIALIZED VIEW CONCURRENTLY alegra_client_balances`
+
+    return result
+}
+
 export async function syncInvoices(sinceOverride?: string): Promise<DocSyncResult> {
     const since = sinceOverride || (await cursorSince("alegra_sales_documents", "issue_date"))
     const invoices = await listInvoicesSince(since)

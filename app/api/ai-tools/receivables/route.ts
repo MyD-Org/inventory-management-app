@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
 import { requireInternalSecret, parseLimit } from "@/lib/ai-tools-auth"
+import { isAlegraConfigured, listClientOpenInvoices } from "@/lib/alegra"
 
 const ORDERS = new Set(["balance", "oldest_payment", "recent_invoice"])
 
@@ -21,6 +22,57 @@ export async function GET(request: NextRequest) {
   const orderRaw = (searchParams.get("order") ?? "").trim()
   const order = ORDERS.has(orderRaw) ? orderRaw : "balance"
   const limit = parseLimit(searchParams.get("limit"), 20)
+
+  // Detalle de un cliente: contra Alegra, no contra el espejo.
+  const detail = (searchParams.get("detail") ?? "").trim()
+  if (detail) {
+    if (!isAlegraConfigured()) {
+      return NextResponse.json({ error: "Alegra no está configurado" }, { status: 503 })
+    }
+    try {
+      // El nombre lo resolvemos en el espejo (ILIKE, que Alegra no ofrece) y con el
+      // alegra_id vamos a la API. Si hay varios matches devolvemos las opciones en vez
+      // de elegir uno: la IA no debe adivinar de qué cliente hablar.
+      const matches = await sql`
+        SELECT id, name, alegra_id FROM alegra_clients
+        WHERE alegra_id IS NOT NULL AND name ILIKE ${`%${detail}%`}
+        ORDER BY name LIMIT 10
+      `
+      if (matches.length === 0) {
+        return NextResponse.json({ detail, found: false, clients: [] })
+      }
+      if (matches.length > 1) {
+        return NextResponse.json({
+          detail,
+          ambiguous: true,
+          clients: matches.map((m: any) => ({ name: m.name })),
+        })
+      }
+
+      const client = matches[0]
+      const invoices = await listClientOpenInvoices(Number(client.alegra_id))
+      const lines = invoices.map((inv: any) => ({
+        code: inv.numberTemplate?.fullNumber ?? inv.number ?? null,
+        issue_date: inv.date ?? null,
+        due_date: inv.dueDate ?? null,
+        total: Number(inv.total) || 0,
+        paid: Number(inv.totalPaid) || 0,
+        outstanding: Number(inv.balance) || 0,
+      }))
+      const balance = Math.round(lines.reduce((a, l) => a + l.outstanding, 0) * 100) / 100
+
+      return NextResponse.json({
+        source: "alegra_live",
+        client: { name: client.name, alegra_id: Number(client.alegra_id) },
+        balance,
+        open_invoices: lines.length,
+        invoices: lines,
+      })
+    } catch (error) {
+      console.error("Error in ai-tools/receivables?detail:", error)
+      return NextResponse.json({ error: "No se pudo consultar Alegra" }, { status: 502 })
+    }
+  }
 
   try {
     const rows = await sql`
@@ -50,7 +102,7 @@ export async function GET(request: NextRequest) {
         AND (${like}::text IS NULL OR name ILIKE ${like}::text)
     `
 
-    return NextResponse.json({ count: rows.length, order, totals, clients: rows })
+    return NextResponse.json({ source: "espejo", count: rows.length, order, totals, clients: rows })
   } catch (error) {
     console.error("Error in ai-tools/receivables:", error)
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
