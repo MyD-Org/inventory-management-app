@@ -158,7 +158,7 @@ export function AiAssistant() {
       config={config}
       branding={{
         title: "Asistente de IA",
-        subtitle: "Respuestas en segundos",
+        subtitle: "Tu copiloto de gestión",
         // Dorado apagado: le da identidad propia al asistente contra el gris neutro de
         // la app, que en oscuro es acromático puro (todos sus tokens en croma cero).
         // Es un color CLARO, así que lleva tinta oscura encima: con blanco la burbuja
