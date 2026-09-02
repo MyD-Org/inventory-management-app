@@ -15,8 +15,8 @@ importers:
         specifier: ^3.10.0
         version: 3.10.0(react-hook-form@7.71.1(react@19.2.3))
       '@myd-org/ai-widget':
-        specifier: file:vendor/myd-org-ai-widget-0.3.0.tgz
-        version: file:vendor/myd-org-ai-widget-0.3.0.tgz(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        specifier: file:vendor/myd-org-ai-widget-0.4.0.tgz
+        version: file:vendor/myd-org-ai-widget-0.4.0.tgz(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@myd-org/sdui':
         specifier: file:vendor/myd-org-sdui-0.6.0.tgz
         version: file:vendor/myd-org-sdui-0.6.0.tgz(@myd-org/ui@file:vendor/myd-org-ui-0.6.4.tgz(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -310,9 +310,9 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@myd-org/ai-widget@file:vendor/myd-org-ai-widget-0.3.0.tgz':
-    resolution: {integrity: sha512-wMaq5JNHSJhumjVcxN9QMZCUgb+y0KI3zn8O7lE0Q+aewwsjWkv1+vjGDE0W0MMBNYo3+pBvWqJzqIB+AIWzdQ==, tarball: file:vendor/myd-org-ai-widget-0.3.0.tgz}
-    version: 0.3.0
+  '@myd-org/ai-widget@file:vendor/myd-org-ai-widget-0.4.0.tgz':
+    resolution: {integrity: sha512-fhlyBO/gRgrkSnP98L9OdowwZ0Q0hQqQUQ/BSRvmTgmGZ+SNkfQky+TqKkwwoODPvYu8EcuDl99dugjMNfYcAA==, tarball: file:vendor/myd-org-ai-widget-0.4.0.tgz}
+    version: 0.4.0
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
@@ -3107,7 +3107,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@myd-org/ai-widget@file:vendor/myd-org-ai-widget-0.3.0.tgz(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@myd-org/ai-widget@file:vendor/myd-org-ai-widget-0.4.0.tgz(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       markdown-to-jsx: 7.7.17(react@19.2.3)
       react: 19.2.3

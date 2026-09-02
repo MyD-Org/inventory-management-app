@@ -159,7 +159,12 @@ export function AiAssistant() {
       branding={{
         title: "Asistente New Avantec",
         subtitle: "Inventario, costos y ventas",
-        primaryColor: "#2563eb",
+        // Dorado apagado: le da identidad propia al asistente contra el gris neutro de
+        // la app, que en oscuro es acromático puro (todos sus tokens en croma cero).
+        // Es un color CLARO, así que lleva tinta oscura encima: con blanco la burbuja
+        // del usuario mide 3.08 y no se lee; con tinta oscura, 5.87.
+        primaryColor: "#a19268",
+        onPrimaryColor: "#16161a",
         launcherPosition: "bottom-right",
       }}
       labels={{
