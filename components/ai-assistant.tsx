@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useCallback } from "react"
+import { useMemo, useCallback, useRef } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { ChatDrawer } from "@myd-org/ai-widget/preset"
 import type { BudgetCard } from "@myd-org/ai-widget"
@@ -17,9 +17,32 @@ export const QUOTE_DRAFT_KEY = "avantec-quote-draft"
 // Asistente de IA flotante (burbuja abajo a la derecha). Consultas de inventario +
 // presupuestos de fabricación. El token de sesión se mintea server-side en
 // /api/ai/token (el API key del tenant nunca llega al browser).
+// Nombre legible de cada sección, por el primer segmento de la ruta. Lo lee el agente,
+// así que va en las palabras del negocio y no en las del router.
+const SCREEN_NAMES: Record<string, string> = {
+  inventory: "inventario",
+  materials: "materiales",
+  stock: "stock",
+  fichas: "fichas de costo",
+  movimientos: "movimientos de stock",
+  pedidos: "pedidos",
+  presupuestos: "presupuestos",
+  graficos: "gráficos",
+  dashboards: "dashboards",
+  automations: "automatizaciones",
+  scan: "escaneo",
+  settings: "configuración",
+}
+
 export function AiAssistant() {
   const router = useRouter()
   const pathname = usePathname()
+
+  // El config se memoiza con deps vacías a propósito: recrearlo hace que el widget
+  // rearme su cliente y su sesión. Para que getPageContext igual vea la ruta actual,
+  // la leemos de un ref que se actualiza en cada render.
+  const pathnameRef = useRef(pathname)
+  pathnameRef.current = pathname
 
   const config = useMemo(
     () => ({
@@ -30,6 +53,25 @@ export function AiAssistant() {
         if (!res.ok) throw new Error("No se pudo obtener el token de IA")
         const data = await res.json()
         return data.token as string
+      },
+      // Contexto de la pantalla abierta, evaluado en CADA mensaje. Sirve para que el
+      // asistente resuelva referencias sin nombre ("este pedido", "cuánto stock tiene
+      // esto") sin que el usuario tenga que dictar el id.
+      //
+      // Mandamos IDENTIFICADORES, no datos: el agente ya tiene tools para consultar la
+      // base, así que meterle el stock o el costo acá sería pagar tokens en cada turno
+      // por algo que puede averiguar — y arriesgarse a mandarle un dato desactualizado.
+      getPageContext: () => {
+        const path = pathnameRef.current ?? "/"
+        const segments = path.split("/").filter(Boolean)
+        const seccion = segments[0] ?? ""
+        return {
+          ruta: path,
+          pantalla: SCREEN_NAMES[seccion] ?? seccion ?? "inicio",
+          // Rutas de detalle (/pedidos/123): el id deja que el agente resuelva la entidad
+          // en foco con sus tools. Las rutas tipo /pedidos/nuevo no matchean y no mandan id.
+          ...(segments[1] && /^\d+$/.test(segments[1]) ? { id: segments[1] } : {}),
+        }
       },
     }),
     [],
