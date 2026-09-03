@@ -27,7 +27,7 @@ describe("estados del pedido", () => {
         // 'por_revisar' y 'por_facturar' son del taller: el cliente no tiene por qué
         // enterarse de la jerga interna.
         expect(customerStatus("por_revisar")).toBe("Recibido")
-        expect(customerStatus("por_facturar")).toBe("En preparación")
+        expect(customerStatus("por_facturar")).toBe("Preparando entrega")
         expect(customerStatus("retirado")).toBe("Entregado")
     })
 
