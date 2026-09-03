@@ -13,7 +13,7 @@
   "dependencies": {
     "@flags-sdk/vercel": "^1.4.5",
     "@hookform/resolvers": "^3.10.0",
-    "@myd-org/ai-widget": "file:vendor/myd-org-ai-widget-0.4.0.tgz",
+    "@myd-org/ai-widget": "file:vendor/myd-org-ai-widget-0.4.1.tgz",
     "@myd-org/sdui": "file:vendor/myd-org-sdui-0.6.0.tgz",
     "@myd-org/sdui-dashboard": "file:vendor/myd-org-sdui-dashboard-0.4.0.tgz",
     "@myd-org/ui": "file:vendor/myd-org-ui-0.6.4.tgz",
