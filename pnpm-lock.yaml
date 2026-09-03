@@ -302,7 +302,7 @@ packages:
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
   '@myd-org/ai-widget@file:vendor/myd-org-ai-widget-0.4.1.tgz':
-    resolution: {integrity: sha512-PgUUwm0kknmf1lXt8F/e3ihf6k9RvqmzCybjHEtf6N3uXt3ZkYni/12LDFk3rNJX6Ih4tj+CZxe3Y9OGeSZKaA==, tarball: file:vendor/myd-org-ai-widget-0.4.1.tgz}
+    resolution: {integrity: sha512-i51gDxj2PmOhR7i9p0/Rd69MuBEzlwjaZrsHwCxNxDiziXbQJJM3z4VGunLSubkze2GIvkE4ISCWkxnFac9iZw==, tarball: file:vendor/myd-org-ai-widget-0.4.1.tgz}
     version: 0.4.1
     peerDependencies:
       react: '>=18'
