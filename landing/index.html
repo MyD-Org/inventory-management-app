@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Tevro conecta el WhatsApp de tu empresa con el inventario, los costos de fabricación, el tablero del taller y la facturación en Alegra.">
+<meta name="color-scheme" content="light dark">
+<meta property="og:title" content="Tevro — del WhatsApp a la factura">
+<meta property="og:description" content="CRM de WhatsApp con bot, inventario, costos de fabricación y facturación para PyMEs que fabrican.">
+<meta property="og:type" content="website">
+<title>Tevro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* ────────────────────────────────────────────────────────────────
+     Tevro — landing
+     Tipografía heredada del producto (Archivo / Public Sans / Plex Mono)
+     para que la landing y la app se lean como la misma marca.
+     Acento: azul de plano. Señal: ámbar de taller.
+     ──────────────────────────────────────────────────────────────── */
+
+  :root {
+    --paper:      #EDF1F5;
+    --surface:    #FFFFFF;
+    --surface-2:  #F6F8FA;
+    --ink:        #0E1621;
+    --ink-2:      #46566B;
+    --ink-3:      #6E8098;
+    --line:       #D2DBE4;
+    --line-soft:  #E2E8EE;
+    --accent:     #1B45C8;
+    --accent-ink: #FFFFFF;
+    --accent-dim: #E7EBFA;
+    --signal:     #B26A00;
+    --signal-bg:  #FBEFD8;
+    --ok:         #1B7A52;
+    --ok-bg:      #DDEFE6;
+    --band:       #0E1621;
+    --band-ink:   #E7EDF4;
+    --band-line:  #26364A;
+    --shadow:     0 1px 2px rgba(14,22,33,.06), 0 8px 24px -12px rgba(14,22,33,.18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #0A1019;
+      --surface:    #121C28;
+      --surface-2:  #17222F;
+      --ink:        #E8EEF5;
+      --ink-2:      #A2B2C5;
+      --ink-3:      #7C8EA4;
+      --line:       #253546;
+      --line-soft:  #1D2B3A;
+      --accent:     #7C9EFF;
+      --accent-ink: #08101C;
+      --accent-dim: #17233C;
+      --signal:     #F0B546;
+      --signal-bg:  #2C2214;
+      --ok:         #4FC08D;
+      --ok-bg:      #10281F;
+      --band:       #060B12;
+      --band-ink:   #D9E3EE;
+      --band-line:  #1B2938;
+      --shadow:     0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:      #0A1019;
+    --surface:    #121C28;
+    --surface-2:  #17222F;
+    --ink:        #E8EEF5;
+    --ink-2:      #A2B2C5;
+    --ink-3:      #7C8EA4;
+    --line:       #253546;
+    --line-soft:  #1D2B3A;
+    --accent:     #7C9EFF;
+    --accent-ink: #08101C;
+    --accent-dim: #17233C;
+    --signal:     #F0B546;
+    --signal-bg:  #2C2214;
+    --ok:         #4FC08D;
+    --ok-bg:      #10281F;
+    --band:       #060B12;
+    --band-ink:   #D9E3EE;
+    --band-line:  #1B2938;
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Public Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16.5px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3 {
+    font-family: "Archivo", ui-sans-serif, system-ui, sans-serif;
+    font-variation-settings: "wdth" 108;
+    letter-spacing: -.018em;
+    text-wrap: balance;
+    margin: 0;
+    line-height: 1.08;
+  }
+  h1 { font-size: clamp(2.3rem, 5.2vw, 3.9rem); font-weight: 700; }
+  h2 { font-size: clamp(1.65rem, 3.2vw, 2.35rem); font-weight: 650; }
+  h3 { font-size: 1.06rem; font-weight: 650; font-variation-settings: "wdth" 100; letter-spacing: -.006em; line-height: 1.3; }
+  p  { margin: 0; }
+  a  { color: inherit; }
+
+  .mono {
+    font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Etiqueta de campo de ficha técnica: el motivo estructural de la página. */
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .70rem;
+    font-weight: 500;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    display: block;
+  }
+
+  .wrap { width: min(1140px, 100% - 2.5rem); margin-inline: auto; }
+
+  /* ── Navegación ─────────────────────────────────────────────── */
+  .nav {
+    position: sticky; top: 0; z-index: 40;
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .nav-in {
+    display: flex; align-items: center; gap: 1.75rem;
+    height: 62px;
+  }
+  .brand {
+    font-family: "Archivo", sans-serif;
+    font-variation-settings: "wdth" 118;
+    font-weight: 800; font-size: 1.22rem;
+    letter-spacing: -.02em;
+    text-decoration: none;
+    display: flex; align-items: center; gap: .5rem;
+  }
+  .brand-mark {
+    width: 15px; height: 15px; flex: none;
+    border: 2.5px solid var(--accent);
+    border-radius: 3px;
+    position: relative;
+  }
+  .brand-mark::after {
+    content: ""; position: absolute; inset: 2px 2px auto auto;
+    width: 5px; height: 5px; background: var(--signal); border-radius: 1px;
+  }
+  .nav-links { display: flex; gap: 1.4rem; margin-left: auto; }
+  .nav-links a {
+    text-decoration: none; color: var(--ink-2); font-size: .92rem; font-weight: 500;
+    padding: .2rem 0; border-bottom: 1.5px solid transparent;
+  }
+  .nav-links a:hover { color: var(--ink); border-bottom-color: var(--accent); }
+  @media (max-width: 860px) { .nav-links { display: none; } .nav-in { gap: 1rem; } }
+
+  /* ── Botones ────────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    font-family: "Public Sans", sans-serif;
+    font-size: .95rem; font-weight: 600;
+    padding: .68rem 1.15rem;
+    border-radius: 7px;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: transform .12s ease, background .15s ease, border-color .15s ease;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); }
+  .btn-primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
+  .btn-ghost { border-color: var(--line); color: var(--ink); background: var(--surface); }
+  .btn-ghost:hover { border-color: var(--ink-3); }
+  .btn-sm { padding: .48rem .85rem; font-size: .88rem; }
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px;
+  }
+
+  /* ── Secciones ──────────────────────────────────────────────── */
+  section { padding-block: clamp(3.4rem, 7vw, 5.6rem); }
+  .sec-head { display: flex; flex-direction: column; gap: .6rem; max-width: 62ch; }
+  .sec-head p { color: var(--ink-2); font-size: 1.04rem; }
+  .rule { border: 0; border-top: 1px solid var(--line-soft); margin: 0; }
+
+  /* ── Hero ───────────────────────────────────────────────────── */
+  .hero { padding-top: clamp(2.6rem, 5vw, 4.2rem); padding-bottom: clamp(3rem, 6vw, 4.6rem); }
+  .hero-grid {
+    display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(0, .98fr);
+    gap: clamp(2rem, 4vw, 3.4rem); align-items: start;
+  }
+  @media (max-width: 940px) { .hero-grid { grid-template-columns: 1fr; } }
+  .hero-copy { display: flex; flex-direction: column; gap: 1.25rem; }
+  .hero-copy .lede { font-size: 1.12rem; color: var(--ink-2); max-width: 46ch; }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: .35rem; }
+  .hero-note { font-size: .86rem; color: var(--ink-3); }
+  .hero h1 em {
+    font-style: normal;
+    box-shadow: inset 0 -.34em 0 var(--accent-dim);
+  }
+
+  /* ── Demo del hero: conversación → orden de trabajo ─────────── */
+  .demo { display: grid; gap: .8rem; }
+  .demo-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .demo-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: .55rem .85rem;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--surface-2);
+  }
+  .demo-head .mono { font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+  .thread { display: flex; flex-direction: column; gap: .5rem; padding: .9rem .85rem; }
+  .msg {
+    max-width: 84%;
+    padding: .5rem .7rem;
+    border-radius: 10px;
+    font-size: .9rem;
+    line-height: 1.45;
+  }
+  .msg-in  { background: var(--surface-2); border: 1px solid var(--line-soft); border-top-left-radius: 3px; align-self: flex-start; }
+  .msg-out { background: var(--accent-dim); border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); border-top-right-radius: 3px; align-self: flex-end; }
+  .msg .who {
+    display: block; font-size: .64rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--ink-3); margin-bottom: .18rem;
+    font-family: "IBM Plex Mono", monospace;
+  }
+
+  .arrow-down {
+    display: flex; align-items: center; gap: .6rem;
+    padding-left: .3rem;
+    font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3);
+    font-family: "IBM Plex Mono", monospace;
+  }
+  .arrow-down::before {
+    content: ""; width: 1px; height: 20px; background: var(--line);
+    margin-left: 1.1rem;
+  }
+
+  /* Ficha de orden de trabajo */
+  .ticket-body { padding: .85rem; display: grid; gap: .7rem; }
+  .ticket-rows { display: grid; gap: 0; border: 1px solid var(--line-soft); border-radius: 7px; overflow: hidden; }
+  .trow {
+    display: grid; grid-template-columns: 8.5rem 1fr;
+    gap: .75rem; padding: .42rem .65rem;
+    font-size: .86rem;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .trow:last-child { border-bottom: 0; }
+  .trow:nth-child(odd) { background: var(--surface-2); }
+  .trow dt { color: var(--ink-3); font-family: "IBM Plex Mono", monospace; font-size: .73rem; letter-spacing: .06em; text-transform: uppercase; padding-top: .12rem; }
+  .trow dd { margin: 0; }
+  .ticket-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: .32rem;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .69rem; font-weight: 500; letter-spacing: .07em; text-transform: uppercase;
+    padding: .22rem .5rem; border-radius: 4px;
+    border: 1px solid transparent;
+  }
+  .chip-ok     { background: var(--ok-bg);     color: var(--ok);     border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+  .chip-signal { background: var(--signal-bg); color: var(--signal); border-color: color-mix(in srgb, var(--signal) 34%, transparent); }
+  .chip-accent { background: var(--accent-dim); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .chip-plain  { background: var(--surface-2); color: var(--ink-2); border-color: var(--line); }
+
+  /* ── Banda oscura: el problema ──────────────────────────────── */
+  .band {
+    background: var(--band); color: var(--band-ink);
+  }
+  .band h2 { color: var(--band-ink); }
+  .band .eyebrow { color: #7A8DA5; }
+  .pains { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 2.2rem; }
+  @media (max-width: 900px) { .pains { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .pains { grid-template-columns: 1fr; } }
+  .pain {
+    padding: 1.15rem 1.3rem 1.15rem 0;
+    border-left: 1px solid var(--band-line);
+    padding-left: 1.3rem;
+    display: flex; flex-direction: column; gap: .45rem;
+  }
+  .pain h3 { color: var(--band-ink); }
+  .pain p { color: #94A6BC; font-size: .93rem; }
+
+  /* ── Recorrido del pedido (secuencia real) ──────────────────── */
+  .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; margin-top: 2.4rem; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  @media (max-width: 1000px) { .flow { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px)  { .flow { grid-template-columns: 1fr; } }
+  .step {
+    background: var(--surface);
+    padding: 1.15rem 1.1rem 1.25rem;
+    display: flex; flex-direction: column; gap: .5rem;
+  }
+  .step-n {
+    font-family: "IBM Plex Mono", monospace; font-size: .72rem; font-weight: 600;
+    letter-spacing: .1em; color: var(--accent);
+  }
+  .step p { font-size: .91rem; color: var(--ink-2); }
+  .step .chip { align-self: flex-start; margin-top: auto; }
+
+  /* ── Módulos ────────────────────────────────────────────────── */
+  .mods { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; margin-top: 2.3rem; align-items: start; }
+  @media (max-width: 900px) { .mods { grid-template-columns: 1fr; } }
+  .mod {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 1.5rem 1.5rem 1.65rem;
+    display: flex; flex-direction: column; gap: 1rem;
+    box-shadow: var(--shadow);
+  }
+  .mod-title { display: flex; flex-direction: column; gap: .3rem; }
+  .mod-title h3 { font-size: 1.32rem; font-variation-settings: "wdth" 108; }
+  .mod > p { color: var(--ink-2); font-size: .96rem; }
+  .feat { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+  .feat li {
+    display: grid; grid-template-columns: 1.1rem 1fr; gap: .6rem;
+    padding: .58rem 0; font-size: .93rem;
+    border-top: 1px solid var(--line-soft);
+    align-items: start;
+  }
+  .feat li::before {
+    content: ""; width: 7px; height: 7px; margin-top: .48rem;
+    border: 1.5px solid var(--accent); border-radius: 2px;
+  }
+  .feat li b { font-weight: 600; }
+  .feat li span { color: var(--ink-2); }
+
+  /* ── IA ─────────────────────────────────────────────────────── */
+  .ai-grid { display: grid; grid-template-columns: minmax(0,.95fr) minmax(0,1.05fr); gap: clamp(1.8rem, 4vw, 3rem); align-items: center; margin-top: 2rem; }
+  @media (max-width: 900px) { .ai-grid { grid-template-columns: 1fr; } }
+  .ai-list { list-style: none; margin: 1.1rem 0 0; padding: 0; display: grid; gap: .75rem; }
+  .ai-list li { display: flex; gap: .65rem; font-size: .96rem; color: var(--ink-2); }
+  .ai-list li::before { content: "→"; color: var(--accent); font-family: "IBM Plex Mono", monospace; flex: none; }
+
+  /* ── Ajuste / a quién le sirve ──────────────────────────────── */
+  .fit { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; margin-top: 2.2rem; }
+  @media (max-width: 780px) { .fit { grid-template-columns: 1fr; } }
+  .fit-col { display: flex; flex-direction: column; gap: .85rem; }
+  .fit-col > .eyebrow { padding-bottom: .6rem; border-bottom: 2px solid var(--line); }
+  .fit-yes > .eyebrow { border-bottom-color: var(--accent); color: var(--accent); }
+  .fit ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+  .fit li { font-size: .95rem; display: flex; gap: .6rem; }
+  .fit-yes li::before { content: "✓"; color: var(--ok); font-weight: 700; flex: none; }
+  .fit-no  li::before { content: "—"; color: var(--ink-3); flex: none; }
+  .fit-no li { color: var(--ink-2); }
+
+  /* ── Programa fundador ──────────────────────────────────────── */
+  .founder {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: clamp(1.6rem, 3.5vw, 2.4rem);
+    display: grid; grid-template-columns: minmax(0,1fr) minmax(0,.85fr); gap: clamp(1.5rem, 3vw, 2.6rem);
+    align-items: center; box-shadow: var(--shadow);
+  }
+  @media (max-width: 860px) { .founder { grid-template-columns: 1fr; } }
+  .founder h2 { font-size: clamp(1.5rem, 2.6vw, 2rem); }
+  .founder p { color: var(--ink-2); margin-top: .7rem; }
+  .founder-terms { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border: 1px solid var(--line-soft); border-radius: 9px; overflow: hidden; }
+  .founder-terms li { display: grid; grid-template-columns: 9.5rem 1fr; gap: .8rem; padding: .6rem .8rem; font-size: .9rem; border-bottom: 1px solid var(--line-soft); }
+  .founder-terms li:last-child { border-bottom: 0; }
+  .founder-terms li:nth-child(odd) { background: var(--surface-2); }
+  .founder-terms b { font-family: "IBM Plex Mono", monospace; font-size: .72rem; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; padding-top: .15rem; }
+
+  /* ── FAQ ────────────────────────────────────────────────────── */
+  .faq { margin-top: 2rem; border-top: 1px solid var(--line); }
+  .faq details { border-bottom: 1px solid var(--line); }
+  .faq summary {
+    cursor: pointer; list-style: none;
+    padding: 1.05rem 2rem 1.05rem 0;
+    font-weight: 600; font-size: 1.01rem;
+    position: relative;
+  }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after {
+    content: "+"; position: absolute; right: .2rem; top: .95rem;
+    font-family: "IBM Plex Mono", monospace; color: var(--accent); font-size: 1.15rem;
+  }
+  .faq details[open] summary::after { content: "–"; }
+  .faq details p { padding-bottom: 1.15rem; color: var(--ink-2); max-width: 72ch; font-size: .96rem; }
+
+  /* ── Cierre ─────────────────────────────────────────────────── */
+  .close-band { background: var(--band); color: var(--band-ink); }
+  .close-in { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.6rem; }
+  .close-in h2 { color: var(--band-ink); max-width: 20ch; }
+  .close-in p { color: #94A6BC; margin-top: .6rem; max-width: 42ch; font-size: .98rem; }
+  .close-band .btn-ghost { background: transparent; border-color: var(--band-line); color: var(--band-ink); }
+  .close-band .btn-ghost:hover { border-color: #7A8DA5; }
+
+  footer { padding-block: 2rem; border-top: 1px solid var(--line-soft); }
+  .foot-in { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: center; font-size: .87rem; color: var(--ink-3); }
+  .foot-in a { text-decoration: none; }
+  .foot-in a:hover { color: var(--ink); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+</head>
+<body>
+<nav class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top"><span class="brand-mark"></span>Tevro</a>
+    <div class="nav-links">
+      <a href="#recorrido">Cómo funciona</a>
+      <a href="#modulos">Módulos</a>
+      <a href="#ia">IA</a>
+      <a href="#para-quien">Para quién es</a>
+      <a href="#faq">Preguntas</a>
+    </div>
+    <!-- TODO: reemplazar por el número real de WhatsApp (formato internacional, sin +) -->
+    <a class="btn btn-primary btn-sm" href="https://wa.me/NUMERO?text=Hola%20Tevro%2C%20quiero%20ver%20una%20demo">Pedir una demo</a>
+  </div>
+</nav>
+
+<main id="top">
+
+  <!-- ── HERO ─────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <span class="eyebrow">Sistema operativo para PyMEs que fabrican</span>
+        <h1>Del mensaje de WhatsApp a la factura, <em>sin planillas en el medio</em>.</h1>
+        <p class="lede">
+          Tevro atiende tu WhatsApp con un bot conectado a tus datos reales, deriva la
+          conversación a la persona que corresponde, arma el pedido, lo pone en el tablero
+          del taller, descuenta el stock y lo factura en Alegra.
+        </p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="https://wa.me/NUMERO?text=Hola%20Tevro%2C%20quiero%20ver%20una%20demo">Pedir una demo por WhatsApp</a>
+          <a class="btn btn-ghost" href="#recorrido">Ver el recorrido de un pedido</a>
+        </div>
+        <p class="hero-note">
+          Andando hoy en un taller de fabricación. Abrimos 5 lugares de implementación.
+        </p>
+      </div>
+
+      <!-- Demo: la conversación y la orden que sale de ella -->
+      <div class="demo">
+        <div class="demo-card">
+          <div class="demo-head">
+            <span class="mono">WhatsApp Business · Ventas</span>
+            <span class="chip chip-ok">Bot activo</span>
+          </div>
+          <div class="thread">
+            <div class="msg msg-in">
+              <span class="who">Cliente · +54 9 351 ···</span>
+              Hola, necesito 4 portones de 3×2,20 en chapa doblada. ¿Los tenés?
+            </div>
+            <div class="msg msg-out">
+              <span class="who">Bot Tevro</span>
+              Sí. Con esa medida usamos caño estructural 40×40 y chapa BWG 18 — tenemos
+              material para las 4 unidades. ¿Los cargo como pedido y te paso el presupuesto?
+            </div>
+            <div class="msg msg-in">
+              <span class="who">Cliente</span>
+              Dale, a nombre de Herrería del Sur.
+            </div>
+            <div class="msg msg-out">
+              <span class="who">Bot Tevro → deriva a Ventas</span>
+              Listo, pedido <span class="mono">#1042</span>. Te sigue Marina, de Ventas.
+            </div>
+          </div>
+        </div>
+
+        <div class="arrow-down">Se convierte en</div>
+
+        <div class="demo-card">
+          <div class="demo-head">
+            <span class="mono">Orden de trabajo · #1042</span>
+            <span class="chip chip-signal">Por revisar</span>
+          </div>
+          <div class="ticket-body">
+            <dl class="ticket-rows">
+              <div class="trow"><dt>Cliente</dt><dd>Herrería del Sur</dd></div>
+              <div class="trow"><dt>Producto</dt><dd>Portón chapa doblada 3,00 × 2,20 m — 4 u.</dd></div>
+              <div class="trow"><dt>Materiales</dt><dd class="mono">Caño 40×40 · 96 m &nbsp;|&nbsp; Chapa BWG 18 · 26,4 m²</dd></div>
+              <div class="trow"><dt>Costo real</dt><dd class="mono">materiales + mano de obra + extras</dd></div>
+              <div class="trow"><dt>Asignado a</dt><dd>Marina — Ventas</dd></div>
+            </dl>
+            <div class="ticket-foot">
+              <span class="chip chip-accent">Descuenta stock</span>
+              <span class="chip chip-plain">Presupuesto</span>
+              <span class="chip chip-plain">Remito</span>
+              <span class="chip chip-plain">Factura Alegra</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── EL PROBLEMA ──────────────────────────────────────────── -->
+  <section class="band">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">El estado actual</span>
+        <h2>Tu empresa ya tiene un sistema. Está repartido en cuatro lugares que no se hablan.</h2>
+      </div>
+      <div class="pains">
+        <div class="pain">
+          <h3>El WhatsApp de todos</h3>
+          <p>Tres celulares, mensajes sin responder y ningún registro de quién dijo qué a quién.</p>
+        </div>
+        <div class="pain">
+          <h3>El Excel del stock</h3>
+          <p>Actualizado cuando alguien se acuerda. El inventario real está en la cabeza del encargado.</p>
+        </div>
+        <div class="pain">
+          <h3>El presupuesto a ojo</h3>
+          <p>Se cotiza con el precio del material de hace seis meses y la mano de obra estimada.</p>
+        </div>
+        <div class="pain">
+          <h3>La facturación aparte</h3>
+          <p>Se vuelve a cargar todo a mano en el sistema contable, con los errores que eso trae.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── RECORRIDO ────────────────────────────────────────────── -->
+  <section id="recorrido">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Recorrido de un pedido</span>
+        <h2>Un solo hilo, de la primera consulta al remito firmado.</h2>
+        <p>Cada etapa deja el dato donde la siguiente lo necesita. Nadie vuelve a tipear lo mismo.</p>
+      </div>
+      <div class="flow">
+        <div class="step">
+          <span class="step-n">ETAPA 1</span>
+          <h3>Entra la consulta</h3>
+          <p>El mensaje llega por WhatsApp a la línea oficial de la empresa, no al celular de alguien.</p>
+          <span class="chip chip-plain">CRM</span>
+        </div>
+        <div class="step">
+          <span class="step-n">ETAPA 2</span>
+          <h3>Responde el bot</h3>
+          <p>Consulta stock, fichas y precios reales. Si hace falta una persona, deriva por departamento y disponibilidad.</p>
+          <span class="chip chip-plain">CRM + IA</span>
+        </div>
+        <div class="step">
+          <span class="step-n">ETAPA 3</span>
+          <h3>Se arma el pedido</h3>
+          <p>Queda como orden de trabajo en el tablero, con materiales, cantidades y prioridad.</p>
+          <span class="chip chip-plain">Pedidos</span>
+        </div>
+        <div class="step">
+          <span class="step-n">ETAPA 4</span>
+          <h3>Se fabrica</h3>
+          <p>El taller mueve la tarjeta de columna. Al producir, el stock se descuenta según la receta del producto.</p>
+          <span class="chip chip-plain">Inventario</span>
+        </div>
+        <div class="step">
+          <span class="step-n">ETAPA 5</span>
+          <h3>Se factura y se entrega</h3>
+          <p>Presupuesto, factura y recibo salen por Alegra. El cliente consulta el estado por el mismo WhatsApp.</p>
+          <span class="chip chip-plain">Alegra</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ── MÓDULOS ──────────────────────────────────────────────── -->
+  <section id="modulos">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Dos módulos</span>
+        <h2>Empezás por donde más duele. El otro se enchufa cuando lo necesitás.</h2>
+      </div>
+      <div class="mods">
+
+        <article class="mod">
+          <div class="mod-title">
+            <span class="eyebrow">Módulo 01</span>
+            <h3>Tevro Conversaciones</h3>
+          </div>
+          <p>El WhatsApp de la empresa, atendido por un equipo y un bot que trabajan sobre la misma bandeja.</p>
+          <ul class="feat">
+            <li><b>Línea oficial de Meta.</b> <span>Integración con WhatsApp Cloud API: una sola línea para toda la empresa, con historial.</span></li>
+            <li><b>Bot con reglas tuyas.</b> <span>Definís qué responde solo, qué no toca y cuándo tiene que llamar a una persona.</span></li>
+            <li><b>Derivación inteligente.</b> <span>Cada conversación cae en el puesto o departamento que corresponde, según disponibilidad.</span></li>
+            <li><b>Traspaso sin repetir.</b> <span>Cuando entra el humano, ve toda la conversación previa y el contexto del cliente.</span></li>
+            <li><b>Automatizaciones.</b> <span>Avisos de estado, seguimientos y recordatorios disparados por lo que pasa en el sistema.</span></li>
+          </ul>
+        </article>
+
+        <article class="mod">
+          <div class="mod-title">
+            <span class="eyebrow">Módulo 02</span>
+            <h3>Tevro Operaciones</h3>
+          </div>
+          <p>Inventario, costos y producción para empresas que fabrican, no solo revenden.</p>
+          <ul class="feat">
+            <li><b>Inventario con código de barras.</b> <span>Entradas, salidas y ajustes con el usuario que los hizo, y alertas de stock bajo.</span></li>
+            <li><b>Fichas y familias de producto.</b> <span>Variaciones, especificaciones y proveedores en un solo lugar.</span></li>
+            <li><b>Costo real de fabricación.</b> <span>Materiales del inventario a precio de hoy + mano de obra + otros costos, con margen y precio sugerido en vivo.</span></li>
+            <li><b>Mano de obra costeada.</b> <span>Empleados, contratistas, talleres y tercerizados con valor por mes u hora.</span></li>
+            <li><b>Tablero de taller.</b> <span>Del pedido a la entrega por columnas, con un estado interno y otro que ve el cliente.</span></li>
+            <li><b>Presupuestos y Alegra.</b> <span>Cotización reutilizando los costos ya calculados, PDF imprimible y alta directa en Alegra sin duplicar productos.</span></li>
+          </ul>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ── IA ───────────────────────────────────────────────────── -->
+  <section id="ia">
+    <div class="wrap">
+      <div class="ai-grid">
+        <div>
+          <span class="eyebrow">Inteligencia artificial</span>
+          <h2 style="margin-top:.6rem">No es un chatbot de preguntas frecuentes.</h2>
+          <p style="color:var(--ink-2); margin-top:.9rem; max-width:44ch">
+            La IA de Tevro consulta tu base: stock, movimientos, fichas, costos y pedidos.
+            Contesta con tus datos, no con un guion escrito de antemano.
+          </p>
+          <ul class="ai-list">
+            <li>«¿Cuánto caño 40×40 me queda y quién lo sacó la semana pasada?»</li>
+            <li>«Armame la lista de materiales para fabricar 4 portones de 3×2,20.»</li>
+            <li>«Calculame el costo con el precio actualizado y el margen que uso.»</li>
+            <li>«¿Qué pedidos están para facturar y cuánto suman?»</li>
+          </ul>
+        </div>
+
+        <div class="demo-card">
+          <div class="demo-head">
+            <span class="mono">Asistente · consulta interna</span>
+            <span class="chip chip-accent">Datos en vivo</span>
+          </div>
+          <div class="thread">
+            <div class="msg msg-out" style="max-width:90%">
+              <span class="who">Marina · Ventas</span>
+              ¿Tengo material para 4 portones de 3×2,20?
+            </div>
+            <div class="msg msg-in" style="max-width:96%">
+              <span class="who">Asistente Tevro</span>
+              Sí, con lo que hay en depósito. Necesitás:
+            </div>
+          </div>
+          <div class="ticket-body" style="padding-top:0">
+            <dl class="ticket-rows">
+              <div class="trow"><dt>Caño 40×40</dt><dd class="mono">96 m &nbsp;·&nbsp; hay 140 m</dd></div>
+              <div class="trow"><dt>Chapa BWG 18</dt><dd class="mono">26,4 m² &nbsp;·&nbsp; hay 31 m²</dd></div>
+              <div class="trow"><dt>Bisagra reforzada</dt><dd class="mono">16 u. &nbsp;·&nbsp; hay 18 u.</dd></div>
+            </dl>
+            <div class="ticket-foot">
+              <span class="chip chip-signal">Bisagra queda bajo mínimo</span>
+              <span class="chip chip-accent">Calcular costo</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ── PARA QUIÉN ───────────────────────────────────────────── -->
+  <section id="para-quien">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Ajuste</span>
+        <h2>Tevro está hecho para un tipo de empresa muy concreto.</h2>
+        <p>Preferimos decírtelo antes de la demo y no después de la implementación.</p>
+      </div>
+      <div class="fit">
+        <div class="fit-col fit-yes">
+          <span class="eyebrow">Te sirve si</span>
+          <ul>
+            <li>Fabricás o armás a pedido: herrería, aberturas, muebles a medida, iluminación, gráfica, textil.</li>
+            <li>Vendés y cotizás por WhatsApp, y ese canal es el que se te desborda.</li>
+            <li>Tenés entre 3 y 50 personas y ya se te quedó chico el Excel.</li>
+            <li>Necesitás saber cuánto te cuesta realmente cada cosa que producís.</li>
+            <li>Facturás con Alegra o estás dispuesta a hacerlo.</li>
+          </ul>
+        </div>
+        <div class="fit-col fit-no">
+          <span class="eyebrow">Todavía no te sirve si</span>
+          <ul>
+            <li>Vendés en mostrador y lo que necesitás es un punto de venta con caja.</li>
+            <li>Tu operación ya vive en un ERP grande y solo querés reemplazar una parte.</li>
+            <li>Tu volumen es de e-commerce puro con catálogo web y checkout.</li>
+            <li>Necesitás multiempresa y jerarquías de sucursales desde el día uno.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PROGRAMA FUNDADOR ────────────────────────────────────── -->
+  <section>
+    <div class="wrap">
+      <div class="founder">
+        <div>
+          <span class="eyebrow">Programa fundador · 5 empresas</span>
+          <h2 style="margin-top:.55rem">Trabajamos con vos adentro del producto.</h2>
+          <p>
+            Tevro está en marcha en una empresa de fabricación y ahora abrimos cinco
+            implementaciones más. No es una beta gratuita: es un acuerdo donde la
+            implementación se hace sobre tu operación real y tus prioridades entran al
+            roadmap.
+          </p>
+          <div class="hero-cta" style="margin-top:1.2rem">
+            <a class="btn btn-primary" href="https://wa.me/NUMERO?text=Hola%20Tevro%2C%20me%20interesa%20el%20programa%20fundador">Postular mi empresa</a>
+          </div>
+        </div>
+        <ul class="founder-terms">
+          <li><b>Implementación</b><span>Carga de inventario, fichas y recetas de producto hecha con vos.</span></li>
+          <li><b>Puesta en marcha</b><span>Línea de WhatsApp conectada y bot configurado con tus reglas.</span></li>
+          <li><b>Acompañamiento</b><span>Ajustes de los primeros meses incluidos, con acceso directo al equipo.</span></li>
+          <li><b>Precio</b><span>Cerrado antes de empezar, sostenido mientras seas cliente.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ── FAQ ──────────────────────────────────────────────────── -->
+  <section id="faq">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Preguntas</span>
+        <h2>Lo que nos preguntan antes de la demo.</h2>
+      </div>
+      <div class="faq">
+        <details open>
+          <summary>¿Necesito cambiar mi número de WhatsApp?</summary>
+          <p>
+            Tevro se conecta a la API oficial de WhatsApp de Meta. Podés usar el número de la
+            empresa que ya tenés, con la salvedad de que ese número deja de funcionar en la app
+            común del celular: pasa a atenderse desde Tevro, donde puede haber varias personas y
+            el bot al mismo tiempo. Si preferís, arrancás con una línea nueva.
+          </p>
+        </details>
+        <details>
+          <summary>¿El bot puede meter la pata con un cliente?</summary>
+          <p>
+            Vos definís hasta dónde llega. El bot responde sobre lo que hay en el sistema —stock,
+            estados, fichas— y todo lo demás lo deriva a una persona. Podés dejarlo solo para
+            responder consultas de estado y que cualquier venta pase por alguien del equipo.
+          </p>
+        </details>
+        <details>
+          <summary>Ya llevo el inventario en Excel. ¿Empiezo de cero?</summary>
+          <p>
+            No. La carga inicial de materiales, fichas y proveedores es parte de la implementación,
+            y si ya tenés productos en Alegra se pueden importar desde ahí.
+          </p>
+        </details>
+        <details>
+          <summary>¿Puedo usar solo el CRM, sin el inventario?</summary>
+          <p>
+            Sí. Son dos módulos: muchas empresas empiezan por Conversaciones porque el desborde de
+            WhatsApp es lo más urgente, y suman Operaciones cuando quieren que el bot levante
+            pedidos y descuente stock.
+          </p>
+        </details>
+        <details>
+          <summary>¿Dónde quedan mis datos?</summary>
+          <p>
+            En una base propia de tu empresa, con usuarios y permisos por rol. La facturación se
+            emite en tu cuenta de Alegra: Tevro no es intermediario fiscal ni guarda tus
+            comprobantes en su lugar.
+          </p>
+        </details>
+        <details>
+          <summary>¿Cuánto tarda la implementación?</summary>
+          <p>
+            Depende del tamaño del catálogo. La conexión de WhatsApp y el bot base se ponen en
+            marcha rápido; lo que lleva tiempo es cargar bien las recetas de producto, que es
+            justamente lo que hace que después el costeo y el descuento de stock sean confiables.
+          </p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CIERRE ───────────────────────────────────────────────── -->
+  <section class="close-band">
+    <div class="wrap close-in">
+      <div>
+        <h2>Mostranos tu peor día de WhatsApp.</h2>
+        <p>Media hora, sobre tu operación real. Te decimos qué resuelve Tevro hoy y qué no.</p>
+      </div>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="https://wa.me/NUMERO?text=Hola%20Tevro%2C%20quiero%20coordinar%20una%20demo">Coordinar por WhatsApp</a>
+        <!-- TODO: reemplazar por el mail real de contacto -->
+        <a class="btn btn-ghost" href="mailto:hola@tevro.com">Escribir un mail</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap foot-in">
+      <span class="brand" style="font-size:1rem"><span class="brand-mark"></span>Tevro</span>
+      <span>Digitalización de PyMEs · CRM de WhatsApp, inventario y producción</span>
+      <a href="https://wa.me/NUMERO">WhatsApp</a>
+    </div>
+  </footer>
+
+</main>
+</body>
+</html>
