@@ -26,7 +26,7 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
     // Cubre los DOS documentos, no solo la factura: es la etapa administrativa del
     // pedido. La clave sigue siendo 'por_facturar' —está guardada en la base y la
     // usan el CRM y el bot—; lo que cambia es cómo se lee.
-    por_facturar: "Facturar y remitir",
+    por_facturar: "Preparando entrega",
     listo_para_retirar: "Listo para retirar",
     retirado: "Retirado",
     cancelado: "Cancelado",
@@ -39,7 +39,7 @@ export const DEFAULT_CUSTOMER_STATUS: Record<OrderStatus, string> = {
     por_revisar: "Recibido",
     recibido: "Recibido",
     en_proceso: "En fabricación",
-    por_facturar: "En preparación",
+    por_facturar: "Preparando entrega",
     listo_para_retirar: "Listo para retirar",
     retirado: "Entregado",
     cancelado: "Cancelado",
