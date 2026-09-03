@@ -33,9 +33,10 @@ Perfil concreto:
   carpintería y muebles a medida, iluminación (el cliente actual), gráfica e
   impresión, textil, marroquinería, metalmecánica liviana.
 - Vende y cotiza **por WhatsApp**, y ese canal ya se le desbordó.
-- Factura con Alegra o puede hacerlo (Alegra acota geografía: Colombia, Argentina,
-  Perú, México, Costa Rica, República Dominicana → **empezar por Argentina y
-  Colombia**).
+- Factura electrónicamente con algún sistema. **No lo tratamos como requisito**: Tevro
+  se integra con el que ya usa. Hoy está resuelta la integración con Alegra, y cada
+  cliente nuevo suma la suya como parte de la implementación. Mercado inicial:
+  Argentina, que es donde ya está el dominio (`tevro.com.ar`) y los primeros clientes.
 - Hoy convive con: 2–3 celulares, un Excel de stock desactualizado, presupuestos
   hechos a ojo y una recarga manual en el sistema contable.
 
@@ -47,6 +48,9 @@ Por qué este perfil:
   no calculan costo de fabricación con mano de obra.
 - El costeo real es lo que más se paga en este rubro: el que cotiza a ojo pierde
   plata en cada trabajo y lo sabe.
+- La integración de facturación es la barrera baja, no la alta: engancharse al sistema
+  que el cliente ya usa saca del medio la objeción más común ("¿tengo que cambiar de
+  facturador?") y no obliga a competir contra su contador.
 - Es el rubro del cliente que ya tenés: cada implementación siguiente cuesta menos y
   el caso de referencia sirve.
 
@@ -62,8 +66,8 @@ diferencial. Sirve para hacer volumen **después**, con el CRM como puerta de en
 - Empresas que ya tienen ERP y solo quieren reemplazar un pedazo (integración cara,
   venta larga).
 - E-commerce puro: Tiendanube/Shopify ya lo resuelven.
-- Empresas grandes o multiempresa con sucursales: hoy no sos multitenant, y prometer
-  eso te compra un problema.
+- Empresas grandes o multiempresa con sucursales: Operaciones todavía no es
+  multitenant, y prometer jerarquías te compra un problema.
 
 ## Posicionamiento
 
@@ -78,14 +82,19 @@ por el recorrido completo del pedido, que es lo que el competidor no tiene.
 
 **Fase 0 — ahora a ~3 meses. Clientes fundadores.**
 Cinco empresas del mismo rubro que el cliente actual (o vecino: herrería, aberturas,
-carpintería). Instalación dedicada por cliente, como ya funciona hoy: no hace falta
-multitenancy para vender cinco. Objetivos: validar precio, endurecer el producto
-contra operaciones reales distintas y sacar dos casos contables.
+carpintería). Objetivos: validar precio, endurecer el producto contra operaciones
+reales distintas y sacar dos casos contables.
 
-**Fase 1 — multitenancy donde importa.**
-El CRM es lo que se vende solo y lo primero que conviene volver multitenant y
-self-serve. Operaciones puede seguir siendo implementación acompañada bastante más
-tiempo: la carga de recetas de producto es un trabajo humano, y cobrarla está bien.
+Dato a favor: **el CRM ya es multitenant** —resuelve el tenant por subdominio
+(`avantec.tevro.com.ar`), con alta sin redeploy—. O sea que Conversaciones se puede
+vender y dar de alta hoy mismo. Lo que falta multitenant es Operaciones, que por ahora
+va con instalación dedicada por cliente: alcanza de sobra para cinco.
+
+**Fase 1 — multitenancy en Operaciones.**
+Es el cuello de botella real para escalar, y recién vale la pena pagarlo cuando haya
+tres o cuatro clientes pidiéndolo. Mientras tanto, Operaciones puede seguir siendo
+implementación acompañada: la carga de recetas de producto es trabajo humano, y
+cobrarla está bien.
 
 **Fase 2 — verticalizar.**
 Plantillas por rubro (recetas típicas de herrería, de carpintería), que es lo que
@@ -111,6 +120,13 @@ Está en `landing/` (ver `landing/README.md`). Decisiones que tomé y por qué:
 
 - **El CTA es una demo por WhatsApp, no un registro.** No sos self-serve todavía, y
   además el canal es el producto: pedir la demo por WhatsApp es la primera prueba.
+- **Ni una palabra de Alegra en la propuesta.** La página dice "tu sistema de
+  facturación"; Alegra aparece una sola vez, en la respuesta del FAQ, como prueba de
+  que la integración existe y no como requisito.
+- **La identidad sale del producto, no de una plantilla.** Logo real (el gradiente
+  teal → dorado de `tevro-icon.svg`), paleta del CRM, el lenguaje de superficies del
+  `ai-widget` para los chats y los glifos de estado de `/pedidos` para el tablero. Lo
+  que se ve en la landing es lo que el cliente se va a encontrar en la demo.
 - **No hay precios.** En Fase 0 el precio se cierra por conversación; publicar un
   número ahora te ata antes de haber validado nada.
 - **Hay una sección de "no te sirve si".** Filtra los leads que te harían perder
