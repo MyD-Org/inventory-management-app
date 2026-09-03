@@ -18,7 +18,7 @@ Dos productos que la mayoría de los competidores tiene por separado:
 
 Lo defendible no es ninguna de las dos por separado —de CRMs de WhatsApp hay
 decenas, de inventarios también— sino **el hilo completo**: la conversación se
-convierte en pedido, el pedido descuenta stock según receta y termina en una factura
+convierte en pedido, el pedido descuenta stock según la lista de materiales del producto y termina en una factura
 de Alegra, y el cliente consulta el estado por el mismo WhatsApp. Ese hilo es el
 producto.
 
@@ -93,11 +93,11 @@ va con instalación dedicada por cliente: alcanza de sobra para cinco.
 **Fase 1 — multitenancy en Operaciones.**
 Es el cuello de botella real para escalar, y recién vale la pena pagarlo cuando haya
 tres o cuatro clientes pidiéndolo. Mientras tanto, Operaciones puede seguir siendo
-implementación acompañada: la carga de recetas de producto es trabajo humano, y
+implementación acompañada: la carga de listas de materiales es trabajo humano, y
 cobrarla está bien.
 
 **Fase 2 — verticalizar.**
-Plantillas por rubro (recetas típicas de herrería, de carpintería), que es lo que
+Plantillas por rubro (listas de materiales típicas de herrería, de carpintería), que es lo que
 baja el costo de implementación de semanas a días. Ese es el momento de escalar.
 
 ## Precio (hipótesis a validar en Fase 0)

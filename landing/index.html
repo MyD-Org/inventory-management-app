@@ -692,7 +692,7 @@
         <div class="step slab" style="--i:4">
           <span class="step-n">ETAPA 4</span>
           <h3>Se fabrica</h3>
-          <p>El taller mueve la tarjeta de columna. Al producir, el stock se descuenta según la receta.</p>
+          <p>El taller mueve la tarjeta de columna. Al producir, el stock se descuenta según la lista de materiales del producto.</p>
           <span class="badge b-plain">Inventario</span>
         </div>
         <div class="step slab" style="--i:5">
@@ -950,7 +950,7 @@
           </div>
         </div>
         <ul class="terms">
-          <li><b>Implementación</b><span>Carga de inventario, fichas y recetas de producto hecha con vos.</span></li>
+          <li><b>Implementación</b><span>Carga de inventario, fichas y listas de materiales hecha con vos.</span></li>
           <li><b>Puesta en marcha</b><span>Línea de WhatsApp conectada y bot configurado con tus reglas.</span></li>
           <li><b>Facturación</b><span>Integración con el sistema que ya usás, sin que cambies de proveedor.</span></li>
           <li><b>Precio</b><span>Cerrado antes de empezar y sostenido mientras seas cliente.</span></li>
@@ -977,14 +977,17 @@
         <details class="slab">
           <summary>¿Necesito cambiar el número de WhatsApp de la empresa?</summary>
           <p>
-            Tevro se conecta a la API oficial de WhatsApp de Meta. Podés usar el número que ya
-            tenés, con una salvedad: ese número deja de funcionar en la app común del celular y
-            pasa a atenderse desde Tevro, donde pueden estar varias personas y el bot al mismo
-            tiempo. Si preferís no tocar el actual, se arranca con una línea nueva.
+            No. Tevro se conecta a la API oficial de WhatsApp de Meta sobre el número que ya
+            tenés, sin migrarlo. Meta permite usar ese mismo número desde la app del celular y
+            desde la API al mismo tiempo (coexistencia): el bot y tu equipo atienden desde
+            Tevro, y quien necesite seguir respondiendo desde la app del teléfono también puede,
+            todo se sincroniza al mismo lugar. La única diferencia es que las plantillas para
+            reabrir una conversación después de 24&nbsp;h solo se mandan desde Tevro, no desde la
+            app.
           </p>
         </details>
         <details class="slab">
-          <summary>¿El bot puede meter la pata con un cliente?</summary>
+          <summary>¿El bot puede cometer un error con un cliente?</summary>
           <p>
             Vos definís hasta dónde llega. El bot responde sobre lo que hay en el sistema
             —stock, estados, fichas— y todo lo demás lo deriva a una persona. Podés dejarlo
