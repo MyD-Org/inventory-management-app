@@ -184,10 +184,13 @@ export async function createCategory(formData: FormData) {
     if (!name) return { error: 'El nombre es requerido' };
 
     try {
-        await sql`INSERT INTO categories (name, description) VALUES (${name}, ${description})`;
+        const [created] = await sql`
+            INSERT INTO categories (name, description) VALUES (${name}, ${description})
+            RETURNING id, name
+        `;
         revalidatePath('/settings/categories');
         revalidatePath('/materials/nuevo');
-        return { success: true };
+        return { success: true, created: created as { id: number; name: string } };
     } catch (error) {
         console.error('Error creating category:', error);
         return { error: 'Error al crear la categoría' };
@@ -231,16 +234,23 @@ export async function createSupplier(formData: FormData) {
         `;
         const columnNames = new Set(columns.map((row: any) => row.column_name));
 
+        let rows;
         if (columnNames.has("address")) {
-            await sql`INSERT INTO suppliers (name, address) VALUES (${name}, ${contact_info || null})`;
+            rows = await sql`
+                INSERT INTO suppliers (name, address) VALUES (${name}, ${contact_info || null})
+                RETURNING id, name
+            `;
         } else if (columnNames.has("contact_info")) {
-            await sql`INSERT INTO suppliers (name, contact_info) VALUES (${name}, ${contact_info || null})`;
+            rows = await sql`
+                INSERT INTO suppliers (name, contact_info) VALUES (${name}, ${contact_info || null})
+                RETURNING id, name
+            `;
         } else {
-            await sql`INSERT INTO suppliers (name) VALUES (${name})`;
+            rows = await sql`INSERT INTO suppliers (name) VALUES (${name}) RETURNING id, name`;
         }
         revalidatePath('/settings/suppliers');
         revalidatePath('/materials/nuevo');
-        return { success: true };
+        return { success: true, created: rows[0] as { id: number; name: string } };
     } catch (error) {
         console.error('Error creating supplier:', error);
         return { error: 'Error al crear el proveedor' };

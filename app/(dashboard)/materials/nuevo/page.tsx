@@ -2,7 +2,7 @@
 
 import React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -27,6 +27,8 @@ export default function NuevoMaterialPage() {
   const [loading, setLoading] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [loadingOptions, setLoadingOptions] = useState(true)
+  const [optionsError, setOptionsError] = useState(false)
   
   const [formData, setFormData] = useState({
     name: "",
@@ -41,29 +43,51 @@ export default function NuevoMaterialPage() {
     initial_stock: "0",
   })
 
-  useEffect(() => {
-    async function loadData() {
+  // Si la carga falla (el server recompilando, la red cortada) el form se
+  // quedaba vacío para siempre y sin avisar. Se reintenta solo, con esperas
+  // crecientes: el usuario no tiene por qué apretar nada.
+  const loadOptions = useCallback(async () => {
+    const esperas = [800, 2000, 4000] // 4 intentos en total
+
+    setLoadingOptions(true)
+    setOptionsError(false)
+
+    for (let intento = 0; ; intento++) {
       try {
         const [catRes, supRes] = await Promise.all([
           fetch("/api/categories"),
           fetch("/api/suppliers"),
         ])
-        
-        if (catRes.ok) {
-          const catData = await catRes.json()
-          setCategories(catData)
+
+        if (!catRes.ok || !supRes.ok) {
+          const detail = await catRes.clone().json().catch(() => null)
+          throw new Error(detail?.detail || detail?.error || "Respuesta no OK")
         }
-        
-        if (supRes.ok) {
-          const supData = await supRes.json()
-          setSuppliers(supData)
-        }
+
+        setCategories(await catRes.json())
+        setSuppliers(await supRes.json())
+        setLoadingOptions(false)
+        return
       } catch (error) {
         console.error("Error loading data:", error)
+
+        if (intento >= esperas.length) {
+          // Se agotaron los reintentos: recién acá se le dice algo al usuario.
+          setOptionsError(true)
+          setLoadingOptions(false)
+          return
+        }
+
+        // Sigue en "Cargando...": mostrar el estado vacío entre intentos
+        // haría parpadear un aviso falso.
+        await new Promise((r) => setTimeout(r, esperas[intento]))
       }
     }
-    loadData()
   }, [])
+
+  useEffect(() => {
+    loadOptions()
+  }, [loadOptions])
 
   const [generatingBarcode, setGeneratingBarcode] = useState(false)
 
@@ -86,9 +110,25 @@ export default function NuevoMaterialPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!formData.name || !formData.category_id || !formData.supplier_id) {
-      toast.error("Error", {
-        description: "Por favor complete los campos obligatorios",
+    // Nombrar los campos que faltan: "complete los campos obligatorios" obliga
+    // al usuario a adivinar cuál de los tres es.
+    const faltantes = [
+      !formData.name.trim() && "Nombre del Material",
+      !formData.barcode.trim() && "Código de Barras",
+      !formData.category_id && "Categoría",
+      !formData.supplier_id && "Proveedor",
+    ].filter(Boolean)
+
+    if (faltantes.length > 0) {
+      toast.error("Faltan datos", {
+        description: `Completá: ${faltantes.join(", ")}`,
+      })
+      return
+    }
+
+    if (Number(formData.min_stock) > Number(formData.max_stock)) {
+      toast.error("Revisá el stock", {
+        description: "El stock mínimo no puede ser mayor que el stock máximo",
       })
       return
     }
@@ -101,7 +141,7 @@ export default function NuevoMaterialPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: formData.name,
-          barcode: formData.barcode || null,
+          barcode: formData.barcode.trim(),
           description: formData.description || null,
           category_id: parseInt(formData.category_id),
           supplier_id: parseInt(formData.supplier_id),
@@ -115,6 +155,7 @@ export default function NuevoMaterialPage() {
 
       if (!response.ok) {
         const error = await response.json()
+        if (error.detail) console.error("Detalle del server:", error.detail)
         throw new Error(error.error || "Error al crear material")
       }
 
@@ -173,6 +214,8 @@ export default function NuevoMaterialPage() {
                 suppliers={suppliers}
                 onGenerateBarcode={generateBarcode}
                 generatingBarcode={generatingBarcode}
+                loadingOptions={loadingOptions}
+                optionsError={optionsError}
                 withInitialStock
               />
 

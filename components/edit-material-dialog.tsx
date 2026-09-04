@@ -83,6 +83,20 @@ export function EditMaterialDialog({ material, categories, suppliers, open: cont
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+
+        // Mismos obligatorios que el alta, nombrando el que falta.
+        const faltantes = [
+            !formData.name.trim() && "Nombre del Material",
+            !formData.barcode.trim() && "Código de Barras",
+            !formData.category_id && "Categoría",
+            !formData.supplier_id && "Proveedor",
+        ].filter(Boolean)
+
+        if (faltantes.length > 0) {
+            toast.error("Faltan datos", { description: `Completá: ${faltantes.join(", ")}` })
+            return
+        }
+
         setLoading(true)
 
         try {
@@ -91,7 +105,7 @@ export function EditMaterialDialog({ material, categories, suppliers, open: cont
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     name: formData.name,
-                    barcode: formData.barcode || null,
+                    barcode: formData.barcode.trim(),
                     description: formData.description || null,
                     category_id: parseInt(formData.category_id),
                     supplier_id: parseInt(formData.supplier_id),
