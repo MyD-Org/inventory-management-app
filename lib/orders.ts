@@ -793,6 +793,57 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
     return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label))
 }
 
+export interface ExtraConsumed {
+    material_id: number
+    label: string
+    quantity: number
+    unit: string | null
+}
+
+// Lo que se descontó por este pedido y NO estaba en su lista de materiales: el
+// tornillo que se rompió, el metro de más que se llevó el taller. Sale de los
+// movimientos, así que queda vinculado al pedido igual que el resto, pero
+// materialNeeds() no lo ve porque no hay línea de BOM que lo explique.
+export async function extraConsumedMaterials(orderId: number): Promise<ExtraConsumed[]> {
+    const rows = await sql`
+        SELECT
+            sm.material_id,
+            m.name AS label,
+            m.unit_of_measure AS unit,
+            COALESCE(SUM(sm.quantity), 0) AS quantity
+        FROM stock_movements sm
+        JOIN materials m ON m.id = sm.material_id
+        WHERE sm.order_id = ${orderId}
+          AND sm.movement_type = 'salida'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM order_item_materials oim
+              JOIN order_items oi ON oi.id = oim.order_item_id
+              WHERE oi.order_id = ${orderId} AND oim.material_id = sm.material_id
+          )
+          -- Una alternativa de familia tampoco es un extra: es el mismo color
+          -- resuelto con otro material, y materialNeeds() ya lo cuenta.
+          AND NOT EXISTS (
+              SELECT 1
+              FROM order_item_materials oim
+              JOIN order_items oi ON oi.id = oim.order_item_id
+              JOIN material_family_options fo
+                ON fo.family_id = oim.family_id AND fo.spec_value = oim.spec_value
+              WHERE oi.order_id = ${orderId} AND fo.material_id = sm.material_id
+          )
+        GROUP BY sm.material_id, m.name, m.unit_of_measure
+        HAVING COALESCE(SUM(sm.quantity), 0) > 0
+        ORDER BY m.name ASC
+    `
+
+    return (rows as any[]).map((r) => ({
+        material_id: r.material_id as number,
+        label: r.label as string,
+        quantity: Number(r.quantity),
+        unit: (r.unit as string | null) ?? null,
+    }))
+}
+
 // ---------- Edición interna de ítems ----------
 // Funciones sin auth ni revalidación. Las usan los endpoints de la API
 // (autenticación server-to-server) y las server actions de la web (auth de

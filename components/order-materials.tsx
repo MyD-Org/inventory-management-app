@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ChevronRight, PackageMinus } from "lucide-react"
 import { ConsumeMaterialsForm } from "@/components/consume-materials-form"
 import { useToast } from "@/hooks/use-toast"
-import type { MaterialNeed } from "@/lib/orders"
+import type { ExtraConsumed, MaterialNeed } from "@/lib/orders"
 import { formatStock } from "@/lib/format"
 
 function Estado({ n }: { n: MaterialNeed }) {
@@ -35,7 +35,16 @@ function Estado({ n }: { n: MaterialNeed }) {
     return <span className="font-mono text-sm tabular-nums text-muted-foreground">{formatStock(n.available)}</span>
 }
 
-export function OrderMaterials({ orderId, needs }: { orderId: number; needs: MaterialNeed[] }) {
+export function OrderMaterials({
+    orderId,
+    needs,
+    extras = [],
+}: {
+    orderId: number
+    needs: MaterialNeed[]
+    /** Lo retirado por este pedido que no estaba en la lista de materiales. */
+    extras?: ExtraConsumed[]
+}) {
     const router = useRouter()
     const { toast } = useToast()
     // Cerrado por defecto: el detalle ya es largo y esta lista se abre cuando se
@@ -47,7 +56,9 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
     const conFaltante = needs.filter((n) => n.available !== null && n.pending > n.available)
     const todoDescontado = needs.length > 0 && needs.every((n) => n.pending === 0)
 
-    if (needs.length === 0) return null
+    // Sin lista de materiales la sección igual se muestra: es la única puerta
+    // para retirar algo por este pedido (un pedido sin hoja de costo, o un
+    // material que se rompió después de haber descontado todo).
 
     return (
         // no-print: al imprimir sale la orden de trabajo (qué armar), no la
@@ -65,7 +76,9 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                     <span className="font-display text-base font-semibold text-foreground">
                         Materiales a utilizar
                     </span>
-                    <span className="font-mono text-xs text-muted-foreground/80">({needs.length})</span>
+                    <span className="font-mono text-xs text-muted-foreground/80">
+                        ({needs.length + extras.length})
+                    </span>
                 </button>
 
                 {conFaltante.length > 0 && (
@@ -76,15 +89,18 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                     </span>
                 )}
 
-                <div className="ml-auto no-print">
-                    {todoDescontado ? (
+                {/* El botón queda SIEMPRE: aunque la lista esté toda descontada, el
+                    taller sigue necesitando retirar el tornillo que se rompió o el
+                    metro de más, y tiene que salir por el pedido para quedar
+                    vinculado a él. Antes, con todo descontado, no había puerta. */}
+                <div className="ml-auto no-print flex items-center gap-2">
+                    {todoDescontado && (
                         <span className="text-sm text-emerald-600">Ya descontado del inventario</span>
-                    ) : (
-                        <Button variant="outline" size="sm" onClick={() => setDialogo(true)} disabled={descontables.length === 0}>
-                            <PackageMinus className="mr-1.5 h-3.5 w-3.5" />
-                            Descontar del inventario
-                        </Button>
                     )}
+                    <Button variant="outline" size="sm" onClick={() => setDialogo(true)}>
+                        <PackageMinus className="mr-1.5 h-3.5 w-3.5" />
+                        {descontables.length === 0 ? "Retirar más materiales" : "Descontar del inventario"}
+                    </Button>
                 </div>
             </div>
 
@@ -127,6 +143,26 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                         </div>
                         )
                     })}
+
+                    {extras.map((e) => (
+                        <div
+                            key={`extra:${e.material_id}`}
+                            className="grid grid-cols-[minmax(0,1fr)_5rem_11rem] items-center gap-3 px-4 py-2.5"
+                        >
+                            <span className="min-w-0 truncate">
+                                {e.label}
+                                <span className="block text-xs text-muted-foreground">
+                                    extra, fuera de la lista
+                                </span>
+                            </span>
+                            <span className="text-right font-mono text-sm tabular-nums text-muted-foreground">
+                                —
+                            </span>
+                            <span className="text-right font-mono text-sm tabular-nums text-emerald-600">
+                                {formatStock(e.quantity)} retirados
+                            </span>
+                        </div>
+                    ))}
                 </div>
             )}
 
@@ -137,7 +173,8 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                     </DialogHeader>
 
                     <p className="text-base text-muted-foreground -mt-2">
-                        Se registra como una salida de stock por este pedido.
+                        Se registra como una salida de stock por este pedido. Podés agregar
+                        materiales que no estén en la lista.
                     </p>
 
                     <ConsumeMaterialsForm
