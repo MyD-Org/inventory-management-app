@@ -798,6 +798,8 @@ export interface ExtraConsumed {
     label: string
     quantity: number
     unit: string | null
+    /** Stock disponible hoy, para mostrarlo igual que en las filas del BOM. */
+    available: number | null
 }
 
 // Lo que se descontó por este pedido y NO estaba en su lista de materiales: el
@@ -810,9 +812,11 @@ export async function extraConsumedMaterials(orderId: number): Promise<ExtraCons
             sm.material_id,
             m.name AS label,
             m.unit_of_measure AS unit,
+            MAX(i.available_stock) AS available,
             COALESCE(SUM(sm.quantity), 0) AS quantity
         FROM stock_movements sm
         JOIN materials m ON m.id = sm.material_id
+        LEFT JOIN inventory i ON i.material_id = sm.material_id
         WHERE sm.order_id = ${orderId}
           AND sm.movement_type = 'salida'
           AND NOT EXISTS (
@@ -841,6 +845,7 @@ export async function extraConsumedMaterials(orderId: number): Promise<ExtraCons
         label: r.label as string,
         quantity: Number(r.quantity),
         unit: (r.unit as string | null) ?? null,
+        available: r.available == null ? null : Number(r.available),
     }))
 }
 
