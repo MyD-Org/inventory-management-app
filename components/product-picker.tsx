@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import type { SellableProduct } from "@/lib/orders"
 
 export function ProductPicker({
     products,
@@ -18,7 +19,8 @@ export function ProductPicker({
     label,
     placeholder = "Buscá o escribí un producto",
 }: {
-    products: string[]
+    products: SellableProduct[]
+    /** Se elige el NOMBRE: es lo que se guarda en la línea del pedido. */
     onPick: (product: string) => void
     onCancel?: () => void
     autoFocus?: boolean
@@ -32,7 +34,15 @@ export function ProductPicker({
 
     const matches = useMemo(() => {
         const q = query.trim().toLowerCase()
-        const list = q ? products.filter((p) => p.toLowerCase().includes(q)) : products
+        // También por código de referencia de Alegra: el taller conoce varios
+        // productos por el código antes que por el nombre largo del catálogo.
+        const list = q
+            ? products.filter(
+                  (p) =>
+                      p.name.toLowerCase().includes(q) ||
+                      (p.reference ?? "").toLowerCase().includes(q),
+              )
+            : products
         // 15 y no 8: ahora la lista tiene scroll, así que mostrar más no empuja
         // nada fuera de la pantalla. Con 162 productos en el catálogo, ocho
         // dejaban afuera resultados válidos de una búsqueda amplia.
@@ -42,7 +52,7 @@ export function ProductPicker({
     // Ofrecemos crearlo salvo que ya exista con ese nombre exacto.
     const nuevo = query.trim()
     const ofrecerNuevo =
-        nuevo.length > 0 && !products.some((p) => p.toLowerCase() === nuevo.toLowerCase())
+        nuevo.length > 0 && !products.some((p) => p.name.toLowerCase() === nuevo.toLowerCase())
 
     useEffect(() => setCursor(0), [query])
 
@@ -81,7 +91,7 @@ export function ProductPicker({
                         setCursor((c) => Math.max(c - 1, 0))
                     } else if (e.key === "Enter") {
                         e.preventDefault()
-                        if (matches[cursor]) onPick(matches[cursor])
+                        if (matches[cursor]) onPick(matches[cursor].name)
                         else if (ofrecerNuevo) onPick(nuevo)
                     } else if (e.key === "Escape") {
                         e.preventDefault()
@@ -101,12 +111,12 @@ export function ProductPicker({
             <div className="absolute z-30 mt-1 min-w-full w-max max-w-[min(34rem,88vw)] max-h-72 overflow-y-auto rounded-md border bg-popover shadow-md">
                 {matches.map((p, i) => (
                     <button
-                        key={p}
+                        key={p.name}
                         type="button"
                         onMouseEnter={() => setCursor(i)}
                         onClick={() => {
                             setOpen(false)
-                            onPick(p)
+                            onPick(p.name)
                         }}
                         // truncate: hay productos del catálogo con el detalle
                         // entero en el nombre ("10 metros de tiras de led con
@@ -116,9 +126,14 @@ export function ProductPicker({
                         className={`block w-full truncate px-3 py-1.5 text-left text-base ${
                             i === cursor ? "bg-muted" : ""
                         }`}
-                        title={p}
+                        title={p.reference ? `${p.reference} · ${p.name}` : p.name}
                     >
-                        {p}
+                        {/* El código adelante y en gris: se puede buscar por él,
+                            así que hay que poder verlo y reconocerlo. */}
+                        {p.reference && (
+                            <span className="text-muted-foreground mr-2">{p.reference}</span>
+                        )}
+                        {p.name}
                     </button>
                 ))}
                 {ofrecerNuevo && (

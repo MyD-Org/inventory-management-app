@@ -15,7 +15,7 @@ import { addOrderItem, deleteOrderItem, updateOrderItem } from "@/lib/order-acti
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { ProductPicker } from "@/components/product-picker"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import type { SpecField } from "@/lib/orders"
+import type { SellableProduct, SpecField } from "@/lib/orders"
 
 interface Item {
     id: number
@@ -43,7 +43,7 @@ export function OrderItemsEditor({
     orderId: number
     items: Item[]
     vocab: Record<string, SpecField>
-    products: string[]
+    products: SellableProduct[]
     readOnly?: boolean
     readOnlyMessage?: string
     highlightedItemId?: number

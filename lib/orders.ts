@@ -187,14 +187,27 @@ export async function resolveProduct(name: string): Promise<ResolvedProduct | nu
 // Antes estos selectores listaban las HOJAS DE COSTO. Cuando el catálogo pasó a
 // ser Alegra quedaron apuntando a lo viejo: en producción hay 162 productos
 // vendibles y 0 hojas de costo, así que no encontraban nada.
-export async function listSellableProducts(): Promise<string[]> {
+export interface SellableProduct {
+    name: string
+    /** Código de referencia de Alegra. null en los que todavía no lo tienen cargado. */
+    reference: string | null
+}
+
+export async function listSellableProducts(): Promise<SellableProduct[]> {
+    // El código viaja junto al nombre para poder buscar por él en el selector.
+    // GROUP BY en vez de DISTINCT: un mismo base_name puede tener varias filas y
+    // el DISTINCT no deja traer otra columna al lado.
     const rows = await sql`
-        SELECT DISTINCT base_name
+        SELECT base_name, MIN(reference) AS reference
         FROM alegra_items
         WHERE status = 'active' AND variant_label IS NULL
+        GROUP BY base_name
         ORDER BY base_name ASC
     `
-    return (rows as any[]).map((r) => r.base_name as string)
+    return (rows as any[]).map((r) => ({
+        name: r.base_name as string,
+        reference: (r.reference as string | null) ?? null,
+    }))
 }
 
 // Qué opciones cambiaron entre las specs guardadas y las nuevas, con las

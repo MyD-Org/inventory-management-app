@@ -21,7 +21,7 @@ import { useToast } from "@/hooks/use-toast"
 import { CustomerPicker, type PickedCustomer } from "@/components/customer-picker"
 import { ProductPicker } from "@/components/product-picker"
 import { PriorityIcon } from "@/components/order-glyphs"
-import type { SpecField } from "@/lib/orders"
+import type { SpecField, SellableProduct } from "@/lib/orders"
 
 interface Line {
     product: string
@@ -46,7 +46,7 @@ export function NewOrderPage({
     products,
 }: {
     specs: Record<string, SpecField>
-    products: string[]
+    products: SellableProduct[]
 }) {
     const router = useRouter()
     const { toast } = useToast()
