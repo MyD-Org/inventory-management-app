@@ -377,7 +377,10 @@ export function MaterialFamiliesManager({
         })
         setSaving(false)
 
-        if (result.error) {
+        // insertMaterialFamily devuelve una unión sin discriminante común:
+        // {success, id} | {error}. El `in` es lo que la angosta; leer .error
+        // directo no compila.
+        if ("error" in result) {
             toast.error("Error", { description: result.error })
             return
         }
