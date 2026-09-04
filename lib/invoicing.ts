@@ -52,10 +52,21 @@ export interface InvoicePreview {
     total: number
     /** Numeración de Alegra que se va a usar. */
     numberTemplate: NumberTemplate | null
+    /** Todas las numeraciones disponibles, para poder elegir otra antes de emitir. */
+    numberTemplates: NumberTemplate[]
     /** Términos y condiciones de pago. */
     terms: string | null
     /** Notas adicionales de la factura. */
     notes: string | null
+}
+
+// "Blanco Frio 6000" → "blanco frio". Devuelve null si el color no termina en
+// una temperatura, así no se busca dos veces lo mismo.
+function variantWithoutTemperature(color: string): string | null {
+    const n = normalizeVariant(color)
+    if (!n) return null
+    const sin = n.replace(/\s*\d{3,5}\s*$/, "").trim()
+    return sin && sin !== n ? sin : null
 }
 
 // Resuelve qué se facturaría, sin tocar Alegra. Es lo que consume el modo
@@ -106,6 +117,10 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
         let elegido = base as any
         let match: InvoiceLinePreview["match"] = "base"
 
+        // Cuando la variante se encontró por el color sin la temperatura, el
+        // renglón tiene que aclarar la temperatura pedida igual que en el caso base.
+        let colorEnDescripcion = false
+
         if (color) {
             const [variante] = await sql`
                 SELECT alegra_id, name, price FROM alegra_items
@@ -117,6 +132,27 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
                 elegido = variante
                 match = "variante"
             } else {
+                // El pedido pide "Blanco Frio 6000" y en Alegra la variante está
+                // cargada como "Blanco Frio" a secas. Es el mismo color y el mismo
+                // precio (todas las variantes de una familia valen igual), así que
+                // se factura esa y la temperatura queda escrita en el renglón.
+                const colorSinTemperatura = variantWithoutTemperature(color)
+                const [porColor] = colorSinTemperatura
+                    ? await sql`
+                        SELECT alegra_id, name, price FROM alegra_items
+                        WHERE base_normalized = ${base.base_normalized}
+                          AND variant_normalized = ${colorSinTemperatura}
+                          AND status = 'active'
+                    `
+                    : [undefined]
+                if (porColor) {
+                    elegido = porColor
+                    match = "variante"
+                    colorEnDescripcion = true
+                }
+            }
+
+            if (match === "base") {
                 const [{ count }] = await sql`
                     SELECT COUNT(*)::int AS count FROM alegra_items
                     WHERE base_normalized = ${base.base_normalized}
@@ -162,19 +198,23 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
             price: Number(elegido.price) || 0,
             // Las specs que ya tienen su propio renglón (la estaca) no se repiten
             // acá: en la factura del cliente quedaría dicho dos veces.
-            description: describeLine(specs, match === "base" ? color : null, specsConLineaPropia),
+            description: describeLine(specs, match === "base" || colorEnDescripcion ? color : null, specsConLineaPropia),
             match,
         })
         lines.push(...agregados)
     }
 
-    if (lines.length === 0) {
+    // Si ya hay avisos, cada uno explica por qué su línea quedó afuera: repetir
+    // "no hay nada que facturar" no agrega información. Solo hace falta cuando el
+    // pedido no dejó ningún aviso (por ejemplo, un pedido sin líneas).
+    if (lines.length === 0 && warnings.length === 0) {
         warnings.push("No se pudo resolver ninguna línea: no hay nada que facturar.")
     }
 
-    const numberTemplate = clientId != null
-        ? await resolveNumberTemplate((order.customer_name as string) ?? null)
-        : undefined
+    // Se traen todas y se elige una acá mismo: la pantalla muestra la sugerida y
+    // deja cambiarla, así que la lista completa viaja igual.
+    const numberTemplates = clientId != null ? await listNumberTemplates() : []
+    const numberTemplate = pickNumberTemplate(numberTemplates, (order.customer_name as string) ?? null)
 
     return {
         orderId,
@@ -184,6 +224,7 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
         warnings,
         total: lines.reduce((s, l) => s + l.price * l.quantity, 0),
         numberTemplate: numberTemplate ?? null,
+        numberTemplates,
         terms: (order.invoice_terms as string | null) ?? null,
         notes: (order.invoice_notes as string | null) ?? null,
     }
@@ -202,7 +243,10 @@ function describeLine(
         .filter(([k, v]) => v && v !== "sin" && !fuera.has(k))
         .map(([k, v]) => formatSpec(k, v))
     const detalle = partes.join(" · ")
-    return colorSuelto ? `${detalle} (color ${colorSuelto})` : detalle
+    if (!colorSuelto) return detalle
+    // Sin otras specs no hay nada que aclarar entre paréntesis: el color es el
+    // renglón entero.
+    return detalle ? `${detalle} (color ${colorSuelto})` : `color ${colorSuelto}`
 }
 
 function formatSpec(key: string, value: string): string {
@@ -231,7 +275,16 @@ function normalizeName(s: string): string {
 // propia cuyo nombre coincide con su nombre, la usa; si no, usa la numeración
 // "Principal"; si tampoco existe, cae en la primera disponible.
 export async function resolveNumberTemplate(clientName: string | null): Promise<NumberTemplate | undefined> {
-    const templates = await listNumberTemplates()
+    return pickNumberTemplate(await listNumberTemplates(), clientName)
+}
+
+// La misma decisión, sobre una lista ya traída. Existe aparte porque la
+// simulación necesita la lista entera (para poder elegir otra) y pedirla dos
+// veces es un viaje de más a Alegra.
+export function pickNumberTemplate(
+    templates: NumberTemplate[],
+    clientName: string | null,
+): NumberTemplate | undefined {
     if (templates.length === 0) return undefined
 
     if (clientName) {
@@ -261,7 +314,7 @@ export interface InvoiceResult extends InvoicePreview {
 // IDEMPOTENTE: si el pedido ya tiene factura, no crea otra.
 export async function invoiceOrder(
     orderId: number,
-    opts: { dryRun?: boolean; terms?: string; notes?: string } = {},
+    opts: { dryRun?: boolean; terms?: string; notes?: string; numberTemplateId?: number } = {},
 ): Promise<InvoiceResult> {
     const dryRun = opts.dryRun ?? false
     const terms = opts.terms?.trim() || null
@@ -297,7 +350,11 @@ export async function invoiceOrder(
         quantity: l.quantity,
     }))
 
-    const numberTemplate = await resolveNumberTemplate(preview.clientName)
+    // La numeración elegida en la pantalla gana; si no vino ninguna, la sugerida.
+    const numberTemplate =
+        (opts.numberTemplateId != null
+            ? preview.numberTemplates.find((t) => t.id === opts.numberTemplateId)
+            : undefined) ?? preview.numberTemplate ?? undefined
 
     // Si el pedido ya se remitió, la factura lo nombra. Alegra tiene una relación
     // nativa (POST /invoices con "remissions": [id]) que acá NO se usa: toma las
