@@ -244,8 +244,11 @@ export function OrderActivity({ orderId, events }: { orderId: number; events: Or
     const { toast } = useToast()
     const [texto, setTexto] = useState("")
     const [guardando, setGuardando] = useState(false)
-    const [soloNotas, setSoloNotas] = useState(false)
-    const [abierto, setAbierto] = useState(false)
+    // Abierta y en "Notas" desde el arranque: lo que se viene a leer del
+    // pedido son los mensajes que alguien dejó a mano, no el registro de campos
+    // cambiados. Los cambios siguen a un clic, en "Historial".
+    const [soloNotas, setSoloNotas] = useState(true)
+    const [abierto, setAbierto] = useState(true)
 
     // Una nota sin texto no se dibuja. Pasó con las notas viejas migradas: el
     // recuadro vacío ocupaba media pantalla para no decir nada.
@@ -278,8 +281,8 @@ export function OrderActivity({ orderId, events }: { orderId: number; events: Or
     return (
         <section className="no-print">
             <div className="flex items-center gap-3 border-t pt-5">
-                {/* Mismo desplegable que los materiales, y cerrado igual que ellos:
-                    la historia se consulta cuando algo no cuadra, no siempre. */}
+                {/* Mismo desplegable que los materiales, pero abierto: la historia
+                    del pedido se lee siempre, no solo cuando algo no cuadra. */}
                 <button
                     type="button"
                     onClick={() => setAbierto((v) => !v)}
@@ -297,8 +300,8 @@ export function OrderActivity({ orderId, events }: { orderId: number; events: Or
                 {abierto && (
                 <div className="ml-auto inline-flex rounded-lg border bg-muted/60 p-0.5">
                     {[
-                        { k: false, label: "Todo" },
-                        { k: true, label: "Solo notas" },
+                        { k: true, label: "Notas" },
+                        { k: false, label: "Historial" },
                     ].map(({ k, label }) => (
                         <button
                             key={label}

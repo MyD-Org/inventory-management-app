@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { unstable_noStore } from "next/cache"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
-import { getSpecs, listSellableProducts, materialNeeds, readOrder, reconcileOrderBoms } from "@/lib/orders"
+import { extraConsumedMaterials, getSpecs, listSellableProducts, materialNeeds, readOrder, reconcileOrderBoms } from "@/lib/orders"
 import { orderNeedsReview } from "@/lib/order-statuses"
 import { STATUS_LABELS } from "@/lib/order-statuses"
 import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
@@ -102,8 +102,9 @@ export default async function OrderDetailPage({
 
     // Los productos del selector salen del CATÁLOGO de Alegra, no de las hojas
     // de costo: un producto existe porque se vende, y la hoja es opcional.
-    const [needs, vocab, products, events, invoiceDrift, remissionDrift] = await Promise.all([
+    const [needs, extras, vocab, products, events, invoiceDrift, remissionDrift] = await Promise.all([
         materialNeeds(id),
+        extraConsumedMaterials(id),
         getSpecs(),
         listSellableProducts(),
         listOrderEvents(id),
@@ -334,7 +335,7 @@ export default async function OrderDetailPage({
                     </section>
 
                     {/* 2. Materiales a utilizar, con su estado de stock */}
-                    <OrderMaterials orderId={order.id} needs={needs} />
+                    <OrderMaterials orderId={order.id} needs={needs} extras={extras} />
 
                     {/* 3. Quién hizo qué, y las notas del taller */}
                     <OrderActivity orderId={order.id} events={events} />
