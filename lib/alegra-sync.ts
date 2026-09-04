@@ -416,6 +416,7 @@ export async function syncItems(): Promise<ItemSyncResult> {
             const name = String(it.name ?? "").trim()
             if (!name) return null
             const { base, variant } = splitItemName(name)
+            const reference = String(it.reference ?? "").trim() || null
             const price = Array.isArray(it.price) ? Number(it.price[0]?.price) : Number(it.price)
             if (variant) result.withVariant++
             bases.add(normalizeName(base))
@@ -428,6 +429,11 @@ export async function syncItems(): Promise<ItemSyncResult> {
                 variant,
                 variantNorm: normalizeVariant(variant),
                 price: Number.isFinite(price) ? price : 0,
+                // Código de referencia del producto en Alegra. Hoy lo tienen
+                // pocos ítems; se guarda igual para poder buscar por él a medida
+                // que se vayan cargando.
+                reference,
+                referenceNorm: reference ? normalizeName(reference) : null,
                 status: (it.status as string) ?? null,
                 // Cuenta de ingresos: 'Ventas' o 'Materia Prima'.
                 account: (it.category?.name as string) ?? null,
@@ -440,7 +446,8 @@ export async function syncItems(): Promise<ItemSyncResult> {
         const inserted = await sql`
             INSERT INTO alegra_items (
                 alegra_id, name, name_normalized, base_name, base_normalized,
-                variant_label, variant_normalized, price, status, account
+                variant_label, variant_normalized, price, status, account,
+                reference, reference_normalized
             )
             SELECT * FROM UNNEST(
                 ${chunk.map((r) => r.alegraId)}::int[],
@@ -452,7 +459,9 @@ export async function syncItems(): Promise<ItemSyncResult> {
                 ${chunk.map((r) => r.variantNorm)}::varchar[],
                 ${chunk.map((r) => r.price)}::numeric[],
                 ${chunk.map((r) => r.status)}::varchar[],
-                ${chunk.map((r) => r.account)}::varchar[]
+                ${chunk.map((r) => r.account)}::varchar[],
+                ${chunk.map((r) => r.reference)}::varchar[],
+                ${chunk.map((r) => r.referenceNorm)}::varchar[]
             )
             ON CONFLICT (alegra_id) DO UPDATE SET
                 name = EXCLUDED.name,
@@ -464,6 +473,8 @@ export async function syncItems(): Promise<ItemSyncResult> {
                 price = EXCLUDED.price,
                 status = EXCLUDED.status,
                 account = EXCLUDED.account,
+                reference = EXCLUDED.reference,
+                reference_normalized = EXCLUDED.reference_normalized,
                 updated_at = NOW()
             RETURNING (xmax = 0) AS is_insert
         `

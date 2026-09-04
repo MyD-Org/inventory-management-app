@@ -15,6 +15,8 @@ import { searchAlegraItems } from "@/lib/alegra-actions"
 interface Item {
     id: number
     name: string
+    /** Código de referencia de Alegra. Null en los productos que aún no lo tienen. */
+    reference?: string | null
 }
 
 export function ProductNameAutocomplete({
@@ -136,8 +138,13 @@ export function ProductNameAutocomplete({
                             className={`w-full truncate text-left p-2.5 text-sm ${
                                 nav.active === i ? "bg-muted" : ""
                             }`}
-                            title={it.name}
+                            title={it.reference ? `${it.reference} · ${it.name}` : it.name}
                         >
+                            {/* El código se muestra al lado del nombre: se puede
+                                buscar por él, así que hay que poder verlo. */}
+                            {it.reference && (
+                                <span className="text-muted-foreground tabular-nums mr-2">{it.reference}</span>
+                            )}
                             {it.name}
                         </button>
                     ))}

@@ -42,19 +42,24 @@ export async function GET(request: NextRequest) {
         // account = 'Ventas': la propia clasificación contable del taller. Separa
         // lo que se le vende a un cliente de lo que solo se compra para fabricar.
         // Sin esto el bot ofrecía grampas y arandelas como si fueran equipos.
+        // La búsqueda también toma el código de referencia: el cliente muchas
+        // veces pide por código y no por el nombre largo del catálogo.
         const rows = q
             ? await sql`
                 SELECT base_name,
-                       ARRAY_REMOVE(ARRAY_AGG(DISTINCT variant_label), NULL) AS variantes
+                       ARRAY_REMOVE(ARRAY_AGG(DISTINCT variant_label), NULL) AS variantes,
+                       MIN(reference) AS reference
                 FROM alegra_items
-                WHERE status = 'active' AND account = 'Ventas' AND base_name ILIKE ${`%${q}%`}
+                WHERE status = 'active' AND account = 'Ventas'
+                  AND (base_name ILIKE ${`%${q}%`} OR reference ILIKE ${`%${q}%`})
                 GROUP BY base_name
                 ORDER BY base_name ASC
                 LIMIT 25
             `
             : await sql`
                 SELECT base_name,
-                       ARRAY_REMOVE(ARRAY_AGG(DISTINCT variant_label), NULL) AS variantes
+                       ARRAY_REMOVE(ARRAY_AGG(DISTINCT variant_label), NULL) AS variantes,
+                       MIN(reference) AS reference
                 FROM alegra_items
                 WHERE status = 'active' AND account = 'Ventas'
                 GROUP BY base_name
@@ -70,6 +75,9 @@ export async function GET(request: NextRequest) {
             productos: rows.map((r: any) => ({
                 producto: r.base_name as string,
                 colores: (r.variantes as string[]) ?? [],
+                // Código de Alegra. Se puede buscar por él y se puede mandar en
+                // POST /api/pedidos en lugar del nombre. null = todavía sin cargar.
+                codigo: (r.reference as string | null) ?? null,
             })),
         })
     } catch (error) {

@@ -129,24 +129,35 @@ export async function resolveProduct(name: string): Promise<ResolvedProduct | nu
 
     // Exacto primero; si no, parcial y solo si es UNO (ambiguo = mejor que lo mire
     // una persona que adivinar, sobre todo cuando de esto sale un precio).
-    // account = 'Ventas' deja afuera las materias primas: en el catálogo conviven
-    // los equipos con las grampas y arandelas que se compran para fabricarlos, y
-    // un pedido de "grampa larga" es un error, no una venta.
+    // Las MATERIAS PRIMAS también resuelven: el taller vende suelto lo que compra
+    // para fabricar (una fuente, una tira de led), y esos ítems están clasificados
+    // como 'Materia Prima' en Alegra. Filtrarlos dejaba la línea sin alegra_item_id
+    // —cargable pero no facturable—, que es peor que ofrecer una grampa de más.
+    // El CÓDIGO DE REFERENCIA cuenta como nombre exacto: si lo que llega es el
+    // código de Alegra del producto, no hay ambigüedad posible y resolverlo por ahí
+    // es mejor que no resolver nada. Solo exacto: un código parcial no identifica.
     const items = await sql`
-        SELECT alegra_id, base_name, (base_normalized = lower(${clean})) AS exact
+        SELECT alegra_id, base_name,
+               (base_normalized = lower(${clean}) OR reference_normalized = lower(${clean})) AS exact
         FROM alegra_items
-        WHERE status = 'active' AND account = 'Ventas' AND variant_label IS NULL
-          AND (base_normalized = lower(${clean}) OR base_name ILIKE ${like})
+        WHERE status = 'active' AND variant_label IS NULL
+          AND (base_normalized = lower(${clean})
+               OR reference_normalized = lower(${clean})
+               OR base_name ILIKE ${like})
         ORDER BY exact DESC, alegra_id DESC
     `
     const exactItems = (items as any[]).filter((r) => r.exact)
     const item = exactItems.length > 0 ? exactItems[0] : items.length === 1 ? (items[0] as any) : null
 
-    // La hoja de costo se busca por separado y con el mismo criterio.
+    // La hoja de costo se busca por separado y con el mismo criterio, pero por el
+    // NOMBRE del catálogo: si lo que llegó fue un código, buscar la hoja por el
+    // código no encontraría nada (las hojas se llaman como el producto).
+    const porNombre = (items as any[]).find((r) => r.exact)?.base_name ?? clean
+    const likeBudget = `%${porNombre}%`
     const budgets = await sql`
-        SELECT id, name, (lower(name) = lower(${clean})) AS exact
+        SELECT id, name, (lower(name) = lower(${porNombre})) AS exact
         FROM budgets
-        WHERE lower(name) = lower(${clean}) OR name ILIKE ${like}
+        WHERE lower(name) = lower(${porNombre}) OR name ILIKE ${likeBudget}
         ORDER BY exact DESC, id DESC
     `
     const exactBudgets = (budgets as any[]).filter((r) => r.exact)
@@ -162,10 +173,16 @@ export async function resolveProduct(name: string): Promise<ResolvedProduct | nu
     }
 }
 
-// Productos que se le pueden vender a un cliente, para los selectores del alta
-// de pedidos. Mismos filtros que resolveProduct(), y por la misma razón: el
-// catálogo mezcla los equipos con las materias primas que se compran para
-// fabricarlos, y el color es una variante del producto, no un producto.
+// Productos que se pueden cargar en un pedido, para los selectores del alta.
+// Mismos filtros que resolveProduct(), y por la misma razón: el color es una
+// variante del producto, no un producto.
+//
+// INCLUYE LAS MATERIAS PRIMAS. Antes filtraba account = 'Ventas' para no ofrecer
+// grampas y arandelas como si fueran equipos. Pero el taller también vende suelto
+// lo que compra para fabricar —una fuente, una tira de led— y esos ítems están
+// clasificados como 'Materia Prima' en Alegra: quedaban invisibles en el alta y no
+// había forma de facturarlos. Un ítem de más en la lista se ignora; uno de menos
+// frena el pedido.
 //
 // Antes estos selectores listaban las HOJAS DE COSTO. Cuando el catálogo pasó a
 // ser Alegra quedaron apuntando a lo viejo: en producción hay 162 productos
@@ -174,7 +191,7 @@ export async function listSellableProducts(): Promise<string[]> {
     const rows = await sql`
         SELECT DISTINCT base_name
         FROM alegra_items
-        WHERE status = 'active' AND account = 'Ventas' AND variant_label IS NULL
+        WHERE status = 'active' AND variant_label IS NULL
         ORDER BY base_name ASC
     `
     return (rows as any[]).map((r) => r.base_name as string)
