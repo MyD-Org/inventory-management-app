@@ -53,17 +53,26 @@ export function OrderItemsEditor({
     const [editing, setEditing] = useState<number | null>(null)
     // Borrador: lo que se toca queda acá hasta apretar Guardar. Antes cada
     // cambio pegaba solo contra el server y no se entendía qué había pasado.
-    const [draft, setDraft] = useState<{ quantity: number; specs: Record<string, string> } | null>(null)
+    const [draft, setDraft] = useState<{
+        quantity: number
+        specs: Record<string, string>
+        product: string
+    } | null>(null)
+    // Cambiar el producto rehace la receta, así que no se hace de un click sin
+    // querer: la fila muestra el nombre y recién al pedirlo aparece el buscador.
+    const [cambiandoProducto, setCambiandoProducto] = useState(false)
     const [savingLine, setSavingLine] = useState(false)
 
     function abrir(item: Item) {
         setEditing(item.id)
-        setDraft({ quantity: item.quantity, specs: { ...item.specs } })
+        setDraft({ quantity: item.quantity, specs: { ...item.specs }, product: item.product })
+        setCambiandoProducto(false)
     }
 
     function cerrar() {
         setEditing(null)
         setDraft(null)
+        setCambiandoProducto(false)
     }
     const [pendingDelete, setPendingDelete] = useState<number | null>(null)
     const [deleting, setDeleting] = useState(false)
@@ -290,6 +299,7 @@ export function OrderItemsEditor({
                     const sucio =
                         draft !== null &&
                         (draft.quantity !== item.quantity ||
+                            draft.product !== item.product ||
                             JSON.stringify(draft.specs) !== JSON.stringify(item.specs))
 
                     return (
@@ -310,9 +320,26 @@ export function OrderItemsEditor({
                                     />
                                 </td>
                                 <td className="px-3 py-2 text-base font-medium">
-                                    <span className="block truncate" title={item.product}>
-                                        {item.product}
-                                    </span>
+                                    {cambiandoProducto ? (
+                                        <ProductPicker
+                                            products={products}
+                                            autoFocus
+                                            onCancel={() => setCambiandoProducto(false)}
+                                            onPick={(product) => {
+                                                setDraft((d) => (d ? { ...d, product } : d))
+                                                setCambiandoProducto(false)
+                                            }}
+                                        />
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            className="block w-full truncate text-left hover:underline"
+                                            title="Cambiar producto"
+                                            onClick={() => setCambiandoProducto(true)}
+                                        >
+                                            {draft?.product ?? item.product}
+                                        </button>
+                                    )}
                                 </td>
 
                                 {columnas.map(([key, field]) => (
@@ -417,6 +444,7 @@ export function OrderItemsEditor({
                                                             updateOrderItem(item.id, {
                                                                 quantity: draft.quantity,
                                                                 specs: draft.specs,
+                                                                product: draft.product,
                                                             }),
                                                         "Cambios guardados",
                                                     )

@@ -467,7 +467,7 @@ export async function updateOrderFields(
 // tiene que poder hacerse acá y la factura se ajusta a mano en Alegra.
 export async function updateOrderItem(
     itemId: number,
-    patch: { quantity?: number; specs?: Record<string, string> },
+    patch: { quantity?: number; specs?: Record<string, string>; product?: string },
 ): Promise<import('@/lib/orders').UpdateOrderItemResult> {
     const session = await auth();
     if (!session?.user) return { ok: false, error: 'No autenticado' };
@@ -478,6 +478,22 @@ export async function updateOrderItem(
     const result = await updateOrderItemInternal(itemId, patch);
     if (result.ok) {
         await markDocumentsStale(item.order_id);
+
+        // El cambio de producto se registra aparte: rehace la receta entera, así
+        // que en el hilo tiene que leerse como tal y no como "cambió un dato".
+        const [actualizado] = await sql`SELECT product FROM order_items WHERE id = ${itemId}`;
+        if (actualizado && actualizado.product !== item.product) {
+            await logOrderEvent(item.order_id, {
+                kind: 'item_updated',
+                field: 'product',
+                oldValue: item.product,
+                newValue: actualizado.product,
+            });
+            revalidatePath('/pedidos');
+            revalidatePath(`/pedidos/${item.order_id}`);
+            return result;
+        }
+
         const cambioCantidad =
             patch.quantity !== undefined && Number(patch.quantity) !== Number(item.quantity);
 
@@ -729,7 +745,21 @@ export async function consumeOrderMaterials(
         return { ok: true, count: aDescontar.length };
     } catch (error) {
         console.error('Error en consumeOrderMaterials:', error);
-        return { error: 'No se pudo descontar del inventario' };
+
+        // Cantidad con decimales contra columnas INTEGER: es el caso que arregla
+        // scripts/32-stock-decimal.sql. Sin este mensaje el error no dice nada.
+        const { code, message } = (error ?? {}) as { code?: string; message?: string };
+        if (code === '22P02' && /integer/i.test(message ?? '')) {
+            return {
+                error:
+                    'El inventario todavía no acepta cantidades con decimales. Falta aplicar la migración de stock fraccionado (scripts/32-stock-decimal.sql).',
+            };
+        }
+
+        return {
+            error: 'No se pudo descontar del inventario',
+            detail: process.env.NODE_ENV === 'production' ? undefined : message,
+        };
     }
 }
 
