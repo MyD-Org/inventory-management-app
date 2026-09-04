@@ -26,7 +26,14 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { FileText, Loader2, RefreshCw, TriangleAlert } from "lucide-react"
+import { FileText, Hash, Loader2, RefreshCw, TriangleAlert } from "lucide-react"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { formatArs } from "@/components/budget-editor"
 import { updateOrderFields } from "@/lib/order-actions"
@@ -50,6 +57,7 @@ interface Preview {
     clientName: string | null
     clientId: number | null
     numberTemplate: { id: number; name: string } | null
+    numberTemplates: { id: number; name: string }[]
     terms: string | null
     notes: string | null
 }
@@ -69,6 +77,7 @@ export function InvoiceButton({
     const [preview, setPreview] = useState<Preview | null>(null)
     const [terms, setTerms] = useState("")
     const [notes, setNotes] = useState("")
+    const [templateId, setTemplateId] = useState<number | null>(null)
     const [cargando, setCargando] = useState(false)
     const [emitiendo, setEmitiendo] = useState(false)
 
@@ -84,6 +93,7 @@ export function InvoiceButton({
         if (preview) {
             setTerms(preview.terms ?? "")
             setNotes(preview.notes ?? "")
+            setTemplateId(preview.numberTemplate?.id ?? null)
         }
     }, [preview])
 
@@ -118,7 +128,7 @@ export function InvoiceButton({
             const res = await fetch(`/api/pedidos/${orderId}/facturar`, {
                 method: actualizando ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ terms, notes }),
+                body: JSON.stringify({ terms, notes, numberTemplateId: templateId }),
             })
             const data = await res.json()
             if (!res.ok) {
@@ -167,20 +177,46 @@ export function InvoiceButton({
 
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="max-w-2xl w-[calc(100%-2rem)] overflow-hidden">
-                    <DialogHeader className="flex flex-row items-start justify-between gap-4">
-                        <DialogTitle>
+                    {/* La numeración NO va en esta fila: la X de cerrar el diálogo
+                        está fija en esa esquina y le quedaba encima. Va abajo, con
+                        su etiqueta, donde además se puede cambiar. */}
+                    <DialogHeader>
+                        <DialogTitle className="pr-8">
                             {actualizando ? "Actualizar factura de " : "Factura para "}
                             {preview?.clientName ?? "el cliente"}
                         </DialogTitle>
-                        {preview?.numberTemplate && (
-                            <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                                N: {preview.numberTemplate.name}
-                            </span>
-                        )}
                     </DialogHeader>
 
                     {preview && (
                         <div className="space-y-3 overflow-hidden">
+                            {/* Actualizar no cambia el número de la factura, así que
+                                ahí la numeración se muestra pero no se elige. */}
+                            {preview.numberTemplate && (
+                                <div className="flex items-center gap-2">
+                                    <Hash className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    <span className="text-sm text-muted-foreground shrink-0">Numeración</span>
+                                    {actualizando || preview.numberTemplates.length < 2 ? (
+                                        <span className="text-sm font-medium">{preview.numberTemplate.name}</span>
+                                    ) : (
+                                        <Select
+                                            value={String(templateId ?? preview.numberTemplate.id)}
+                                            onValueChange={(v) => setTemplateId(Number(v))}
+                                        >
+                                            <SelectTrigger className="h-8 w-[220px] text-sm">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {preview.numberTemplates.map((t) => (
+                                                    <SelectItem key={t.id} value={String(t.id)}>
+                                                        {t.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="rounded-md border divide-y">
                                 {preview.lines.map((l, i) => (
                                     <div key={i} className="flex items-start gap-3 px-3 py-2 text-sm">

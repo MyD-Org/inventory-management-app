@@ -82,6 +82,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const resultado = await invoiceOrder(orderId, {
             terms: typeof body.terms === "string" ? body.terms : undefined,
             notes: typeof body.notes === "string" ? body.notes : undefined,
+            numberTemplateId: typeof body.numberTemplateId === "number" ? body.numberTemplateId : undefined,
         })
         // Emitir es irreversible del lado de Alegra: es de lo primero que se va a
         // buscar en la historia cuando algo salga mal.
