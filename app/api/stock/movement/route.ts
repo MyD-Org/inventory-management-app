@@ -49,8 +49,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Material no encontrado en inventario" }, { status: 404 })
     }
 
-    const currentStock = currentInventory[0].current_stock
-    const availableStock = currentInventory[0].available_stock
+    // Number() obligatorio: current_stock y available_stock son numeric y el
+    // driver los devuelve como string ("12.00"). Sin esto, una entrada suma
+    // concatenando ("12.00" + 5 = "12.005") y corrompe el stock sin error.
+    const currentStock = Number(currentInventory[0].current_stock)
+    const availableStock = Number(currentInventory[0].available_stock)
 
     // Validar stock suficiente para salidas
     if (movement_type === "salida" && Math.abs(quantity) > availableStock) {
