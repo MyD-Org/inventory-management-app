@@ -863,10 +863,12 @@ export async function addOrderItemInternal(
 
 export async function updateOrderItemInternal(
     itemId: number,
-    patch: { quantity?: number; specs?: Record<string, string> },
+    patch: { quantity?: number; specs?: Record<string, string>; product?: string },
 ): Promise<UpdateOrderItemResult> {
     try {
-        const [item] = await sql`SELECT order_id, quantity, budget_id, specs FROM order_items WHERE id = ${itemId}`
+        const [item] = await sql`
+            SELECT order_id, quantity, budget_id, specs, product FROM order_items WHERE id = ${itemId}
+        `
         if (!item) return { ok: false, error: "La línea no existe" }
 
         if (patch.specs) {
@@ -877,6 +879,14 @@ export async function updateOrderItemInternal(
         const quantity = patch.quantity ?? Number(item.quantity)
         if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, error: "Cantidad inválida" }
 
+        // Cambiar el producto no es editar un texto: es cambiar la receta. Se
+        // vuelve a resolver la hoja de costo, el ítem de Alegra y needs_review,
+        // y más abajo se rehace la lista de materiales igual que con las specs.
+        const pedido = patch.product?.trim()
+        const productChanged = Boolean(pedido) && pedido !== item.product
+        const resolved = productChanged ? await resolveProduct(pedido as string) : null
+        const budgetId = productChanged ? (resolved?.budgetId ?? null) : (item.budget_id as number | null)
+
         await sql`
             UPDATE order_items SET
                 quantity = ${quantity},
@@ -884,11 +894,23 @@ export async function updateOrderItemInternal(
             WHERE id = ${itemId}
         `
 
+        if (productChanged) {
+            await sql`
+                UPDATE order_items SET
+                    product = ${resolved?.label ?? pedido},
+                    budget_id = ${resolved?.budgetId ?? null},
+                    alegra_item_id = ${resolved?.alegraItemId ?? null},
+                    needs_review = ${!resolved?.budgetId}
+                WHERE id = ${itemId}
+            `
+        }
+
         const specsChanged =
             patch.specs !== undefined && !sameSpecs(patch.specs, (item.specs ?? {}) as Record<string, unknown>)
+        const specsFinales = (patch.specs ?? (item.specs ?? {})) as Record<string, string>
         let consumed = false
 
-        if (specsChanged && item.budget_id) {
+        if (specsChanged || productChanged) {
             const [{ count }] = await sql`
                 SELECT COUNT(*)::int AS count FROM stock_movements
                 WHERE order_id = ${item.order_id} AND movement_type = 'salida'
@@ -901,7 +923,9 @@ export async function updateOrderItemInternal(
                 `
                 await sql`DELETE FROM order_item_materials WHERE order_item_id = ${itemId}`
                 try {
-                    await explodeBom(itemId, item.budget_id as number, patch.specs ?? {}, quantity)
+                    // Sin hoja de costo la línea queda en needs_review y sin
+                    // materiales: el borrado de arriba ya la dejó así.
+                    if (budgetId) await explodeBom(itemId, budgetId, specsFinales, quantity)
                 } catch (error) {
                     await sql`DELETE FROM order_item_materials WHERE order_item_id = ${itemId}`
                     for (const m of previo) {
@@ -915,13 +939,24 @@ export async function updateOrderItemInternal(
             }
         }
 
-        const reexploded = specsChanged && Boolean(item.budget_id) && !consumed
+        const reexploded = (specsChanged || productChanged) && Boolean(budgetId) && !consumed
         if (!reexploded && patch.quantity !== undefined) {
             await sql`
                 UPDATE order_item_materials
                 SET qty_total = qty_per_unit * ${quantity}
                 WHERE order_item_id = ${itemId}
             `
+        }
+
+        // Cambiar a un producto sin hoja de costo deja la línea sin materiales: se
+        // avisa, porque en pantalla el cambio se ve igual de exitoso.
+        if (productChanged && !budgetId) {
+            return {
+                ok: true,
+                itemId,
+                warning:
+                    "El producto nuevo no tiene hoja de costo cargada, así que esta línea quedó sin lista de materiales.",
+            }
         }
 
         if (consumed) {

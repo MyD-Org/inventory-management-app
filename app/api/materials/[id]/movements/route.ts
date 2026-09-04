@@ -1,3 +1,6 @@
+// Redirige el driver al Postgres local cuando NEON_LOCAL_PROXY está seteada.
+// Sin este import la ruta intenta hablar con Neon y falla ("fetch failed").
+import "@/lib/neon-local"
 import { neon } from "@neondatabase/serverless"
 import { NextRequest, NextResponse } from "next/server"
 

@@ -1,3 +1,6 @@
+// Redirige el driver al Postgres local cuando NEON_LOCAL_PROXY está seteada.
+// Sin este import la ruta intenta hablar con Neon y falla ("fetch failed").
+import "@/lib/neon-local"
 import { neon } from "@neondatabase/serverless"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -29,9 +32,9 @@ export async function PUT(
             max_stock,
         } = body
 
-        if (!name || !category_id || !supplier_id) {
+        if (!name || !barcode?.toString().trim() || !category_id || !supplier_id) {
             return NextResponse.json(
-                { error: "Nombre, categoría y proveedor son obligatorios" },
+                { error: "Nombre, código de barras, categoría y proveedor son obligatorios" },
                 { status: 400 }
             )
         }

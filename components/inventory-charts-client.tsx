@@ -65,8 +65,9 @@ function buildDailySeries(rows: any[]) {
         const key = typeof r.date === "string" ? r.date.slice(0, 10) : new Date(r.date).toISOString().slice(0, 10)
         if (!byDate.has(key)) byDate.set(key, { date: key, entrada: 0, salida: 0 })
         const bucket = byDate.get(key)!
-        if (r.type === "entrada") bucket.entrada += r.quantity
-        else if (r.type === "salida") bucket.salida += r.quantity
+        // quantity es numeric: el driver lo da como string y += concatena.
+        if (r.type === "entrada") bucket.entrada += Number(r.quantity)
+        else if (r.type === "salida") bucket.salida += Number(r.quantity)
     }
     return Array.from(byDate.values())
         .sort((a, b) => a.date.localeCompare(b.date))

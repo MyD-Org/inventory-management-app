@@ -11,7 +11,7 @@ import Link from "next/link"
 import { Input } from "@/components/ui/input"
 import { useListNavigation } from "@/hooks/use-list-navigation"
 import { Layers, Plus } from "lucide-react"
-import { formatArs } from "@/lib/format"
+import { formatArs, formatStock } from "@/lib/format"
 import { fuzzyFilter } from "@/lib/fuzzy"
 
 // Una familia como opción del buscador: no es un material del inventario, es la
@@ -168,7 +168,7 @@ export function MaterialLineAutocomplete({
                                 <span className="ml-2 font-mono text-xs text-muted-foreground">{r.barcode}</span>
                             </span>
                             <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                                {formatArs(Number(r.unit_cost))} · stock {r.available_stock}
+                                {formatArs(Number(r.unit_cost))} · stock {formatStock(r.available_stock)}
                             </span>
                         </button>
                     ))}

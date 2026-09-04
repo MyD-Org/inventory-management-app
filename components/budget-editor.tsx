@@ -294,6 +294,13 @@ export function BudgetEditor({
 
     // ── Búsqueda con debounce ────────────────────────────────────────────────
     // Elegir un material del inventario en la línea i (rellena nombre y costo unitario).
+    // La unidad de medida no se guarda en la hoja: se lee del inventario por id,
+    // así una corrección en el material se refleja acá sin migrar nada.
+    const unitOf = (m: MaterialLine) =>
+        m.materialId === null
+            ? null
+            : materialsCatalog.find((c) => c.id === m.materialId)?.unit_of_measure ?? null
+
     const pickMaterial = (i: number, r: MaterialSearchResult) => {
         updateMaterial(i, { materialId: r.id, label: r.name, unitCost: Number(r.unit_cost) })
     }
@@ -627,16 +634,17 @@ export function BudgetEditor({
                         {/* Líneas: cada una con su buscador de material (estilo presupuesto) */}
                         {materials.length > 0 && (
                             <div className="space-y-2">
-                                <div className="hidden md:grid grid-cols-[1fr_150px_120px_110px_36px] gap-2 text-xs text-muted-foreground px-1">
+                                <div className="hidden md:grid grid-cols-[1fr_150px_70px_120px_110px_36px] gap-2 text-xs text-muted-foreground px-1">
                                     <span>Material</span>
-                                    <span>Cantidad</span>
-                                    <span>Costo unitario</span>
+                                    <span className="text-center">Cantidad</span>
+                                    <span className="text-center">Unidad</span>
+                                    <span className="text-center">Costo unitario</span>
                                     <span className="text-right">Subtotal</span>
                                     <span />
                                 </div>
                                 {materials.map((m, i) => (
                                     <div key={m.uid} className={m.isNew ? "rounded-md bg-green-50 px-1 py-1 ring-1 ring-green-200 dark:bg-green-950/30 dark:ring-green-900" : ""}>
-                                        <div className="grid grid-cols-2 md:grid-cols-[1fr_150px_120px_110px_36px] gap-2 items-center">
+                                        <div className="grid grid-cols-2 md:grid-cols-[1fr_150px_70px_120px_110px_36px] gap-2 items-center">
                                             <div className="col-span-2 min-w-0 md:col-span-1">
                                                 {m.isNew && (
                                                     <span className="mb-1 inline-block rounded bg-green-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
@@ -675,9 +683,14 @@ export function BudgetEditor({
                                                 onChange={(n) => updateMaterial(i, { qty: n })}
                                                 withSteppers
                                             />
+                                            {/* "2" a secas no dice de qué: la unidad sale del inventario. */}
+                                            <span className="hidden md:block text-center text-sm text-muted-foreground">
+                                                {unitOf(m) ?? "—"}
+                                            </span>
                                             <NumericInput
                                                 value={m.unitCost}
                                                 onChange={(n) => updateMaterial(i, { unitCost: n })}
+                                                className="text-center"
                                             />
                                             <span className="text-sm text-right font-medium">{formatArs(m.qty * m.unitCost)}</span>
                                             <Button

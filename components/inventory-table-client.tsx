@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { EditMaterialDialog } from "./edit-material-dialog"
 import { formatCurrencyUSD } from "@/lib/formatters"
+import { formatStock } from "@/lib/format"
 
 interface InventoryTableClientProps {
     items: any[]
@@ -85,9 +86,9 @@ export function InventoryTableClient({ items, categories, suppliers, userRole }:
                                     </td>
                                     <td className="py-3 px-3 text-center">
                                         <div className="text-sm">
-                                            <div className="font-medium">{item.current_stock}</div>
+                                            <div className="font-medium">{formatStock(item.current_stock)}</div>
                                             {item.reserved_stock > 0 && (
-                                                <div className="text-muted-foreground">Reservado: {item.reserved_stock}</div>
+                                                <div className="text-muted-foreground">Reservado: {formatStock(item.reserved_stock)}</div>
                                             )}
                                         </div>
                                     </td>

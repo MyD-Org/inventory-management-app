@@ -13,6 +13,7 @@ import { ChevronRight, PackageMinus } from "lucide-react"
 import { ConsumeMaterialsForm } from "@/components/consume-materials-form"
 import { useToast } from "@/hooks/use-toast"
 import type { MaterialNeed } from "@/lib/orders"
+import { formatStock } from "@/lib/format"
 
 function Estado({ n }: { n: MaterialNeed }) {
     if (n.available === null) {
@@ -27,11 +28,11 @@ function Estado({ n }: { n: MaterialNeed }) {
         // y rompía la columna de números.
         return (
             <span className="font-mono text-sm tabular-nums font-medium text-destructive">
-                {n.available}
+                {formatStock(n.available)}
             </span>
         )
     }
-    return <span className="font-mono text-sm tabular-nums text-muted-foreground">{n.available}</span>
+    return <span className="font-mono text-sm tabular-nums text-muted-foreground">{formatStock(n.available)}</span>
 }
 
 export function OrderMaterials({ orderId, needs }: { orderId: number; needs: MaterialNeed[] }) {
@@ -115,11 +116,11 @@ export function OrderMaterials({ orderId, needs }: { orderId: number; needs: Mat
                                 )}
                                 {n.consumed > 0 && n.pending > 0 && (
                                     <span className="block text-xs text-muted-foreground">
-                                        {n.consumed} ya descontados
+                                        {formatStock(n.consumed)} ya descontados
                                     </span>
                                 )}
                             </span>
-                            <span className="text-right font-mono text-sm tabular-nums">{n.required}</span>
+                            <span className="text-right font-mono text-sm tabular-nums">{formatStock(n.required)}</span>
                             <span className="text-right">
                                 <Estado n={n} />
                             </span>

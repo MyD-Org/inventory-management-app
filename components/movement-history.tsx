@@ -7,6 +7,7 @@ import { MovementFilters } from "./movement-filters"
 import { DownloadMovementsButton } from "./download-movements-button"
 import { MovementHistoryLoadingOverlay, MovementHistoryProvider } from "./movement-history-context"
 import { Pagination } from "./pagination"
+import { formatStock } from "@/lib/format"
 
 const MOVEMENTS_PER_PAGE = 25
 
@@ -275,10 +276,10 @@ export async function MovementHistory({
                           <div className="text-right">
                             <Badge variant={badgeVariant as any}>
                               {movement.movement_type === "entrada" ? "+" : movement.movement_type === "salida" ? "-" : "±"}
-                              {Math.abs(movement.quantity)}
+                              {formatStock(Math.abs(Number(movement.quantity)))}
                             </Badge>
                             <div className="mt-1 text-xs text-muted-foreground">
-                              {movement.previous_stock} → {movement.new_stock}
+                              {formatStock(movement.previous_stock)} → {formatStock(movement.new_stock)}
                             </div>
                           </div>
                         </div>
