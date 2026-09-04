@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Package, AlertTriangle, CheckCircle, Scan } from "lucide-react"
 import { BarcodeScanner } from "./barcode-scanner"
+import { formatStock } from "@/lib/format"
 
 interface Material {
   id: number
@@ -134,11 +135,11 @@ export function MaterialLookup({ onMaterialFound }: MaterialLookupProps) {
 
               <div className="grid grid-cols-3 gap-4 text-sm">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-foreground">{material.current_stock}</div>
+                  <div className="text-2xl font-bold text-foreground">{formatStock(material.current_stock)}</div>
                   <div className="text-muted-foreground">Total</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{material.available_stock}</div>
+                  <div className="text-2xl font-bold text-green-600">{formatStock(material.available_stock)}</div>
                   <div className="text-muted-foreground">Disponible</div>
                 </div>
                 <div className="text-center">

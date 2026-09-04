@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Plus, Minus, RotateCcw, Scan, AlertTriangle, CheckCircle } from "lucide-react"
 import { BarcodeScanner } from "./barcode-scanner"
 import { useToast } from "@/hooks/use-toast"
+import { formatStock } from "@/lib/format"
 
 interface Material {
   id: number
@@ -114,7 +115,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
 
     if (movementType === "salida" && qty > material.available_stock) {
       toast.error("Error", {
-        description: `Stock insuficiente. Disponible: ${material.available_stock}`,
+        description: `Stock insuficiente. Disponible: ${formatStock(material.available_stock)}`,
       })
       return false
     }
@@ -247,13 +248,13 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
                 <div>
                   <Label className="text-muted-foreground">Stock Actual</Label>
                   <p className="font-semibold">
-                    {material.current_stock} {material.unit_of_measure}
+                    {formatStock(material.current_stock)} {material.unit_of_measure}
                   </p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Disponible</Label>
                   <p className="font-semibold">
-                    {material.available_stock} {material.unit_of_measure}
+                    {formatStock(material.available_stock)} {material.unit_of_measure}
                   </p>
                 </div>
               </div>
@@ -282,7 +283,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
                   required
                 />
                 {movementType === "salida" && material && (
-                  <p className="text-xs text-muted-foreground mt-1">Máximo disponible: {material.available_stock}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Máximo disponible: {formatStock(material.available_stock)}</p>
                 )}
               </div>
 
@@ -330,7 +331,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
                   <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950 dark:border-red-800">
                     <AlertTriangle className="w-5 h-5 text-red-600" />
                     <span className="text-sm text-red-600 dark:text-red-400">
-                      Stock insuficiente. Disponible: {material.available_stock} {material.unit_of_measure}
+                      Stock insuficiente. Disponible: {formatStock(material.available_stock)} {material.unit_of_measure}
                     </span>
                   </div>
                 )}

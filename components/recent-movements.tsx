@@ -3,6 +3,7 @@ import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { TrendingUp, TrendingDown, RotateCcw } from "lucide-react"
+import { formatStock } from "@/lib/format"
 
 async function getRecentMovements() {
   try {
@@ -95,7 +96,7 @@ export async function RecentMovements() {
                   <div className="text-right">
                     <Badge variant="outline">
                       {movement.movement_type === "entrada" ? "+" : movement.movement_type === "salida" ? "-" : "±"}
-                      {Math.abs(movement.quantity)}
+                      {formatStock(Math.abs(Number(movement.quantity)))}
                     </Badge>
                     <div className="text-xs text-muted-foreground mt-1">
                       {new Date(movement.created_at).toLocaleDateString("es-AR", {

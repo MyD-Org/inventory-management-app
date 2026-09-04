@@ -1,4 +1,5 @@
 import { sql } from "@/lib/database"
+import { formatStock } from "@/lib/format"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -166,7 +167,7 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
                         <CardContent className="space-y-6">
                             <div className="text-center p-4 bg-muted rounded-xl">
                                 <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Stock Actual</p>
-                                <p className="text-4xl font-bold">{material.current_stock}</p>
+                                <p className="text-4xl font-bold">{formatStock(material.current_stock)}</p>
                                 <Badge
                                     className="mt-2"
                                     variant={stockLevel === "low" ? "destructive" : stockLevel === "high" ? "secondary" : "default"}
@@ -178,11 +179,11 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
                             <div className="space-y-3">
                                 <div className="flex justify-between text-sm">
                                     <span className="text-muted-foreground">Disponible:</span>
-                                    <span className="font-semibold text-green-600">{material.available_stock}</span>
+                                    <span className="font-semibold text-green-600">{formatStock(material.available_stock)}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-muted-foreground">Reservado:</span>
-                                    <span className="font-semibold text-orange-600">{material.reserved_stock}</span>
+                                    <span className="font-semibold text-orange-600">{formatStock(material.reserved_stock)}</span>
                                 </div>
                                 <div className="pt-3 border-t">
                                     <div className="flex justify-between text-xs text-muted-foreground">
@@ -265,11 +266,11 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
                                                                 : m.movement_type === "salida"
                                                                     ? "-"
                                                                     : "±"}
-                                                            {Math.abs(m.quantity)}
+                                                            {formatStock(Math.abs(Number(m.quantity)))}
                                                         </Badge>
                                                     </td>
                                                     <td className="py-3 text-center font-mono text-xs text-muted-foreground">
-                                                        {m.previous_stock} → <span className="font-bold text-foreground">{m.new_stock}</span>
+                                                        {formatStock(m.previous_stock)} → <span className="font-bold text-foreground">{formatStock(m.new_stock)}</span>
                                                     </td>
                                                     <td className="py-3">{m.user_name || "Sistema"}</td>
                                                     <td className="py-3 max-w-xs">
