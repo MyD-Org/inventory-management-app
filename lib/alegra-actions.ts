@@ -96,15 +96,26 @@ export async function searchAlegraItems(query: string) {
     if (!term) return { items: [] };
 
     try {
+        // También por código de referencia: el taller conoce muchos productos por
+        // el código de Alegra antes que por el nombre largo. Un código exacto va
+        // primero, después el nombre exacto, después el resto.
         const rows = await sql`
-            SELECT alegra_id, base_name
+            SELECT alegra_id, base_name, reference
             FROM alegra_items
             WHERE status = 'active' AND account = 'Ventas' AND variant_label IS NULL
-              AND base_name ILIKE ${`%${term}%`}
-            ORDER BY (base_normalized = lower(${term})) DESC, base_name ASC
+              AND (base_name ILIKE ${`%${term}%`} OR reference ILIKE ${`%${term}%`})
+            ORDER BY (reference_normalized = lower(${term})) DESC,
+                     (base_normalized = lower(${term})) DESC,
+                     base_name ASC
             LIMIT 10
         `;
-        return { items: rows.map((r: any) => ({ id: Number(r.alegra_id), name: r.base_name as string })) };
+        return {
+            items: rows.map((r: any) => ({
+                id: Number(r.alegra_id),
+                name: r.base_name as string,
+                reference: (r.reference as string | null) ?? null,
+            })),
+        };
     } catch (error) {
         console.error('Error searching Alegra items:', error);
         return { error: errorMessage(error), items: [] };
