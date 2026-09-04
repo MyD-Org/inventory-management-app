@@ -15,24 +15,39 @@ import { useToast } from "@/hooks/use-toast"
 import type { ExtraConsumed, MaterialNeed } from "@/lib/orders"
 import { formatStock } from "@/lib/format"
 
+// Dos datos distintos, dos columnas: cuánto hay en el depósito (Stock) y en qué
+// anda ese material dentro del pedido (Estado). Antes la misma celda mostraba a
+// veces un número y a veces la palabra "descontado", así que no se podía leer
+// ninguna de las dos cosas de un vistazo.
+function Stock({ available, falta = false }: { available: number | null; falta?: boolean }) {
+    if (available === null) {
+        return <span className="font-mono text-sm text-muted-foreground">—</span>
+    }
+    // El número en rojo cuando no alcanza: el ojo va a la cifra antes que a la
+    // palabra de la columna Estado.
+    return (
+        <span
+            className={`font-mono text-sm tabular-nums ${falta ? "font-medium text-destructive" : "text-muted-foreground"}`}
+        >
+            {formatStock(available)}
+        </span>
+    )
+}
+
 function Estado({ n }: { n: MaterialNeed }) {
     if (n.available === null) {
         return <span className="text-sm text-muted-foreground">fuera del inventario</span>
     }
     if (n.pending === 0) {
-        return <span className="font-mono text-sm tabular-nums text-emerald-600">descontado</span>
+        return <span className="text-sm text-emerald-600">descontado</span>
     }
     if (n.available < n.pending) {
-        // Solo el stock, en rojo. Al lado está la columna NECESITA, así que la
-        // resta la hace la vista: agregar "faltan 2" era decir lo mismo dos veces
-        // y rompía la columna de números.
-        return (
-            <span className="font-mono text-sm tabular-nums font-medium text-destructive">
-                {formatStock(n.available)}
-            </span>
-        )
+        return <span className="text-sm font-medium text-destructive">stock insuficiente</span>
     }
-    return <span className="font-mono text-sm tabular-nums text-muted-foreground">{formatStock(n.available)}</span>
+    if (n.consumed > 0) {
+        return <span className="text-sm text-muted-foreground">descontado en parte</span>
+    }
+    return <span className="text-sm text-muted-foreground">a descontar</span>
 }
 
 export function OrderMaterials({
@@ -106,12 +121,16 @@ export function OrderMaterials({
 
             {abierto && (
                 <div className="border rounded-lg divide-y overflow-hidden">
-                    {/* Necesita contra hay: las dos cifras alineadas a la derecha se
-                        comparan de un vistazo, que es la pregunta real del depósito. */}
-                    <div className="grid grid-cols-[minmax(0,1fr)_5rem_11rem] gap-3 bg-muted/60 px-4 py-2 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
+                    {/* Cantidad contra stock: las dos cifras alineadas a la derecha se
+                        comparan de un vistazo, que es la pregunta real del depósito.
+                        El estado va aparte, en palabras. */}
+                    <div className="grid grid-cols-[minmax(0,1fr)_5rem_5rem_9rem] gap-3 bg-muted/60 px-4 py-2 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
                         <span>Material</span>
-                        <span className="text-right">Necesita</span>
+                        {/* "Cantidad" y no "Necesita": la misma columna lleva lo que
+                            pide el BOM y lo que se retiró de más, que nadie pidió. */}
+                        <span className="text-right">Cantidad</span>
                         <span className="text-right">En stock</span>
+                        <span className="text-right">Estado</span>
                     </div>
                     {needs.map((n) => {
                         const needKey =
@@ -121,7 +140,7 @@ export function OrderMaterials({
                         return (
                         <div
                             key={needKey}
-                            className="grid grid-cols-[minmax(0,1fr)_5rem_11rem] items-center gap-3 px-4 py-2.5"
+                            className="grid grid-cols-[minmax(0,1fr)_5rem_5rem_9rem] items-center gap-3 px-4 py-2.5"
                         >
                             <span className="min-w-0 truncate">
                                 {n.label}
@@ -138,6 +157,9 @@ export function OrderMaterials({
                             </span>
                             <span className="text-right font-mono text-sm tabular-nums">{formatStock(n.required)}</span>
                             <span className="text-right">
+                                <Stock available={n.available} falta={n.available !== null && n.available < n.pending} />
+                            </span>
+                            <span className="text-right">
                                 <Estado n={n} />
                             </span>
                         </div>
@@ -147,7 +169,7 @@ export function OrderMaterials({
                     {extras.map((e) => (
                         <div
                             key={`extra:${e.material_id}`}
-                            className="grid grid-cols-[minmax(0,1fr)_5rem_11rem] items-center gap-3 px-4 py-2.5"
+                            className="grid grid-cols-[minmax(0,1fr)_5rem_5rem_9rem] items-center gap-3 px-4 py-2.5"
                         >
                             <span className="min-w-0 truncate">
                                 {e.label}
@@ -156,11 +178,12 @@ export function OrderMaterials({
                                 </span>
                             </span>
                             <span className="text-right font-mono text-sm tabular-nums text-muted-foreground">
-                                —
+                                {formatStock(e.quantity)}
                             </span>
-                            <span className="text-right font-mono text-sm tabular-nums text-emerald-600">
-                                {formatStock(e.quantity)} retirados
+                            <span className="text-right">
+                                <Stock available={e.available} />
                             </span>
+                            <span className="text-right text-sm text-emerald-600">retirado</span>
                         </div>
                     ))}
                 </div>
