@@ -140,3 +140,96 @@ describe("sameSpecs", () => {
         expect(sameSpecs({}, {})).toBe(true)
     })
 })
+
+// ── Cantidad por variante ────────────────────────────────────────────────────
+// El caso real: la grampa la elige el cliente y arrastra la cantidad de otras dos
+// líneas. El tornillo y la arandela son EL MISMO material con las dos grampas;
+// lo único que cambia es cuánto sale del depósito.
+//   grampa corta -> 1 tornillo, 2 arandelas
+//   grampa larga -> 2 tornillos, 4 arandelas
+const arandela = (over: Partial<BomLine> = {}): BomLine => ({
+    id: 3,
+    materialId: 30,
+    label: "Arandela 6mm",
+    qty: 2,
+    specFieldKey: "clamp",
+    options: [
+        { specValue: "corta", materialId: 30, label: "Arandela 6mm", qty: 2 },
+        { specValue: "larga", materialId: 30, label: "Arandela 6mm", qty: 4 },
+    ],
+    ...over,
+})
+
+describe("cantidad por variante", () => {
+    it("usa la cantidad de la variante en lugar de la de la línea", () => {
+        expect(resolveBomLine(arandela(), { clamp: "larga" }).qty).toBe(4)
+        expect(resolveBomLine(arandela(), { clamp: "corta" }).qty).toBe(2)
+    })
+
+    it("cae a la cantidad de la línea cuando la variante no declara una", () => {
+        const sinQty = arandela({
+            options: [{ specValue: "larga", materialId: 30, label: "Arandela 6mm" }],
+        })
+        expect(resolveBomLine(sinQty, { clamp: "larga" }).qty).toBe(2)
+    })
+
+    it("null es lo mismo que no declararla", () => {
+        const nula = arandela({
+            options: [{ specValue: "larga", materialId: 30, label: "Arandela 6mm", qty: null }],
+        })
+        expect(resolveBomLine(nula, { clamp: "larga" }).qty).toBe(2)
+    })
+
+    it("las variantes no tocan la línea cuando el pedido no dice nada", () => {
+        expect(resolveBomLine(arandela(), {}).qty).toBe(2)
+    })
+
+    it("multiplica por la cantidad del pedido", () => {
+        const { lines } = resolveBom([arandela()], { clamp: "larga" }, 3)
+        expect(lines).toHaveLength(1)
+        expect(lines[0].qty).toBe(4)
+        expect(lines[0].qtyTotal).toBe(12)
+    })
+
+    it("una variante en 0 saca la línea del BOM y NO la reporta como sin mapear", () => {
+        // "La tapa de acrílico solo va si eligieron acrílico": con chapa la hoja
+        // sabe perfectamente qué pasa —no va nada—, así que no hay nada que avisar.
+        const tapa = arandela({
+            label: "Tapa de acrílico",
+            options: [
+                { specValue: "corta", materialId: 30, label: "Tapa de acrílico", qty: 1 },
+                { specValue: "larga", materialId: 30, label: "Tapa de acrílico", qty: 0 },
+            ],
+        })
+        const { lines, unmapped } = resolveBom([tapa], { clamp: "larga" }, 5)
+        expect(lines).toHaveLength(0)
+        expect(unmapped).toEqual([])
+    })
+
+    it("el 0 no se confunde con 'no declara cantidad'", () => {
+        // Un `option.qty || line.qty` haría descontar 2 arandelas donde no va ninguna.
+        const cero = arandela({
+            options: [{ specValue: "larga", materialId: 30, label: "Arandela 6mm", qty: 0 }],
+        })
+        expect(resolveBomLine(cero, { clamp: "larga" }).qty).toBe(0)
+    })
+
+    it("convive con la sustitución de material: cambia el material Y la cantidad", () => {
+        const grampa: BomLine = {
+            id: 4,
+            materialId: 40,
+            label: "Grampa corta",
+            qty: 1,
+            specFieldKey: "clamp",
+            options: [
+                { specValue: "corta", materialId: 40, label: "Grampa corta", qty: 1 },
+                { specValue: "larga", materialId: 41, label: "Grampa larga", qty: 2 },
+            ],
+        }
+        const r = resolveBomLine(grampa, { clamp: "larga" })
+        expect(r.materialId).toBe(41)
+        expect(r.label).toBe("Grampa larga")
+        expect(r.qty).toBe(2)
+        expect(r.substituted).toBe(true)
+    })
+})

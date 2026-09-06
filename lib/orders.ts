@@ -484,6 +484,10 @@ export async function validateOrderPayload(
 // REAL con lib/bom.ts antes de insertar. Sin variantes cargadas el resultado es
 // idéntico al INSERT … SELECT que había antes.
 //
+// La variante también decide CUÁNTO sale, no solo qué: una misma respuesta del
+// pedido —la grampa— cambia la cantidad de otras líneas (2 arandelas con la corta,
+// 4 con la larga), y en 0 la línea no va. Ver scripts/34-cantidad-por-variante.sql.
+//
 // Si el pedido trae un valor que la hoja no tiene mapeado, esa línea NO aporta
 // material: se anota en order_items.unmapped_specs y el taller decide qué sacar.
 // Antes se caía al material de referencia y eso hacía descontar del rollo que no
@@ -506,7 +510,8 @@ export async function explodeBom(
         SELECT
             bm.id, bm.material_id, bm.label, bm.qty, bm.family_id,
             COALESCE(f.spec_field_key, bm.spec_field_key) AS spec_field_key,
-            COALESCE(fam.options, own.options, '[]') AS options
+            COALESCE(fam.options, own.options, '[]') AS options,
+            COALESCE(ovr.qty_by_value, '{}') AS qty_by_value
         FROM budget_materials bm
         LEFT JOIN material_families f ON f.id = bm.family_id
         LEFT JOIN LATERAL (
@@ -526,24 +531,43 @@ export async function explodeBom(
             FROM budget_material_options o
             WHERE o.budget_material_id = bm.id
         ) own ON TRUE
+        -- Cantidad por variante. Va APARTE de las opciones y no adentro, porque
+        -- tiene que valer también cuando los materiales vinieron de la familia:
+        -- el material de una variante es de la familia (vivo, compartido entre
+        -- productos) pero cuántas arandelas lleva la grampa en L es de esta hoja.
+        -- Ver scripts/34-cantidad-por-variante.sql.
+        LEFT JOIN LATERAL (
+            SELECT json_object_agg(o.spec_value, o.qty) FILTER (WHERE o.qty IS NOT NULL) AS qty_by_value
+            FROM budget_material_options o
+            WHERE o.budget_material_id = bm.id
+        ) ovr ON TRUE
         WHERE bm.budget_id = ${budgetId}
         ORDER BY bm.id ASC
     `
 
-    const lines: BomLine[] = rows.map((r) => ({
-        id: r.id as number,
-        familyId: (r.family_id as number | null) ?? null,
-        materialId: r.material_id as number | null,
-        label: r.label as string,
-        qty: Number(r.qty),
-        specFieldKey: (r.spec_field_key as string | null) ?? null,
-        options: (r.options as BomOption[]).map((o) => ({
-            specValue: String(o.specValue),
-            materialId: o.materialId == null ? null : Number(o.materialId),
-            label: String(o.label),
-            isDefault: o.isDefault ?? true,
-        })),
-    }))
+    const lines: BomLine[] = rows.map((r) => {
+        // numeric llega como string desde el driver (ver 32-stock-decimal.sql).
+        const qtyByValue = (r.qty_by_value ?? {}) as Record<string, string | number>
+        return {
+            id: r.id as number,
+            familyId: (r.family_id as number | null) ?? null,
+            materialId: r.material_id as number | null,
+            label: r.label as string,
+            qty: Number(r.qty),
+            specFieldKey: (r.spec_field_key as string | null) ?? null,
+            options: (r.options as BomOption[]).map((o) => {
+                const specValue = String(o.specValue)
+                const override = qtyByValue[specValue]
+                return {
+                    specValue,
+                    materialId: o.materialId == null ? null : Number(o.materialId),
+                    label: String(o.label),
+                    isDefault: o.isDefault ?? true,
+                    qty: override === undefined || override === null ? null : Number(override),
+                }
+            }),
+        }
+    })
 
     const { lines: resolved, unmapped } = resolveBom(lines, specs, quantity)
 

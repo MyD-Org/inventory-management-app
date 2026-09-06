@@ -36,9 +36,9 @@ const linea = (over: Partial<FamilyLineFields> = {}): FamilyLineFields => ({
     unitCost: 1000,
     specFieldKey: "led_color",
     options: [
-        { specValue: "blanco", materialId: 10, label: "Tira LED blanca" },
-        { specValue: "calido", materialId: 11, label: "Tira LED cálida" },
-        { specValue: "rgb", materialId: 12, label: "Tira LED RGB" },
+        { specValue: "blanco", materialId: 10, label: "Tira LED blanca", qty: null },
+        { specValue: "calido", materialId: 11, label: "Tira LED cálida", qty: null },
+        { specValue: "rgb", materialId: 12, label: "Tira LED RGB", qty: null },
     ],
     ...over,
 })
@@ -131,9 +131,9 @@ describe("lineFromFamily", () => {
             unitCost: 3400 / 3,
             specFieldKey: "led_color",
             options: [
-                { specValue: "blanco", materialId: 10, label: "Tira LED blanca" },
-                { specValue: "calido", materialId: 11, label: "Tira LED cálida" },
-                { specValue: "rgb", materialId: 12, label: "Tira LED RGB" },
+                { specValue: "blanco", materialId: 10, label: "Tira LED blanca", qty: null },
+                { specValue: "calido", materialId: 11, label: "Tira LED cálida", qty: null },
+                { specValue: "rgb", materialId: 12, label: "Tira LED RGB", qty: null },
             ],
         })
     })
@@ -162,14 +162,54 @@ describe("syncLineWithFamily", () => {
         })
         const synced = syncLineWithFamily(linea(), family)
         expect(synced.options).toEqual([
-            { specValue: "blanco", materialId: 10, label: "Tira LED blanca" },
-            { specValue: "calido", materialId: 99, label: "Tira LED cálida nueva" },
-            { specValue: "azul", materialId: 13, label: "Tira LED azul" },
+            { specValue: "blanco", materialId: 10, label: "Tira LED blanca", qty: null },
+            { specValue: "calido", materialId: 99, label: "Tira LED cálida nueva", qty: null },
+            { specValue: "azul", materialId: 13, label: "Tira LED azul", qty: null },
         ])
         // La referencia sigue a la predeterminada de la familia...
         expect(synced.materialId).toBe(99)
         // ...pero el costo con el que se calculó el producto NO se mueve solo.
         expect(synced.unitCost).toBe(1000)
+    })
+
+    it("conserva la cantidad por variante al ponerse al día con la familia", () => {
+        // El vínculo con la familia es vivo para el MATERIAL. Cuántas arandelas
+        // lleva este producto con la grampa en L es de la hoja, no de la familia:
+        // si la sincronización la borrara, el taller volvería a descontar de menos.
+        const conCantidades = linea({
+            options: [
+                { specValue: "blanco", materialId: 10, label: "Tira LED blanca", qty: 4 },
+                { specValue: "calido", materialId: 11, label: "Tira LED cálida", qty: 0 },
+                { specValue: "rgb", materialId: 12, label: "Tira LED RGB", qty: null },
+            ],
+        })
+        // La familia cambió el material del cálido; las cantidades no la tocan.
+        const family = tiraLed({
+            options: [
+                { specValue: "blanco", materialId: 10, label: "Tira LED blanca", unitCost: 900, barcode: "A10" },
+                { specValue: "calido", materialId: 99, label: "Tira LED cálida nueva", unitCost: 1200, barcode: "A99" },
+                { specValue: "rgb", materialId: 12, label: "Tira LED RGB", unitCost: 1500, barcode: "A12" },
+            ],
+        })
+        expect(syncLineWithFamily(conCantidades, family).options).toEqual([
+            { specValue: "blanco", materialId: 10, label: "Tira LED blanca", qty: 4 },
+            { specValue: "calido", materialId: 99, label: "Tira LED cálida nueva", qty: 0 },
+            { specValue: "rgb", materialId: 12, label: "Tira LED RGB", qty: null },
+        ])
+    })
+
+    it("una variante nueva de la familia entra sin cantidad propia", () => {
+        const family = tiraLed({
+            options: [
+                { specValue: "blanco", materialId: 10, label: "Tira LED blanca", unitCost: 900, barcode: "A10" },
+                { specValue: "calido", materialId: 11, label: "Tira LED cálida", unitCost: 1000, barcode: "A11" },
+                { specValue: "rgb", materialId: 12, label: "Tira LED RGB", unitCost: 1500, barcode: "A12" },
+                { specValue: "azul", materialId: 13, label: "Tira LED azul", unitCost: 1100, barcode: "A13" },
+            ],
+        })
+        const synced = syncLineWithFamily(linea({ options: [{ specValue: "blanco", materialId: 10, label: "Tira LED blanca", qty: 4 }] }), family)
+        expect(synced.options.find((o) => o.specValue === "azul")?.qty).toBeNull()
+        expect(synced.options.find((o) => o.specValue === "blanco")?.qty).toBe(4)
     })
 
     it("sigue el renombre de la familia", () => {
