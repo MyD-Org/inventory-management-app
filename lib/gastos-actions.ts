@@ -82,9 +82,13 @@ export async function createExpenseCategory(name: string) {
         `
         if (dup.length > 0) return { error: 'Ya existe una categoría con ese nombre' }
 
-        await sql`INSERT INTO expense_categories (name) VALUES (${trimmed})`
+        const inserted = await sql`
+            INSERT INTO expense_categories (name) VALUES (${trimmed}) RETURNING id
+        `
         revalidatePath('/gastos')
-        return { ok: true as const }
+        // El id vuelve para que el select que disparó el alta pueda
+        // seleccionarla en el acto, sin esperar el refresh.
+        return { ok: true as const, id: Number(inserted[0].id) }
     } catch (error) {
         console.error('Error en createExpenseCategory:', error)
         return { error: 'No se pudo crear la categoría' }

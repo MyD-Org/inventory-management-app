@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { saveExpense } from "@/lib/gastos-actions"
+import { createExpenseCategory, saveExpense } from "@/lib/gastos-actions"
 import { PAYMENT_METHODS, type CategoriaGasto, type GastoRow } from "@/lib/gastos"
+import { Loader2, Plus } from "lucide-react"
 
 // Modal de alta/edición. El control ES el valor (estilo Linear): al elegir o
 // salir del campo se guarda solo con el submit. En edición, si la categoría
@@ -34,6 +35,12 @@ export function ExpenseDialog({
     const [description, setDescription] = useState("")
     const [amount, setAmount] = useState("")
     const [paymentMethod, setPaymentMethod] = useState("transferencia")
+    // Categorías creadas desde acá, mientras llega el refresh de la página:
+    // se agregan al select en el acto para poder seleccionarlas de una.
+    const [creadas, setCreadas] = useState<CategoriaGasto[]>([])
+    const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
+    const [nuevaCategoria, setNuevaCategoria] = useState("")
+    const [creatingCategory, setCreatingCategory] = useState(false)
 
     const hoy = new Date().toLocaleDateString("sv") // YYYY-MM-DD local
 
@@ -48,9 +55,28 @@ export function ExpenseDialog({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, expense])
 
-    const opcionesCategoria = expense
+    const opcionesCategoria = (expense
         ? categories.filter((c) => c.active || c.id === expense.category_id)
         : categories.filter((c) => c.active)
+    ).concat(creadas)
+
+    async function handleCreateCategory() {
+        if (!nuevaCategoria.trim()) return
+        setCreatingCategory(true)
+        const result = await createExpenseCategory(nuevaCategoria)
+        setCreatingCategory(false)
+        if (result.error || result.id === undefined) {
+            toast.error("Error", { description: result.error ?? "No se pudo crear la categoría" })
+            return
+        }
+        const creada: CategoriaGasto = { id: result.id, name: nuevaCategoria.trim(), active: true }
+        setCreadas((prev) => [...prev, creada])
+        setCategoryId(String(creada.id))
+        setNuevaCategoria("")
+        setCategoryDialogOpen(false)
+        toast.success("Categoría creada")
+        router.refresh()
+    }
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
@@ -77,6 +103,7 @@ export function ExpenseDialog({
     }
 
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-md">
                 <DialogHeader>
@@ -113,18 +140,33 @@ export function ExpenseDialog({
 
                     <div className="space-y-1.5">
                         <Label>Categoría</Label>
-                        <Select value={categoryId} onValueChange={setCategoryId}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Elegí una categoría" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {opcionesCategoria.map((c) => (
-                                    <SelectItem key={c.id} value={String(c.id)}>
-                                        {c.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        {/* "+" al lado del select: la categoría se crea desde
+                            acá, sin salir del formulario (mismo patrón que el
+                            alta de material). */}
+                        <div className="flex gap-2">
+                            <Select value={categoryId} onValueChange={setCategoryId}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Elegí una categoría" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {opcionesCategoria.map((c) => (
+                                        <SelectItem key={c.id} value={String(c.id)}>
+                                            {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="shrink-0"
+                                title="Nueva categoría"
+                                onClick={() => setCategoryDialogOpen(true)}
+                            >
+                                <Plus className="h-4 w-4" />
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="space-y-1.5">
@@ -165,5 +207,41 @@ export function ExpenseDialog({
                 </form>
             </DialogContent>
         </Dialog>
+
+        <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+            <DialogContent className="max-w-sm">
+                <DialogHeader>
+                    <DialogTitle>Nueva categoría</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="nueva-categoria">Nombre</Label>
+                        <Input
+                            id="nueva-categoria"
+                            autoFocus
+                            placeholder="Ej: Impuestos"
+                            value={nuevaCategoria}
+                            onChange={(e) => setNuevaCategoria(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault()
+                                    handleCreateCategory()
+                                }
+                            }}
+                        />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <Button type="button" variant="outline" onClick={() => setCategoryDialogOpen(false)}>
+                            Cancelar
+                        </Button>
+                        <Button type="button" onClick={handleCreateCategory} disabled={creatingCategory || !nuevaCategoria.trim()}>
+                            {creatingCategory && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Crear y seleccionar
+                        </Button>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
+        </>
     )
 }
