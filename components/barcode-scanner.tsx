@@ -3,12 +3,19 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Camera, CameraOff, Scan, Search } from "lucide-react"
+import { Camera, Scan, Search } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+
+// zxing pesa: se carga recién cuando alguien elige el modo Cámara.
+const CameraBarcodeScanner = dynamic(
+  () => import("@/components/camera-barcode-scanner").then(m => m.CameraBarcodeScanner),
+  { ssr: false },
+)
 
 interface BarcodeScannerProps {
   isOpen: boolean
@@ -18,18 +25,14 @@ interface BarcodeScannerProps {
 }
 
 export function BarcodeScanner({ isOpen, onClose, onScan, title = "Escanear Código de Barras" }: BarcodeScannerProps) {
-  const [isScanning, setIsScanning] = useState(false)
   const [manualInput, setManualInput] = useState("")
   const [lastScanned, setLastScanned] = useState<string>("")
   const [scanMode, setScanMode] = useState<"camera" | "manual" | "usb">("manual")
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Limpiar recursos al cerrar
   useEffect(() => {
     if (!isOpen) {
-      stopCamera()
       setManualInput("")
       setLastScanned("")
       setScanMode("manual")
@@ -70,38 +73,6 @@ export function BarcodeScanner({ isOpen, onClose, onScan, title = "Escanear Cód
     }
   }, [isOpen, scanMode])
 
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      })
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        streamRef.current = stream
-        setIsScanning(true)
-      }
-    } catch (error) {
-      console.error("Error accessing camera:", error)
-      alert("No se pudo acceder a la cámara. Verifique los permisos.")
-    }
-  }
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
-    setIsScanning(false)
-  }
-
   const handleScan = (barcode: string) => {
     if (barcode && barcode !== lastScanned) {
       setLastScanned(barcode)
@@ -127,12 +98,6 @@ export function BarcodeScanner({ isOpen, onClose, onScan, title = "Escanear Cód
     }
   }
 
-  const handleCameraCapture = () => {
-    // Simular captura de código (en producción usarías una librería como QuaggaJS)
-    const simulatedBarcode = "7891234567890"
-    handleScan(simulatedBarcode)
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
@@ -149,10 +114,7 @@ export function BarcodeScanner({ isOpen, onClose, onScan, title = "Escanear Cód
             <Button
               variant={scanMode === "manual" ? "default" : "outline"}
               size="sm"
-              onClick={() => {
-                setScanMode("manual")
-                stopCamera()
-              }}
+              onClick={() => setScanMode("manual")}
             >
               Manual
             </Button>
@@ -167,10 +129,7 @@ export function BarcodeScanner({ isOpen, onClose, onScan, title = "Escanear Cód
             <Button
               variant={scanMode === "usb" ? "default" : "outline"}
               size="sm"
-              onClick={() => {
-                setScanMode("usb")
-                stopCamera()
-              }}
+              onClick={() => setScanMode("usb")}
             >
               <Scan className="w-4 h-4 mr-1" />
               Lector USB
@@ -202,48 +161,14 @@ export function BarcodeScanner({ isOpen, onClose, onScan, title = "Escanear Cód
             </Card>
           )}
 
-          {/* Modo Cámara */}
+          {/* Modo Cámara. Antes esto mostraba el video y un botón "Capturar" que
+              devolvía un código fijo inventado, sin leer nada de la imagen.
+              Ahora usa el mismo lector que el modal de entrada/salida. */}
           {scanMode === "camera" && (
-            <Card>
-              <CardContent className="pt-4">
-                <div className="space-y-3">
-                  {!isScanning ? (
-                    <div className="text-center">
-                      <div className="w-full h-48 bg-muted rounded-lg flex items-center justify-center mb-3">
-                        <Camera className="w-12 h-12 text-muted-foreground" />
-                      </div>
-                      <Button onClick={startCamera} className="w-full">
-                        <Camera className="w-4 h-4 mr-2" />
-                        Iniciar Cámara
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="relative">
-                        <video
-                          ref={videoRef}
-                          autoPlay
-                          playsInline
-                          className="w-full h-48 bg-black rounded-lg object-cover"
-                        />
-                        <div className="absolute inset-0 border-2 border-primary rounded-lg pointer-events-none">
-                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-16 border-2 border-red-500 bg-red-500/10 rounded"></div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button onClick={handleCameraCapture} className="flex-1">
-                          <Scan className="w-4 h-4 mr-2" />
-                          Capturar
-                        </Button>
-                        <Button variant="outline" onClick={stopCamera}>
-                          <CameraOff className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <CameraBarcodeScanner
+              onDetect={handleScan}
+              onClose={() => setScanMode("manual")}
+            />
           )}
 
           {/* Modo USB */}

@@ -8,10 +8,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Save, Plus, Minus, Scan, Search } from "lucide-react"
+import dynamic from "next/dynamic"
+import { Camera, Loader2, Save, Plus, Minus, Scan, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useDebouncedCallback } from "use-debounce"
 import { formatStock } from "@/lib/format"
+
+// zxing pesa: se carga recién cuando alguien abre la cámara, no en cada modal.
+const CameraBarcodeScanner = dynamic(
+    () => import("@/components/camera-barcode-scanner").then(m => m.CameraBarcodeScanner),
+    { ssr: false },
+)
 
 interface Material {
     id: number
@@ -62,6 +69,8 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
     const [notFoundCode, setNotFoundCode] = useState<string | null>(null)
     const [submitError, setSubmitError] = useState<string | null>(null)
     const [suggestOpen, setSuggestOpen] = useState(false)
+    // Cámara del celular como alternativa al lector: se abre a pedido.
+    const [camaraAbierta, setCamaraAbierta] = useState(false)
     // Índice de la sugerencia resaltada para navegación con ↑/↓ + Enter.
     // -1 = nada resaltado (Enter cae al fallback: buscar por código exacto).
     const [activeIndex, setActiveIndex] = useState(-1)
@@ -123,6 +132,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
             setSubmitError(null)
             setSuggestOpen(false)
             setActiveIndex(-1)
+            setCamaraAbierta(false)
             setTimeout(() => {
                 barcodeInputRef.current?.focus()
             }, 100)
@@ -309,11 +319,35 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                                 <Button
                                     type="button"
                                     size="icon"
+                                    variant={camaraAbierta ? "secondary" : "outline"}
+                                    onClick={() => setCamaraAbierta(v => !v)}
+                                    title="Escanear con la cámara"
+                                    aria-label="Escanear con la cámara"
+                                >
+                                    <Camera className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="icon"
                                     onClick={() => findMaterialByBarcode(barcode)}
                                 >
                                     <Search className="w-4 h-4" />
                                 </Button>
                             </div>
+
+                            {camaraAbierta && (
+                                <div className="mt-3">
+                                    <CameraBarcodeScanner
+                                        onDetect={(code) => {
+                                            setCamaraAbierta(false)
+                                            setBarcode(code)
+                                            setSuggestOpen(false)
+                                            findMaterialByBarcode(code)
+                                        }}
+                                        onClose={() => setCamaraAbierta(false)}
+                                    />
+                                </div>
+                            )}
                             {suggestOpen && !selectedMaterial && suggestions.length > 0 && (
                                 <div
                                     ref={suggestionsRef}
