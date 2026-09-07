@@ -10,7 +10,12 @@ export const authConfig = {
             const isOnLogin = nextUrl.pathname.startsWith('/login');
 
             if (isOnLogin) {
-                if (isLoggedIn) return Response.redirect(new URL('/', nextUrl));
+                // Cada rol aterriza donde trabaja: el admin en el dashboard general
+                // y el operador en el tablero de pedidos.
+                if (isLoggedIn) {
+                    const home = auth?.user?.role === 'admin' ? '/' : '/pedidos';
+                    return Response.redirect(new URL(home, nextUrl));
+                }
                 return true;
             }
 
