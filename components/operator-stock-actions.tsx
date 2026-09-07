@@ -22,9 +22,10 @@ export function OperatorStockActions({ materials }: { materials: Material[] }) {
 
     return (
         <>
-            {/* Abajo de lg van dos botones en fila; en desktop, con la columna
-                angosta de la izquierda, apilados y a todo lo ancho. */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            {/* Barra de acciones: en el celular los botones van uno debajo del
+                otro a todo lo ancho; desde sm, en fila y pegados a la izquierda,
+                con el ancho justo del contenido. */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-start">
                 <button
                     type="button"
                     onClick={() => setDialog("entrada")}
