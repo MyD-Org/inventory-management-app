@@ -4,6 +4,7 @@ import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { getFlags } from "@/lib/feature-flags"
 import { AppShell, SIDEBAR_COOKIE } from "@/components/app-shell"
+import { OperatorShell } from "@/components/operator-shell"
 
 async function getMaterials() {
   try {
@@ -28,6 +29,12 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   // hace que el server ya pinte el ancho correcto. Con localStorage el primer
   // render sale siempre expandido y se ve el salto en cada carga.
   const collapsed = cookies().get(SIDEBAR_COOKIE)?.value === "1"
+
+  // El operador no lleva sidebar: su única pantalla es el inicio y las dos
+  // acciones de stock son un modal. Ver components/operator-shell.tsx.
+  if (session?.user && session.user.role !== "admin") {
+    return <OperatorShell user={session.user}>{children}</OperatorShell>
+  }
 
   return (
     <AppShell user={session?.user} materials={materials} flags={flags} defaultCollapsed={collapsed}>

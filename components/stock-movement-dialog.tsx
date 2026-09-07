@@ -30,9 +30,13 @@ interface StockMovementDialogProps {
     trigger?: React.ReactNode
     open?: boolean
     onOpenChange?: (open: boolean) => void
+    /** En false no se muestra ni se manda el precio unitario (operadores: es
+     *  información de costos). El backend lo ignora igual para no-admin, ver
+     *  app/api/stock/movement/route.ts. */
+    canSetUnitCost?: boolean
 }
 
-export function StockMovementDialog({ type, materials, trigger, open: controlledOpen, onOpenChange: setControlledOpen }: StockMovementDialogProps) {
+export function StockMovementDialog({ type, materials, trigger, open: controlledOpen, onOpenChange: setControlledOpen, canSetUnitCost = true }: StockMovementDialogProps) {
     const [internalOpen, setInternalOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const { toast } = useToast()
@@ -85,7 +89,9 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
         setSuggestOpen(false)
         setBarcode(m.barcode || m.name)
         // Prefill precio con el unit_cost actual (viene como string desde Postgres DECIMAL).
-        const currentCost = Number(m.unit_cost ?? 0)
+        // Sin permiso para verlo no se prellena: el campo no existe y el costo
+        // del material no tiene por qué llegar al formulario.
+        const currentCost = canSetUnitCost ? Number(m.unit_cost ?? 0) : 0
         setUnitCost(currentCost > 0 ? String(currentCost) : "")
         setTimeout(() => quantityInputRef.current?.focus(), 100)
     }
@@ -221,7 +227,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                     reference_number: formData.reference_number || null,
                     notes: formData.notes || null,
                     // Precio solo aplica en entradas. Vacío → null (no pisa el unit_cost del material).
-                    unit_cost: type === "entrada" && unitCost ? Number(unitCost) : null,
+                    unit_cost: type === "entrada" && canSetUnitCost && unitCost ? Number(unitCost) : null,
                     // El usuario se toma de la sesión en el servidor (ver /api/stock/movement)
                 }),
             })
@@ -387,7 +393,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                                 disabled={!selectedMaterial}
                             />
                         </div>
-                        {type === "entrada" && (
+                        {type === "entrada" && canSetUnitCost && (
                             <div className="space-y-2">
                                 <Label htmlFor="unit-cost">Precio unitario (opcional)</Label>
                                 <Input

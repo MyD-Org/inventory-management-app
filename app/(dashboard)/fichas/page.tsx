@@ -11,6 +11,8 @@ export const dynamic = 'force-dynamic';
 export default async function CostsPage() {
     const session = await auth();
     if (!session?.user) redirect('/login')
+    // Fichas y presupuestos son solo de admin: muestran costos, márgenes y precios.
+    if (session.user.role !== 'admin') redirect('/')
 
     // Costo total derivado de las líneas (materiales + mano de obra + extras).
     const rows = await sql`

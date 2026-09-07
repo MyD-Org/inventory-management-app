@@ -4,6 +4,7 @@ import { Upload } from "lucide-react"
 import { InventoryTable } from "@/components/inventory-table"
 import { DownloadReportButton } from "@/components/download-report-button"
 import { Button } from "@/components/ui/button"
+import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 
 export const dynamic = "force-dynamic"
@@ -14,7 +15,11 @@ export default async function InventoryPage({
     searchParams: { search?: string; category?: string; status?: string }
 }) {
     const session = await auth()
-    const isAdmin = session?.user?.role === "admin"
+    if (!session?.user) redirect('/login')
+    // La vista completa del inventario es admin: el operador busca el material
+    // dentro del modal de entrada/salida, que no muestra costos.
+    if (session.user.role !== 'admin') redirect('/')
+    const isAdmin = true
 
     return (
         <div className="bg-background">
@@ -30,7 +35,7 @@ export default async function InventoryPage({
                                 </Link>
                             </Button>
                         )}
-                        <DownloadReportButton />
+                        {isAdmin && <DownloadReportButton />}
                     </div>
                 </div>
                 <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-lg" />}>

@@ -92,22 +92,22 @@ const sections: NavSection[] = [
     title: "Gestión",
     items: [
       { label: "Inventario", href: "/inventory", icon: Package, activePrefixes: ["/materials/"] },
-      { label: "Nuevo Material", href: "/materials/nuevo", icon: PlusCircle },
+      { label: "Nuevo Material", href: "/materials/nuevo", icon: PlusCircle, adminOnly: true },
       // Materias primas que vienen en variantes (tira LED por color, grampa por
       // largo): el mapeo variante -> material que usan las hojas de costo.
       { label: "Familias de Materiales", href: "/materials/familias", icon: Layers, adminOnly: true },
-      { label: "Fichas de producto", href: "/fichas", icon: ClipboardList, activePrefixes: ["/fichas/"] },
+      { label: "Fichas de producto", href: "/fichas", icon: ClipboardList, activePrefixes: ["/fichas/"], adminOnly: true },
       { label: "Mano de Obra", href: "/settings/recursos", icon: HardHat, adminOnly: true },
       // Presupuestos oculto temporalmente (del menú y de la IA). Para reactivar, descomentar
       // esta línea y las tools/prompt de presupuestos en components/ai-assistant.tsx.
-      // { label: "Presupuestos", href: "/presupuestos", icon: FileSpreadsheet, activePrefixes: ["/presupuestos/"] },
+      // { label: "Presupuestos", href: "/presupuestos", icon: FileSpreadsheet, activePrefixes: ["/presupuestos/"], adminOnly: true },
     ],
   },
   {
     title: "Análisis",
     items: [
       { label: "Movimientos", href: "/movimientos", icon: ArrowLeftRight },
-      { label: "Gráficos", href: "/graficos", icon: BarChart3 },
+      { label: "Gráficos", href: "/graficos", icon: BarChart3, adminOnly: true },
       // AI dashboard builder: dashboards armados por chat (solo admins, como el asistente).
       { label: "Dashboards IA", href: "/dashboards", icon: LayoutDashboard, adminOnly: true, flag: "ai_dashboards", activePrefixes: ["/dashboards/"] },
       // Automatizaciones: reutiliza la misma capability family que Dashboards IA

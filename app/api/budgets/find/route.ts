@@ -15,6 +15,10 @@ export async function GET(request: NextRequest) {
     if (!session?.user) {
         return NextResponse.json({ error: "No autenticado" }, { status: 401 })
     }
+    // Devuelve la ficha de costo de un producto: mismo criterio que /fichas.
+    if (session.user.role !== "admin") {
+        return NextResponse.json({ error: "Solo administradores" }, { status: 403 })
+    }
     const name = (new URL(request.url).searchParams.get("name") ?? "").trim()
     if (!name) return NextResponse.json({ id: null })
 

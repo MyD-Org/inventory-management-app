@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { sql } from "@/lib/database"
+import { auth } from "@/auth"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { TrendingUp, TrendingDown, RotateCcw, Calendar, ExternalLink } from "lucide-react"
@@ -120,6 +121,11 @@ export async function MovementHistory({
   const to = typeof searchParams?.to === "string" ? searchParams.to : undefined
   const pageParam = typeof searchParams?.page === "string" ? Number.parseInt(searchParams.page, 10) : 1
 
+  // El historial lo ve cualquiera; exportarlo es solo de admin (mismo criterio
+  // que el reporte de inventario).
+  const session = await auth()
+  const isAdmin = session?.user?.role === "admin"
+
   const totalCount = await getMovementHistoryCount({ search, type, from, to })
   const totalPages = totalCount > 0 ? Math.ceil(totalCount / MOVEMENTS_PER_PAGE) : 0
   const currentPage = totalPages > 0 ? Math.min(Math.max(pageParam, 1), totalPages) : 1
@@ -186,7 +192,7 @@ export async function MovementHistory({
             </CardTitle>
             <div className="flex items-center gap-2">
               {headerAction}
-              <DownloadMovementsButton />
+              {isAdmin && <DownloadMovementsButton />}
             </div>
           </div>
 

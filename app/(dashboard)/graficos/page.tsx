@@ -1,9 +1,16 @@
 import { Suspense } from "react"
+import { redirect } from "next/navigation"
+import { auth } from "@/auth"
 import { InventoryCharts } from "@/components/inventory-charts"
 
 export const dynamic = "force-dynamic"
 
-export default function GraficosPage() {
+export default async function GraficosPage() {
+  const session = await auth()
+  if (!session?.user) redirect("/login")
+  // Los gráficos agregan valores y tendencias del inventario: solo admin.
+  if (session.user.role !== "admin") redirect("/")
+
   return (
     <div className="bg-background">
       <main className="mx-auto w-full max-w-[1600px] px-3 py-6 sm:px-6 lg:px-8 space-y-6">

@@ -212,7 +212,10 @@ function validBudgetPayload(p: BudgetPayload): string | null {
 // (delete + insert): simple y suficiente para el volumen de un taller.
 export async function saveBudget(id: number | null, payload: BudgetPayload) {
     const session = await auth();
-    if (!session?.user) return { error: 'No autenticado' };
+    // Las fichas de costo son territorio de admin: exponen costos y márgenes.
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
 
     const invalid = validBudgetPayload(payload);
     if (invalid) return { error: invalid };
@@ -302,7 +305,9 @@ export async function saveBudget(id: number | null, payload: BudgetPayload) {
 
 export async function deleteBudget(id: number) {
     const session = await auth();
-    if (!session?.user) return { error: 'No autenticado' };
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
 
     try {
         await sql`DELETE FROM budgets WHERE id = ${id}`; // líneas caen por CASCADE

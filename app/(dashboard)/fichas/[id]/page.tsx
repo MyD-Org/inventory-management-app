@@ -14,6 +14,8 @@ export const dynamic = 'force-dynamic';
 export default async function EditCostPage({ params }: { params: { id: string } }) {
     const session = await auth();
     if (!session?.user) redirect('/login')
+    // Fichas y presupuestos son solo de admin: muestran costos, márgenes y precios.
+    if (session.user.role !== 'admin') redirect('/')
 
     const budgetId = Number.parseInt(params.id, 10)
     if (!Number.isFinite(budgetId)) notFound()

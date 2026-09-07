@@ -1,6 +1,13 @@
 import { StockMovementForm } from "@/components/stock-movement-form"
+import { redirect } from "next/navigation"
+import { auth } from "@/auth"
 
-export default function AjustePage() {
+export default async function AjustePage() {
+  const session = await auth()
+  if (!session?.user) redirect("/login")
+  // Solo admin: el operador hace entradas y salidas desde el modal del inicio.
+  if (session.user.role !== "admin") redirect("/")
+
   return (
     <div className="bg-background">
       <main className="container mx-auto px-4 py-6">

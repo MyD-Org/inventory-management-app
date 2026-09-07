@@ -29,8 +29,11 @@ export async function POST(request: NextRequest) {
     // Precio opcional: solo tiene sentido para entradas. Aceptamos number o null;
     // si viene, tiene que ser >= 0. Si es 0 o null lo guardamos como null (evita
     // pisar el unit_cost del material con 0 cuando el usuario deja el campo vacío).
+    // Además, solo un admin puede fijarlo: el formulario del operador no
+    // muestra el campo, pero el chequeo va acá porque el front no es la barrera.
+    const puedeFijarPrecio = session.user.role === "admin"
     let unitCost: number | null = null
-    if (unit_cost !== undefined && unit_cost !== null && unit_cost !== "") {
+    if (puedeFijarPrecio && unit_cost !== undefined && unit_cost !== null && unit_cost !== "") {
       const parsed = Number(unit_cost)
       if (!Number.isFinite(parsed) || parsed < 0) {
         return NextResponse.json({ error: "Precio unitario inválido" }, { status: 400 })
