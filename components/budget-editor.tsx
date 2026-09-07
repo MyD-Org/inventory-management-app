@@ -713,7 +713,7 @@ export function BudgetEditor({
                         {/* Líneas: cada una con su buscador de material (estilo presupuesto) */}
                         {materials.length > 0 && (
                             <div className="space-y-2">
-                                <div className="hidden md:grid grid-cols-[1fr_150px_70px_120px_110px_36px] gap-2 text-xs text-muted-foreground px-1">
+                                <div className="hidden md:grid grid-cols-[1fr_116px_60px_106px_96px_36px] gap-2 text-xs text-muted-foreground px-1">
                                     <span>Material</span>
                                     <span className="text-center">Cantidad</span>
                                     <span className="text-center">Unidad</span>
@@ -734,7 +734,7 @@ export function BudgetEditor({
                                                 : ""
                                         }`}
                                     >
-                                        <div className="grid grid-cols-2 md:grid-cols-[1fr_150px_70px_120px_110px_36px] gap-2 items-center">
+                                        <div className="grid grid-cols-2 md:grid-cols-[1fr_116px_60px_106px_96px_36px] gap-2 items-center">
                                             <div className="col-span-2 min-w-0 md:col-span-1">
                                                 {m.isNew && (
                                                     <span className="mb-1 inline-block rounded bg-green-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
@@ -991,7 +991,7 @@ export function BudgetEditor({
                     <CardContent className="space-y-4">
                         {labor.length > 0 && (
                             <div className="space-y-2">
-                                <div className="hidden md:grid grid-cols-[1fr_90px_120px_110px_36px] gap-2 text-xs text-muted-foreground px-1">
+                                <div className="hidden md:grid grid-cols-[1fr_90px_106px_96px_36px] gap-2 text-xs text-muted-foreground px-1">
                                     <span>Recurso / tarea</span>
                                     <span>Horas</span>
                                     <span>Costo por hora</span>
@@ -999,7 +999,7 @@ export function BudgetEditor({
                                     <span />
                                 </div>
                                 {labor.map((l, i) => (
-                                    <div key={i} className="grid grid-cols-2 md:grid-cols-[1fr_90px_120px_110px_36px] gap-2 items-center">
+                                    <div key={i} className="grid grid-cols-2 md:grid-cols-[1fr_90px_106px_96px_36px] gap-2 items-center">
                                         <div className="col-span-2 min-w-0 md:col-span-1">
                                             <ResourceLineAutocomplete
                                                 value={l.label}
