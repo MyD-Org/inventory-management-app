@@ -252,14 +252,26 @@ function describeLine(
 function formatSpec(key: string, value: string): string {
     switch (key) {
         case "clamp":
-            return `grampa ${value}`
+            return conPrefijo("grampa", value)
         case "body_color":
-            return `equipo color ${value}`
+            return conPrefijo("equipo color", value)
         case "optic":
-            return `óptica ${value}°`
+            // El vocabulario guarda el número solo ("30"), pero si alguien cargó
+            // la opción con el símbolo no hay que ponerlo dos veces.
+            return conPrefijo("óptica", value.endsWith("°") ? value : `${value}°`)
         default:
             return value
     }
+}
+
+// El vocabulario de specs lo carga el taller desde la pantalla de opciones, y a
+// veces la opción ya incluye la palabra que acá se prefija: clamp="Grampa en U"
+// salía "grampa Grampa en U" en la factura. Si el valor ya arranca con el
+// prefijo, se deja como está.
+function conPrefijo(prefijo: string, value: string): string {
+    return normalizeName(value).startsWith(normalizeName(prefijo))
+        ? value
+        : `${prefijo} ${value}`
 }
 
 function normalizeName(s: string): string {
