@@ -6,14 +6,17 @@ import { BarcodeFormat, DecodeHintType } from "@zxing/library"
 import { CameraOff, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-// Formatos 1D nomás: son los que salen de una etiquetadora y los que usan los
-// códigos del inventario. Restringirlos hace la lectura bastante más rápida que
-// dejar a zxing probando también QR y compañía en cada cuadro.
+// Todos los formatos 1D que lee zxing. La lista está completa a propósito: no
+// sabemos en qué formato imprime la etiquetadora del taller, y así no hay que
+// averiguarlo para que funcione. Lo que sí queda afuera es 2D (QR, DataMatrix):
+// no lo usa ninguna etiqueta de producto y hace más lento cada cuadro.
 const FORMATOS = [
     BarcodeFormat.EAN_13,
     BarcodeFormat.EAN_8,
     BarcodeFormat.CODE_128,
+    BarcodeFormat.CODE_93,
     BarcodeFormat.CODE_39,
+    BarcodeFormat.CODABAR,
     BarcodeFormat.UPC_A,
     BarcodeFormat.UPC_E,
     BarcodeFormat.ITF,
