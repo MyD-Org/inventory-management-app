@@ -149,7 +149,13 @@ export function ExpenseDialog({
                         <div className="flex gap-2">
                             <Select value={categoryId} onValueChange={setCategoryId}>
                                 <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Elegí una categoría" />
+                                    {/* El label va como children porque Radix solo
+                                        autocompleta el texto cuando el ítem llegó a
+                                        montarse (el dropdown abierto): una categoría
+                                        recién creada nunca se montó y quedaba ciega. */}
+                                    <SelectValue placeholder="Elegí una categoría">
+                                        {opcionesCategoria.find((c) => String(c.id) === categoryId)?.name}
+                                    </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                     {opcionesCategoria.map((c) => (
@@ -187,7 +193,9 @@ export function ExpenseDialog({
                         <Label>Medio de pago</Label>
                         <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                             <SelectTrigger>
-                                <SelectValue />
+                                <SelectValue>
+                                    {PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label}
+                                </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                                 {PAYMENT_METHODS.map((m) => (
