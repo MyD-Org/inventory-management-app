@@ -17,8 +17,10 @@ export async function GET(request: NextRequest) {
         m.barcode,
         m.unit_of_measure,
         m.min_stock,
-        i.current_stock,
-        i.available_stock,
+        -- ::float8 para que el JSON lleve un número: numeric viaja como "12.00"
+        -- (string) y del otro lado el agente hace cuentas con eso.
+        i.current_stock::float8 AS current_stock,
+        i.available_stock::float8 AS available_stock,
         c.name AS category_name
       FROM materials m
       JOIN inventory i ON i.material_id = m.id

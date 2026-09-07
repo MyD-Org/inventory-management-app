@@ -19,8 +19,10 @@ interface Material {
   name: string
   barcode: string
   unit_of_measure: string
-  current_stock: number
-  available_stock: number
+  // numeric(12,2) en la base: el driver de Neon lo entrega como string
+  // ("12.00"). El tipo lo dice para que no se opere sin convertir.
+  current_stock: number | string
+  available_stock: number | string
   min_stock: number
   max_stock: number
   unit_cost?: number | string | null
@@ -105,15 +107,20 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
       return false
     }
 
-    const qty = Number.parseInt(quantity)
-    if (!qty || qty <= 0) {
+    // parseFloat y NO parseInt: desde que el stock es numeric(12,2) hay
+    // materiales que se miden (1,75 m de cable) y no se cuentan. parseInt
+    // truncaba "2.5" a 2 sin decir nada, y se descontaba de menos.
+    const qty = Number.parseFloat(quantity)
+    if (!Number.isFinite(qty) || qty <= 0) {
       toast.error("Falta la cantidad", {
         description: "La cantidad debe ser mayor a 0.",
       })
       return false
     }
 
-    if (movementType === "salida" && qty > material.available_stock) {
+    // available_stock viene del driver como string ("12.00"): sin Number() la
+    // comparación se resuelve por coerción y depende del formato.
+    if (movementType === "salida" && qty > Number(material.available_stock)) {
       toast.error("Error", {
         description: `Stock insuficiente. Disponible: ${formatStock(material.available_stock)}`,
       })
@@ -139,7 +146,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
         body: JSON.stringify({
           material_id: material!.id,
           movement_type: movementType,
-          quantity: movementType === "salida" ? -Number.parseInt(quantity) : Number.parseInt(quantity),
+          quantity: movementType === "salida" ? -Number.parseFloat(quantity) : Number.parseFloat(quantity),
           reference_number: referenceNumber || null,
           notes: notes || null,
           // Precio solo tiene sentido en entradas. En salida/ajuste no lo mandamos
@@ -276,7 +283,11 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
                 <Input
                   id="quantity"
                   type="number"
-                  min="1"
+                  min="0"
+                  // step="any": sin esto el navegador hereda step=1 y rechaza
+                  // "2,5" como inválido, así que no se podía ni tipear una
+                  // cantidad fraccionada para los materiales que se miden.
+                  step="any"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
                   placeholder="Ingrese la cantidad"
@@ -327,7 +338,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
               {quantity &&
                 material &&
                 movementType === "salida" &&
-                Number.parseInt(quantity) > material.available_stock && (
+                Number.parseFloat(quantity) > Number(material.available_stock) && (
                   <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950 dark:border-red-800">
                     <AlertTriangle className="w-5 h-5 text-red-600" />
                     <span className="text-sm text-red-600 dark:text-red-400">

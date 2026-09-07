@@ -11,12 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Save, Plus, Minus, Scan, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useDebouncedCallback } from "use-debounce"
+import { formatStock } from "@/lib/format"
 
 interface Material {
     id: number
     name: string
     barcode: string
-    current_stock?: number
+    // numeric(12,2) en la base: el driver de Neon lo entrega como string
+    // ("12.00"). El tipo lo dice para que no se opere sin convertir.
+    current_stock?: number | string
     unit_of_measure?: string
     unit_cost?: number | string | null
 }
@@ -191,8 +194,11 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
             barcodeInputRef.current?.focus()
             return
         }
-        const qty = Number.parseInt(formData.quantity)
-        if (!formData.quantity || Number.isNaN(qty) || qty <= 0) {
+        // parseFloat y NO parseInt: desde que el stock es numeric(12,2) hay
+        // materiales que se miden (1,75 m de cable) y no se cuentan. parseInt
+        // truncaba "2.5" a 2 sin decir nada, y se retiraba de menos.
+        const qty = Number.parseFloat(formData.quantity)
+        if (!formData.quantity || !Number.isFinite(qty) || qty <= 0) {
             setQuantityError(true)
             toast.error("Falta la cantidad", {
                 description: `Ingresá cuántas unidades vas a ${type === "entrada" ? "ingresar" : "retirar"} (mayor a 0).`,
@@ -211,7 +217,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                 body: JSON.stringify({
                     material_id: parseInt(formData.material_id),
                     movement_type: type,
-                    quantity: parseInt(formData.quantity), // Changed to parseInt
+                    quantity: qty,
                     reference_number: formData.reference_number || null,
                     notes: formData.notes || null,
                     // Precio solo aplica en entradas. Vacío → null (no pisa el unit_cost del material).
@@ -324,7 +330,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                                                 <span className="ml-2 font-mono text-xs text-muted-foreground">{m.barcode}</span>
                                             </span>
                                             <span className="shrink-0 text-xs text-muted-foreground">
-                                                stock {m.current_stock ?? 0}
+                                                stock {formatStock(m.current_stock)}
                                             </span>
                                         </button>
                                     ))}
@@ -343,9 +349,9 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                                     <div className="text-sm text-muted-foreground font-mono mb-2">{selectedMaterial.barcode}</div>
                                     <div className="flex items-center gap-2 text-sm">
                                         <span className="font-medium">Stock Actual:</span>
-                                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${(selectedMaterial.current_stock || 0) <= 0 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${Number(selectedMaterial.current_stock ?? 0) <= 0 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
                                             }`}>
-                                            {selectedMaterial.current_stock} {selectedMaterial.unit_of_measure}
+                                            {formatStock(selectedMaterial.current_stock)} {selectedMaterial.unit_of_measure}
                                         </span>
                                     </div>
                                 </div>
@@ -367,8 +373,11 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                                 id="quantity"
                                 ref={quantityInputRef}
                                 type="number"
-                                min="1"
-                                step="1"
+                                min="0"
+                                // step="any": con step="1" el navegador rechaza "2,5" como
+                                // inválido, así que no se podía ni tipear una cantidad
+                                // fraccionada para los materiales que se miden.
+                                step="any"
                                 placeholder="0"
                                 value={formData.quantity}
                                 onChange={(e) => { setFormData(prev => ({ ...prev, quantity: e.target.value })); if (quantityError) setQuantityError(false) }}

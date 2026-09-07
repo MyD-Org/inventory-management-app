@@ -28,8 +28,10 @@ export async function GET(request: NextRequest) {
         m.unit_of_measure,
         m.unit_cost,
         m.min_stock,
-        i.current_stock,
-        i.available_stock,
+        -- ::float8 para que el JSON lleve un número: numeric viaja como "12.00"
+        -- (string) y del otro lado el agente hace cuentas con eso.
+        i.current_stock::float8 AS current_stock,
+        i.available_stock::float8 AS available_stock,
         c.name AS category_name,
         s.name AS supplier_name,
         -- A qué familia pertenece el material, si pertenece a alguna. Es lo que le

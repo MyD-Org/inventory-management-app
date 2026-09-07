@@ -34,7 +34,9 @@ export async function GET(request: NextRequest) {
                 bm.unit_cost AS unit_cost_snapshot,
                 bm.material_id,
                 m.unit_cost AS unit_cost_actual,
-                i.current_stock,
+                -- ::float8 para que el JSON lleve un número: numeric viaja como "12.00"
+                -- (string) y del otro lado el agente hace cuentas con eso.
+                i.current_stock::float8 AS current_stock,
                 m.min_stock,
                 (i.current_stock IS NOT NULL AND i.current_stock <= m.min_stock) AS bajo_minimo,
                 (bm.unit_cost = 0) AS costo_cero,

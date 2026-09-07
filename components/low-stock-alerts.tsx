@@ -3,6 +3,7 @@ import { sql } from "@/lib/database"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle } from "lucide-react"
+import { formatStock } from "@/lib/format"
 
 async function getLowStockItems() {
   try {
@@ -87,7 +88,7 @@ export async function LowStockAlerts() {
               </div>
               <div className="text-right">
                 <Badge variant="destructive" className="mb-1">
-                  {item.current_stock} {item.unit_of_measure}
+                  {formatStock(item.current_stock)} {item.unit_of_measure}
                 </Badge>
                 <div className="text-xs text-muted-foreground">Mín: {item.min_stock}</div>
               </div>

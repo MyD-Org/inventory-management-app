@@ -49,7 +49,10 @@ export function InventoryImporter() {
             const row = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.trim().replace(/"/g, ''))
 
             const barcode = row[barcodeIndex]
-            const stock = parseInt(row[stockIndex])
+            // parseFloat: el stock es numeric(12,2). Con parseInt, importar una
+            // planilla con "12,5 m de cable" cargaba 12 y la diferencia no
+            // aparecía por ningún lado.
+            const stock = parseFloat(row[stockIndex])
             const cost = costIndex !== -1 ? parseFloat(row[costIndex]) : undefined
 
             if (barcode && !isNaN(stock)) {
