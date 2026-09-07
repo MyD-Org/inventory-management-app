@@ -27,7 +27,8 @@ yarn-error.log*
 next-env.d.ts
 
 # Carpeta de build alterna (NEXT_DIST_DIR), para correr un segundo dev server
-.next-verify
+# Dist dirs de los servidores de verificación local (.next-verify, .next-3009, …)
+/.next-*/
 
 # Configuración local de Claude Code
 .claude/

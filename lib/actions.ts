@@ -1,5 +1,8 @@
 'use server';
 
+// El shim de la base local: sin este import las consultas de este módulo se
+// irían a Neon aunque DATABASE_URL apunte a postgres local.
+import './neon-local';
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
 
@@ -7,8 +10,25 @@ export async function authenticate(
     prevState: string | undefined,
     formData: FormData,
 ) {
+    const email = String(formData.get('email') ?? '');
+    const password = String(formData.get('password') ?? '');
+
+    // El destino se resuelve ACÁ y no solo en el callback de auth.config: ese
+    // rebota al que ya está logueado y entra a /login, pero al enviar el
+    // formulario signIn redirige por su cuenta y nunca vuelve a pasar por
+    // /login. Sin esto, el operador terminaba igual en el inventario.
+    // Si el mail no existe o la clave está mal, signIn falla antes de redirigir.
+    let destino = '/';
     try {
-        await signIn('credentials', formData);
+        const sql = neon(process.env.DATABASE_URL!);
+        const filas = await sql`SELECT role FROM users WHERE email=${email}`;
+        if (filas[0] && filas[0].role !== 'admin') destino = '/pedidos';
+    } catch (error) {
+        console.error('No se pudo resolver el destino del login:', error);
+    }
+
+    try {
+        await signIn('credentials', { email, password, redirectTo: destino });
     } catch (error) {
         if (error instanceof AuthError) {
             switch (error.type) {

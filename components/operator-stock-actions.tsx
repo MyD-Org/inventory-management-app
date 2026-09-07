@@ -16,26 +16,31 @@ interface Material {
 // Los dos botones del inicio del operador. Abren el MISMO modal que el atajo del
 // sidebar del admin (StockMovementDialog): no hay página dedicada de entrada ni
 // de salida para este rol. Al guardar, el modal hace router.refresh() y la lista
-// de movimientos recientes de abajo se actualiza sola.
+// de movimientos de abajo se actualiza sola.
 export function OperatorStockActions({ materials }: { materials: Material[] }) {
     const [dialog, setDialog] = useState<"entrada" | "salida" | null>(null)
 
     return (
         <>
-            {/* Barra de acciones: en el celular los botones van uno debajo del
-                otro a todo lo ancho; desde sm, en fila y pegados a la izquierda,
-                con el ancho justo del contenido. */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-start">
+            {/* Apilados y a todo el ancho, en teléfono y en escritorio: son lo
+                único que hace el operador, así que son la pantalla. Uno arriba
+                del otro (y no en fila) porque arriba/abajo se distingue mejor
+                que izquierda/derecha cuando se toca apurado, y errarle es caro.
+                El de quitar va en destructive —el único color del sistema— por
+                lo mismo: es el que puede hacer daño. */}
+            <div className="flex flex-col gap-3">
                 <button
                     type="button"
                     onClick={() => setDialog("entrada")}
-                    className="flex items-center gap-3.5 rounded-lg border bg-card p-5 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex items-center gap-4 rounded-xl border bg-card p-5 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted">
                         <ArrowDownToLine className="h-5 w-5 text-foreground" />
                     </span>
                     <span>
-                        <span className="block font-semibold">Agregar al stock</span>
+                        <span className="block font-display text-lg font-semibold leading-tight">
+                            Agregar al stock
+                        </span>
                         <span className="block text-sm text-muted-foreground">Entrada de materiales</span>
                     </span>
                 </button>
@@ -43,13 +48,15 @@ export function OperatorStockActions({ materials }: { materials: Material[] }) {
                 <button
                     type="button"
                     onClick={() => setDialog("salida")}
-                    className="flex items-center gap-3.5 rounded-lg border bg-card p-5 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex items-center gap-4 rounded-xl border border-destructive/40 bg-card p-5 text-left transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
-                        <ArrowUpFromLine className="h-5 w-5 text-foreground" />
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                        <ArrowUpFromLine className="h-5 w-5 text-destructive" />
                     </span>
                     <span>
-                        <span className="block font-semibold">Quitar del stock</span>
+                        <span className="block font-display text-lg font-semibold leading-tight text-destructive">
+                            Quitar del stock
+                        </span>
                         <span className="block text-sm text-muted-foreground">Salida de materiales</span>
                     </span>
                 </button>
