@@ -55,10 +55,13 @@ export function ExpenseDialog({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, expense])
 
+    // Las creadas desde acá se agregan al select en el acto; cuando llega el
+    // refresh de la página la prop ya las trae, así que se filtran las que
+    // aparecieron en props para no listarlas dos veces.
     const opcionesCategoria = (expense
         ? categories.filter((c) => c.active || c.id === expense.category_id)
         : categories.filter((c) => c.active)
-    ).concat(creadas)
+    ).concat(creadas.filter((c) => !categories.some((x) => x.id === c.id)))
 
     async function handleCreateCategory() {
         if (!nuevaCategoria.trim()) return
