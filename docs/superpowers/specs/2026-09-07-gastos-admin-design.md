@@ -80,7 +80,12 @@ Server page `app/(dashboard)/gastos/page.tsx`:
 2. **Total del mes**: monto grande formateado es-AR, arriba de todo (es la primera pregunta al entrar).
 3. **Totales por categoría** (lo primero que se ve según lo pedido): barras horizontales proporcionales al monto del mes. Cada fila: nombre de categoría, monto y % del total. Referencia visual: dashboard por categoría del expense-tracker personal, adaptado al estilo de esta app (tipografía y colores de tema). Monto formateado con `formatArs` de `lib/format.ts` (ya existe; el plan descartó crear `formatMoney`).
 4. **Detalle del mes**: lista/tabla con fecha, descripción, categoría, medio de pago y monto. Cada fila tiene editar (abre el mismo modal de carga, precargado) y borrar (`ConfirmDialog`, patrón de `components/orders-table.tsx`).
-5. **Categorías**: botón secundario "Categorías" en la barra superior que abre el manager de categorías: crear, renombrar, activar/desactivar. Patrón: `components/material-families-manager.tsx`.
+5. **Categorías**: se crean desde el propio modal de gasto, con el botón "+" al
+   lado del select (mismo patrón que el alta de material): se crea y queda
+   seleccionada sin salir del formulario. No hay manager dedicado en la vista
+   (decisión posterior al mockup); las server actions de renombrar/activar
+   quedan implementadas en `lib/gastos-actions.ts` para una futura pantalla de
+   mantenimiento.
 
 ## Carga y edición
 
