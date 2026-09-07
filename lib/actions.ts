@@ -275,6 +275,12 @@ export async function deleteSupplier(id: number) {
 }
 
 export async function downloadInventoryReport() {
+    // El reporte lleva unit_cost y total_value: es información de costos, solo admin.
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return [];
+    }
+
     const sql = neon(process.env.DATABASE_URL!);
     try {
         const data = await sql`
@@ -301,6 +307,11 @@ export async function downloadInventoryReport() {
 }
 
 export async function downloadMovementsReport(params?: { search?: string; type?: string; from?: string; to?: string }) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return [];
+    }
+
     const sql = neon(process.env.DATABASE_URL!);
     const { search, type, from, to } = params || {};
 

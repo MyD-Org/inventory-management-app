@@ -15,6 +15,11 @@ export async function POST(request: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 })
     }
+    // El alta de materiales es solo de admin, igual que editar y borrar
+    // (app/api/materials/[id]/route.ts). Los operadores mueven stock, no crean catálogo.
+    if (session.user.role !== "admin") {
+      return NextResponse.json({ error: "Solo administradores" }, { status: 403 })
+    }
     const user_name = session.user.name || session.user.email || "Desconocido"
 
     const body = await request.json()

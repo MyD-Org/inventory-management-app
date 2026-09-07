@@ -3,6 +3,8 @@ import { sql } from "@/lib/database"
 import { MovementHistory } from "@/components/movement-history"
 import { MovementPageHeaderAction } from "@/components/movement-page-header-action"
 import { ConsumeFromOrder } from "@/components/consume-from-order"
+import { redirect } from "next/navigation"
+import { auth } from "@/auth"
 
 export const dynamic = "force-dynamic"
 
@@ -26,6 +28,11 @@ export default async function SalidaPage({
 }: {
   searchParams?: { [key: string]: string | string[] | undefined }
 }) {
+  const session = await auth()
+  if (!session?.user) redirect("/login")
+  // Solo admin: el operador hace entradas y salidas desde el modal del inicio.
+  if (session.user.role !== "admin") redirect("/")
+
   const materials = await getMaterials()
 
   return (

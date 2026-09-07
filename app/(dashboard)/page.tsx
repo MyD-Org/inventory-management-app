@@ -1,4 +1,8 @@
 import { Suspense } from "react"
+import { redirect } from "next/navigation"
+import { auth } from "@/auth"
+import { sql } from "@/lib/database"
+import { OperatorStockActions } from "@/components/operator-stock-actions"
 import { StatsCards } from "@/components/stats-cards"
 
 import { LowStockAlerts } from "@/components/low-stock-alerts"
@@ -7,7 +11,45 @@ import { MonthlyMovementsSummary } from "@/components/monthly-movements-summary"
 
 export const dynamic = "force-dynamic"
 
+// Sin unit_cost a propósito: esta lista viaja al navegador del operador y el
+// costo se vería abriendo la consola, aunque el campo no esté en el formulario.
+async function getMaterials() {
+  try {
+    const materials = await sql`
+      SELECT m.id, m.name, m.barcode, i.current_stock, m.unit_of_measure
+      FROM materials m
+      JOIN inventory i ON m.id = i.material_id
+      ORDER BY m.name
+    `
+    return materials as any[]
+  } catch (error) {
+    console.error("Error fetching materials:", error)
+    return []
+  }
+}
+
 export default async function DashboardPage() {
+  const session = await auth()
+  if (!session?.user) redirect("/login")
+
+  // El operador tiene su propio inicio: los dos botones de stock (que abren el
+  // modal) y los últimos movimientos. Nada de stats, resumen del mes ni alertas.
+  if (session.user.role !== "admin") {
+    const materials = await getMaterials()
+
+    return (
+      <div className="bg-background">
+        <main className="container mx-auto max-w-3xl px-4 py-6 space-y-6">
+          <OperatorStockActions materials={materials} />
+
+          <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-lg" />}>
+            <RecentMovements showViewAll={false} linkToDetail={false} />
+          </Suspense>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-background">
       <main className="container mx-auto px-4 py-6 space-y-6">

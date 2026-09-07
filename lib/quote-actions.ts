@@ -47,7 +47,10 @@ function validQuotePayload(p: QuotePayload): string | null {
 // (delete + insert), igual que en los cálculos de costo.
 export async function saveQuote(id: number | null, payload: QuotePayload) {
     const session = await auth();
-    if (!session?.user) return { error: 'No autenticado' };
+    // Mismo criterio que las fichas de costo: los precios al cliente son solo de admin.
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
 
     const invalid = validQuotePayload(payload);
     if (invalid) return { error: invalid };
@@ -93,7 +96,9 @@ export async function saveQuote(id: number | null, payload: QuotePayload) {
 
 export async function deleteQuote(id: number) {
     const session = await auth();
-    if (!session?.user) return { error: 'No autenticado' };
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
 
     try {
         await sql`DELETE FROM quotes WHERE id = ${id}`; // items caen por CASCADE

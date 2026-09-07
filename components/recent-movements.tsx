@@ -31,7 +31,16 @@ async function getRecentMovements() {
   }
 }
 
-export async function RecentMovements() {
+// `linkToDetail` sale en false para el operador: el detalle del material es
+// admin-only, así que la fila no puede ser un link a ningún lado. `showViewAll`
+// también, porque "Ver todos" lleva al historial completo.
+export async function RecentMovements({
+  showViewAll = true,
+  linkToDetail = true,
+}: {
+  showViewAll?: boolean
+  linkToDetail?: boolean
+} = {}) {
   const movements = await getRecentMovements()
 
   const getMovementIcon = (type: string) => {
@@ -64,12 +73,14 @@ export async function RecentMovements() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle className="text-lg">Movimientos Recientes</CardTitle>
-        <Link
-          href="/movimientos"
-          className="shrink-0 text-sm font-medium text-primary hover:underline"
-        >
-          Ver todos →
-        </Link>
+        {showViewAll && (
+          <Link
+            href="/movimientos"
+            className="shrink-0 text-sm font-medium text-primary hover:underline"
+          >
+            Ver todos →
+          </Link>
+        )}
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
@@ -80,11 +91,20 @@ export async function RecentMovements() {
               const Icon = getMovementIcon(movement.movement_type)
               const colorClass = getMovementColor(movement.movement_type)
 
+              const Row = linkToDetail ? Link : "div"
+              const rowProps = linkToDetail
+                ? { href: `/materials/${movement.material_id}` as const }
+                : {}
+
               return (
-                <Link
+                <Row
                   key={movement.id}
-                  href={`/materials/${movement.material_id}`}
-                  className="flex items-center gap-3 p-3 bg-muted rounded-lg transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  {...(rowProps as any)}
+                  className={`flex items-center gap-3 p-3 bg-muted rounded-lg ${
+                    linkToDetail
+                      ? "transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      : ""
+                  }`}
                 >
                   <Icon className={`w-5 h-5 ${colorClass}`} />
                   <div className="flex-1 min-w-0">
@@ -107,7 +127,7 @@ export async function RecentMovements() {
                       })}
                     </div>
                   </div>
-                </Link>
+                </Row>
               )
             })
           )}

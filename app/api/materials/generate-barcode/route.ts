@@ -14,6 +14,10 @@ export async function GET() {
     if (!session?.user) {
         return NextResponse.json({ error: "No autenticado" }, { status: 401 })
     }
+    // Solo se usa desde el alta de material, que es admin-only.
+    if (session.user.role !== "admin") {
+        return NextResponse.json({ error: "Solo administradores" }, { status: 403 })
+    }
 
     try {
         for (let i = 0; i < 20; i++) {

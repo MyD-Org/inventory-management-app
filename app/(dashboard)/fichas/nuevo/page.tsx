@@ -14,6 +14,8 @@ export const dynamic = 'force-dynamic';
 export default async function NewCostPage() {
     const session = await auth();
     if (!session?.user) redirect('/login')
+    // Fichas y presupuestos son solo de admin: muestran costos, márgenes y precios.
+    if (session.user.role !== 'admin') redirect('/')
 
     const [resources, defaultMargin, workHoursPerMonth, specFields, families] = await Promise.all([
         sql`SELECT id, name, role, monthly_value FROM labor_resources WHERE active = TRUE ORDER BY name ASC`,

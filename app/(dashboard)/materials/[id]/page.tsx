@@ -17,7 +17,7 @@ import {
     Home,
 } from "lucide-react"
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { formatCurrencyUSD } from "@/lib/formatters"
 
@@ -62,6 +62,10 @@ async function getMaterialMovements(id: string) {
 
 export default async function MaterialDetailPage({ params }: { params: { id: string } }) {
     const session = await auth()
+    if (!session?.user) redirect('/login')
+    // Muestra el costo unitario: es información de admin.
+    if (session.user.role !== 'admin') redirect('/')
+
     const material = await getMaterialDetail(params.id)
 
     if (!material) {
