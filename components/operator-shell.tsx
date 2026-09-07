@@ -2,9 +2,17 @@
 
 import type { ReactNode } from "react"
 import { signOut } from "next-auth/react"
-import { ClipboardList, ExternalLink, LogOut, Package } from "lucide-react"
+import { useTheme } from "next-themes"
+import { ClipboardList, ExternalLink, LogOut, Moon, Package, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ThemeToggle } from "@/components/theme-toggle"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 // Shell del OPERADOR: sin sidebar. Su trabajo son dos acciones (cargar y
 // descontar stock) y los dos viven en un modal, así que un menú de navegación
@@ -19,6 +27,8 @@ export function OperatorShell({
     children: ReactNode
 }) {
     const initials = user?.name?.slice(0, 2).toUpperCase() || "US"
+    const { theme, setTheme } = useTheme()
+    const esOscuro = theme === "dark"
 
     return (
         <div className="min-h-screen bg-background">
@@ -40,27 +50,41 @@ export function OperatorShell({
                     </Button>
                 </a>
 
-                <ThemeToggle />
-
+                {/* Nombre y cerrar sesión viven DENTRO del avatar: sueltos en la
+                    barra, en pantalla angosta la hacían saltar a dos líneas. */}
                 {user && (
-                    <div className="flex items-center gap-2 border-l pl-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                            {initials}
-                        </div>
-                        <div className="hidden min-w-0 sm:block">
-                            <p className="truncate text-sm font-medium leading-tight">{user.name}</p>
-                            <p className="truncate text-xs text-muted-foreground">Operador</p>
-                        </div>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => signOut()}
-                            title="Cerrar sesión"
-                        >
-                            <LogOut className="h-4 w-4" />
-                        </Button>
-                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                title={user.name ?? "Cuenta"}
+                                aria-label="Abrir menú de la cuenta"
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                                {initials}
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuLabel className="font-normal">
+                                <p className="truncate text-sm font-medium">{user.name}</p>
+                                <p className="truncate text-xs text-muted-foreground">Operador</p>
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                onClick={() => setTheme(esOscuro ? "light" : "dark")}
+                                onSelect={(e) => e.preventDefault()}
+                            >
+                                {esOscuro ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+                                {esOscuro ? "Modo claro" : "Modo oscuro"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => signOut()}>
+                                <LogOut className="mr-2 h-4 w-4" />
+                                Cerrar sesión
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 )}
+
             </header>
 
             {children}
