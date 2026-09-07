@@ -22,7 +22,9 @@ export function OperatorStockActions({ materials }: { materials: Material[] }) {
 
     return (
         <>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {/* Abajo de lg van dos botones en fila; en desktop, con la columna
+                angosta de la izquierda, apilados y a todo lo ancho. */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
                 <button
                     type="button"
                     onClick={() => setDialog("entrada")}

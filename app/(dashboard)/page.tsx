@@ -39,7 +39,10 @@ export default async function DashboardPage() {
 
     return (
       <div className="bg-background">
-        <main className="container mx-auto max-w-3xl px-4 py-6 space-y-6">
+        {/* En desktop las acciones quedan en una columna a la izquierda y los
+            movimientos ocupan el resto, como una app de escritorio; abajo de
+            lg es una sola columna centrada, como estaba. */}
+        <main className="container mx-auto px-4 py-6 space-y-6 lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start lg:gap-6 lg:space-y-0">
           <OperatorStockActions materials={materials} />
 
           <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-lg" />}>
