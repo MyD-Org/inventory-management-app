@@ -5,7 +5,6 @@ import { sql } from "@/lib/database"
 import { formatArs } from "@/lib/format"
 import { totalesPorCategoria, type CategoriaGasto, type GastoRow } from "@/lib/gastos"
 import { GastosClient } from "@/components/gastos-client"
-import { ExpenseCategoriesManager } from "@/components/expense-categories"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
@@ -69,7 +68,6 @@ export default async function GastosPage({
                         <h1 className="text-2xl font-bold text-foreground">Gastos</h1>
                         <p className="mt-1 text-sm text-muted-foreground">Gastos operativos de la empresa</p>
                     </div>
-                    <ExpenseCategoriesManager categories={categories} />
                 </div>
 
                 <div className="flex flex-wrap items-end justify-between gap-4">
