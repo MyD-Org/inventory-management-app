@@ -71,7 +71,10 @@ export function OrderStatusSelect({
                 // dark:bg-transparent: el Select de shadcn trae un relleno propio
                 // en oscuro (dark:bg-input/30) que bg-transparent no pisa, porque
                 // son variantes distintas y tailwind-merge conserva las dos.
-                className="h-7 w-fit max-w-full border-0 bg-transparent dark:bg-transparent px-1.5 text-base hover:bg-muted focus:ring-0 justify-start gap-2">
+                // whitespace-normal: el trigger trae whitespace-nowrap y una etiqueta
+                // larga ("Preparando entrega") en la media celda del celular se
+                // pisaba con la de al lado. Con el wrap pasa a dos líneas.
+                className="h-auto min-h-7 w-fit max-w-full whitespace-normal border-0 bg-transparent dark:bg-transparent px-1.5 py-0.5 text-base hover:bg-muted focus:ring-0 justify-start gap-2">
                 <StatusIcon status={value} />
                 <span>{STATUS_LABELS[value]}</span>
             </SelectTrigger>

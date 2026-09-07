@@ -39,10 +39,12 @@ function formatDate(d: string | null): string {
     return new Date(y, m - 1, day).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" })
 }
 
-// Celda de la fila de datos del encabezado.
+// Celda de la fila de datos del encabezado. En el celular son seis celdas en
+// grilla de dos columnas (separadas por el gap-px del contenedor, que deja ver
+// el fondo `bg-border`); desde lg vuelven a ser una fila con bordes propios.
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div className="flex-1 min-w-[9.5rem] border-r last:border-r-0 px-4 py-2.5 flex flex-col gap-1">
+        <div className="bg-muted/40 px-3 py-2.5 flex flex-col gap-1 sm:px-4 lg:bg-transparent lg:flex-1 lg:min-w-[9.5rem] lg:border-r lg:last:border-r-0">
             <dt className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
                 {label}
             </dt>
@@ -140,7 +142,7 @@ export default async function OrderDetailPage({
 
 
     return (
-        <div className="w-full px-8 py-6">
+        <div className="w-full px-4 py-6 sm:px-8">
             {/* Encabezado de la hoja impresa: arriba el cliente, que es lo que
                 identifica el trabajo en el taller. En pantalla no hace falta,
                 están las migas y la barra de propiedades. */}
@@ -164,9 +166,9 @@ export default async function OrderDetailPage({
                     <span className="font-mono text-foreground tabular-nums">#{order.order_number}</span>
                 </div>
 
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div className="min-w-0">
-                        <h1 className="font-display text-3xl font-bold tracking-tight leading-tight truncate">
+                <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                        <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight leading-tight truncate">
                             {order.customer_name ?? order.customer_external_id}
                         </h1>
                         {/* Debajo del cliente va solo cuándo entró el pedido. El
@@ -191,7 +193,7 @@ export default async function OrderDetailPage({
                     celdas de Factura y Remito) son lugares distintos de la misma
                     fila. */}
                 <OrderEmissionProvider>
-                <dl className="mt-5 flex flex-wrap rounded-lg border bg-muted/40 overflow-hidden">
+                <dl className="mt-5 grid grid-cols-2 gap-px rounded-lg border bg-border overflow-hidden lg:flex lg:flex-wrap lg:gap-0 lg:bg-muted/40">
                     <Fact label="Estado">
                         <OrderStatusSelect
                             id={order.id}
@@ -203,7 +205,7 @@ export default async function OrderDetailPage({
                     {/* Editable acá y en un solo lugar: antes estaba dos veces,
                         arriba de solo lectura y abajo en el aside para tocarla. */}
                     <Fact label="Entrega estimada">
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                             <DateField id={order.id} value={order.delivery_date_estimate} />
                             {overdue && (
                                 <span className="shrink-0 text-xs font-semibold text-destructive">
@@ -212,17 +214,20 @@ export default async function OrderDetailPage({
                             )}
                         </div>
                     </Fact>
+                    {/* Editable acá, como la fecha: se cambia donde se lee, no en
+                        el aside de abajo. */}
                     <Fact label="Prioridad">
-                        <span className="font-medium">
-                            {PRIORITY_LABELS[order.priority] ?? order.priority}
-                        </span>
+                        <PriorityField id={order.id} value={order.priority} />
                     </Fact>
                     <Fact label="Trabajo">
                         <span className="font-mono tabular-nums font-medium">{units} u.</span>
                     </Fact>
-                    {/* La celda es para todos: emitir lo puede hacer cualquiera del
-                        taller. Lo que sigue siendo del admin son los IMPORTES, y esos
-                        los recorta el server en la simulación, no esta pantalla. */}
+                    {/* Factura y remito son del admin: el taller no emite ni entra a
+                        Alegra. La emisión AUTOMÁTICA al pasar a "Facturar y remitir"
+                        sigue funcionando para todos — lo que se saca de acá es la
+                        puerta manual, no el circuito. */}
+                    {isAdmin && (
+                    <>
                     <Fact label="Factura">
                         <EmissionSlot doc="invoice">
                             {order.alegra_invoice_id ? (
@@ -301,11 +306,13 @@ export default async function OrderDetailPage({
                             )}
                         </EmissionSlot>
                     </Fact>
+                    </>
+                    )}
                 </dl>
                 </OrderEmissionProvider>
             </header>
 
-            <div className="orden-trabajo grid gap-8 lg:grid-cols-[1fr_250px] items-start">
+            <div className="orden-trabajo grid gap-6 lg:gap-8 lg:grid-cols-[1fr_250px] items-start">
                 {/* ---------- El trabajo ---------- */}
                 <div className="min-w-0 space-y-7">
                     {/* 1. Qué armar */}
@@ -428,9 +435,6 @@ export default async function OrderDetailPage({
                         <h2 className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground border-b pb-2 mb-1.5">
                             Administración
                         </h2>
-                        <Prop label="Prioridad">
-                            <PriorityField id={order.id} value={order.priority} />
-                        </Prop>
                         {isAdmin && order.invoice_warnings?.length > 0 && (
                             <Prop label="Factura">
                                 <p className="text-xs text-amber-600">
