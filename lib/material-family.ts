@@ -41,7 +41,11 @@ export interface FamilyLineFields {
     materialId: number | null
     unitCost: number
     specFieldKey: string | null
-    options: Array<{ specValue: string; materialId: number | null; label: string }>
+    // qty: cuánto sale del depósito con esa variante. null = la cantidad de la
+    // línea; 0 = con esa variante la línea no va. Es PROPIA DE LA HOJA aunque el
+    // material venga de la familia: cuántas arandelas lleva la grampa en L
+    // depende del producto, no de la familia (scripts/34-cantidad-por-variante.sql).
+    options: Array<{ specValue: string; materialId: number | null; label: string; qty: number | null }>
 }
 
 // Agrupa las opciones de una familia por valor de spec. Un color puede tener
@@ -106,10 +110,21 @@ export function familyUnitCost(family: MaterialFamily): number {
 // El elegido es el marcado con isDefault, que es exactamente para lo que existe esa
 // marca. Sin este colapso, cualquier hoja que use una familia con dos materiales en
 // un color no se puede guardar: "La variante X está repetida".
-export function familyLineOptions(family: MaterialFamily): FamilyLineFields["options"] {
+export function familyLineOptions(
+    family: MaterialFamily,
+    // Cantidades ya cargadas en la línea, por valor de spec. La familia no sabe de
+    // cantidades, así que si no se pasan las de la línea, poner al día el vínculo
+    // las borraría en silencio y el taller volvería a descontar de menos.
+    qtyBySpecValue?: Map<string, number | null>,
+): FamilyLineFields["options"] {
     return Array.from(optionsBySpecValue(family).values()).map((options) => {
         const chosen = options.find((o) => o.isDefault) ?? options[0]
-        return { specValue: chosen.specValue, materialId: chosen.materialId, label: chosen.label }
+        return {
+            specValue: chosen.specValue,
+            materialId: chosen.materialId,
+            label: chosen.label,
+            qty: qtyBySpecValue?.get(chosen.specValue) ?? null,
+        }
     })
 }
 
@@ -139,12 +154,15 @@ export function syncLineWithFamily<T extends FamilyLineFields>(line: T, family: 
     if (line.familyId === null) return line
     if (!family) return { ...line, familyId: null }
     const def = defaultOption(family)
+    // Las cantidades por variante sobreviven a la sincronización: el vínculo con la
+    // familia es vivo para el MATERIAL, no para cuánto lleva este producto.
+    const qtyBySpecValue = new Map(line.options.map((o) => [o.specValue, o.qty ?? null] as const))
     return {
         ...line,
         label: family.name,
         materialId: def?.materialId ?? line.materialId,
         specFieldKey: family.specFieldKey,
-        options: familyLineOptions(family),
+        options: familyLineOptions(family, qtyBySpecValue),
     }
 }
 

@@ -1,0 +1,55 @@
+-- ============================================
+-- Cantidad por variante: cuánto sale del depósito, no solo qué sale.
+--
+-- CONTEXTO: 15-material-variants.sql resolvió "qué material corresponde a lo que
+-- pidió el cliente" (clamp='larga' -> grampa larga). Lo que quedó afuera es que
+-- una misma respuesta del pedido también cambia CUÁNTO se usa de OTRAS líneas:
+--
+--     grampa recta  ->  1 tornillo, 2 arandelas
+--     grampa en L   ->  2 tornillos, 4 arandelas
+--
+-- El tornillo y la arandela son EL MISMO material en los dos casos; lo único que
+-- cambia es la cantidad. Con el modelo anterior eso no se podía expresar: la
+-- cantidad vivía en budget_materials.qty, fija para la línea entera, así que el
+-- taller descontaba siempre 2 arandelas y el faltante salía mal.
+--
+-- CÓMO QUEDA: budget_material_options —que ya mapea spec_value -> material— gana
+-- una cantidad propia.
+--
+--     qty NULL  la variante no dice nada de cantidad y vale la de la línea.
+--               Es el valor de TODAS las filas existentes, o sea que esta
+--               migración no cambia el comportamiento de ninguna ficha cargada.
+--     qty 0     con esa opción la línea NO VA. Sirve para "la tapa de acrílico
+--               solo va si eligieron acrílico": la línea desaparece del BOM en
+--               lugar de descontar de más.
+--     qty > 0   reemplaza a la cantidad de la línea para esa opción.
+--
+-- VALE TAMBIÉN PARA LAS LÍNEAS CON FAMILIA, y esa es la parte fina. En una línea
+-- vinculada a una familia el MATERIAL sale de la familia en vivo (cambiarlo en el
+-- inventario vale para todos los productos a la vez), pero la CANTIDAD no puede
+-- vivir ahí: cuántas arandelas lleva una grampa en L es propio de cada producto,
+-- no de la familia. Así que para esas líneas la fila de budget_material_options
+-- existe solo para llevar la cantidad, y explodeBom la superpone sobre las
+-- variantes que trajo la familia. El vínculo con la familia sigue siendo vivo
+-- para el material y propio de la hoja para la cantidad.
+--
+-- EL COSTEO NO SE TOCA, a propósito. La línea sigue costeando con
+-- budget_materials.qty * unit_cost, igual que antes de esta migración: el producto
+-- se cobra un solo precio y la ficha necesita un solo número. Las cantidades por
+-- variante mandan sobre el DESCUENTO DE STOCK y nada más, que es la misma
+-- separación que ya existe entre el material que costea (el de referencia o la
+-- estrategia de la familia) y el que realmente sale del depósito.
+--
+-- numeric(10,2) y no INTEGER: es el mismo tipo que budget_materials.qty, y desde
+-- 32-stock-decimal.sql hay materias primas que se miden (cable por metro). Ojo al
+-- leerlo desde JS: el driver devuelve numeric como STRING, hay que envolverlo en
+-- Number() antes de operar.
+--
+-- QUÉ TOCA ESTA MIGRACIÓN: agrega UNA columna nullable a budget_material_options.
+-- No reescribe filas ni borra nada.
+--
+-- Aplicar en prod:  node scripts/run-sql.js scripts/34-cantidad-por-variante.sql
+-- ============================================
+
+ALTER TABLE budget_material_options
+    ADD COLUMN IF NOT EXISTS qty numeric(10,2) CHECK (qty IS NULL OR qty >= 0);

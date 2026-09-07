@@ -156,7 +156,11 @@ export interface BudgetPayload {
         qty: number;
         unit_cost: number;
         spec_field_key?: string | null;
-        options?: Array<{ spec_value: string; material_id: number | null; label: string }>;
+        // qty por variante: cuánto sale del depósito con esa opción. Ausente o null
+        // = la cantidad de la línea; 0 = con esa opción la línea no va. NO afecta
+        // el costo, que sigue siendo qty * unit_cost de la línea (ver
+        // scripts/34-cantidad-por-variante.sql).
+        options?: Array<{ spec_value: string; material_id: number | null; label: string; qty?: number | null }>;
         // Familia de materiales que arma esta línea (ver lib/material-families.ts).
         // null = mapeo propio de la línea. Vinculada, las variantes se leen de la
         // familia al explotar el BOM; las de acá quedan igual como foto.
@@ -184,6 +188,11 @@ function validBudgetPayload(p: BudgetPayload): string | null {
         const seen = new Set<string>();
         for (const o of options) {
             if (!o.spec_value?.trim() || !o.label?.trim()) return `Hay variantes incompletas en "${m.label.trim()}"`;
+            // El 0 es válido y significa "con esta opción no lleva nada", así que
+            // solo se rechaza lo que no es un número o es negativo.
+            if (o.qty !== undefined && o.qty !== null && (!Number.isFinite(o.qty) || o.qty < 0)) {
+                return `La cantidad de la variante "${o.spec_value.trim()}" en "${m.label.trim()}" es inválida`;
+            }
             if (seen.has(o.spec_value.trim())) return `La variante "${o.spec_value.trim()}" está repetida en "${m.label.trim()}"`;
             seen.add(o.spec_value.trim());
         }
@@ -265,8 +274,8 @@ export async function saveBudget(id: number | null, payload: BudgetPayload) {
             `;
             for (const o of m.options ?? []) {
                 await sql`
-                    INSERT INTO budget_material_options (budget_material_id, spec_value, material_id, label)
-                    VALUES (${line.id}, ${o.spec_value.trim()}, ${o.material_id}, ${o.label.trim()})
+                    INSERT INTO budget_material_options (budget_material_id, spec_value, material_id, label, qty)
+                    VALUES (${line.id}, ${o.spec_value.trim()}, ${o.material_id}, ${o.label.trim()}, ${o.qty ?? null})
                 `;
             }
         }

@@ -92,12 +92,16 @@ export function NumericInput({
 
     return (
         <div className={`flex items-center gap-1 ${className ?? ""}`}>
-            <Button type="button" variant="outline" size="icon" className="shrink-0 h-9 w-8" disabled={disabled} onClick={() => step(-1)} aria-label="Restar 1">
-                <Minus className="w-3.5 h-3.5" />
+            {/* Más chicos que el input (h-8 contra h-9) y angostos: son un ajuste
+                fino, no la acción principal de la fila. Lo que se gana a lo ancho
+                se lo lleva la columna del nombre del material, que es la que se
+                queda corta y termina truncando. */}
+            <Button type="button" variant="outline" size="icon" className="shrink-0 h-8 w-7" disabled={disabled} onClick={() => step(-1)} aria-label="Restar 1">
+                <Minus className="w-3 h-3" />
             </Button>
             {input}
-            <Button type="button" variant="outline" size="icon" className="shrink-0 h-9 w-8" disabled={disabled} onClick={() => step(1)} aria-label="Sumar 1">
-                <Plus className="w-3.5 h-3.5" />
+            <Button type="button" variant="outline" size="icon" className="shrink-0 h-8 w-7" disabled={disabled} onClick={() => step(1)} aria-label="Sumar 1">
+                <Plus className="w-3 h-3" />
             </Button>
         </div>
     )

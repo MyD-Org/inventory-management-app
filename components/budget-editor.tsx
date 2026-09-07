@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ChevronRight, Layers, Loader2, Plus, Trash2, RefreshCw, Save, Sparkles } from "lucide-react"
-import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { NumericInput } from "@/components/numeric-input"
@@ -38,7 +38,7 @@ import { ResourceLineAutocomplete } from "@/components/resource-line-autocomplet
 import type { SpecFieldChoice } from "@/lib/spec-choices"
 // Familias de materiales: el mapeo variante -> material declarado una vez en el
 // inventario. Elegir una arma la línea entera.
-import { costStrategySummary, defaultOption, familyUnitCost, lineFromFamily, optionsBySpecValue, syncLineWithFamily, type MaterialFamily } from "@/lib/material-family"
+import { defaultOption, familyUnitCost, lineFromFamily, optionsBySpecValue, syncLineWithFamily, type MaterialFamily } from "@/lib/material-family"
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +49,10 @@ interface VariantOption {
     specValue: string
     materialId: number | null
     label: string
+    // Cuánto sale del depósito con esta variante. null = la cantidad de la línea.
+    // 0 = con esta variante la línea no va. No toca el costo de la ficha, que
+    // sigue saliendo de la cantidad de la línea (scripts/34-cantidad-por-variante.sql).
+    qty: number | null
 }
 
 let nextUid = 1
@@ -179,6 +183,11 @@ export function BudgetEditor({
         setOpenVariants((prev) => ({ ...prev, [uid]: !(prev[uid] ?? false) }))
     }
 
+    // Qué línea está mostrando el selector de "la cantidad varía según…". Es un
+    // desplegable que la enorme mayoría de las líneas no necesita —la cantidad es
+    // fija— así que se ofrece detrás de un enlace y no ocupando una fila por línea.
+    const [openQtyVary, setOpenQtyVary] = useState<Record<number, boolean>>({})
+
     // Catálogo de inventario para el buscador de materiales por línea. Se trae una vez al
     // montar y el filtrado difuso (sin acentos, tolerante a typos) se hace en el cliente.
     const [materialsCatalog, setMaterialsCatalog] = useState<MaterialSearchResult[]>([])
@@ -302,7 +311,57 @@ export function BudgetEditor({
             : materialsCatalog.find((c) => c.id === m.materialId)?.unit_of_measure ?? null
 
     const pickMaterial = (i: number, r: MaterialSearchResult) => {
-        updateMaterial(i, { materialId: r.id, label: r.name, unitCost: Number(r.unit_cost) })
+        // Las variantes de cantidad apuntan todas al material de la línea (es el
+        // mismo tornillo con la grampa recta y con la de L), así que cambiar el
+        // material las tiene que arrastrar: si no, la línea diría un material y el
+        // descuento sacaría otro.
+        setMaterials((prev) =>
+            prev.map((m, idx) =>
+                idx !== i
+                    ? m
+                    : {
+                          ...m,
+                          materialId: r.id,
+                          label: r.name,
+                          unitCost: Number(r.unit_cost),
+                          options:
+                              m.familyId === null
+                                  ? m.options.map((o) => ({ ...o, materialId: r.id, label: r.name }))
+                                  : m.options,
+                      },
+            ),
+        )
+    }
+
+    // Hacer que la CANTIDAD de una línea de material fijo dependa de una respuesta
+    // del pedido. Es el caso de la arandela: el material es el mismo con las dos
+    // grampas, lo único que cambia es cuántas salen del depósito. No es una familia
+    // —una familia sustituye el material— así que la línea guarda una variante por
+    // cada valor del campo, todas con SU PROPIO material, y solo la cantidad varía.
+    //
+    // Arrancan todas con la cantidad de la línea: así elegir el campo no cambia por
+    // sí solo lo que se descuenta, y lo que hay que editar son los casos que difieren.
+    const varyQtyBy = (i: number, fieldKey: string) => {
+        const field = specFields.find((f) => f.key === fieldKey)
+        if (!field) return
+        setMaterials((prev) =>
+            prev.map((m, idx) =>
+                idx !== i
+                    ? m
+                    : {
+                          ...m,
+                          specFieldKey: fieldKey,
+                          options: field.options.map((o) => ({
+                              specValue: o.value,
+                              materialId: m.materialId,
+                              label: m.label,
+                              qty: m.qty,
+                          })),
+                      },
+            ),
+        )
+        const uid = materials[i]?.uid
+        if (uid !== undefined) setOpenVariants((prev) => ({ ...prev, [uid]: true }))
     }
 
     // Elegir una FAMILIA en la línea i: arma la línea entera de una. El costo sale de
@@ -373,6 +432,26 @@ export function BudgetEditor({
     const removeMaterial = (i: number) => {
         setMaterials((prev) => prev.filter((_, idx) => idx !== i))
     }
+
+    // Cantidad de UNA variante de la línea i. Si la variante todavía no está en la
+    // línea —el caso normal de una línea con familia, donde las variantes se
+    // muestran desde la familia— se agrega acá, que es la única forma de que la
+    // cantidad tenga dónde guardarse.
+    const setVariantQty = (i: number, specValue: string, label: string, materialId: number | null, qty: number | null) => {
+        setMaterials((prev) =>
+            prev.map((m, idx) => {
+                if (idx !== i) return m
+                const exists = m.options.some((o) => o.specValue === specValue)
+                const options = exists
+                    ? m.options.map((o) => (o.specValue === specValue ? { ...o, qty } : o))
+                    : [...m.options, { specValue, materialId, label, qty }]
+                return { ...m, options }
+            }),
+        )
+    }
+
+    const variantQty = (m: MaterialLine, specValue: string): number | null =>
+        m.options.find((o) => o.specValue === specValue)?.qty ?? null
 
     // ── Mano de obra ─────────────────────────────────────────────────────────
     // Elegir un recurso en la línea i (rellena nombre y costo/hora).
@@ -528,7 +607,7 @@ export function BudgetEditor({
                 options: m.specFieldKey
                     ? m.options
                           .filter((o) => o.label.trim() !== "")
-                          .map((o) => ({ spec_value: o.specValue, material_id: o.materialId, label: o.label }))
+                          .map((o) => ({ spec_value: o.specValue, material_id: o.materialId, label: o.label, qty: o.qty }))
                     : [],
             })),
             labor: cleanLabor.map((l) => ({
@@ -634,7 +713,7 @@ export function BudgetEditor({
                         {/* Líneas: cada una con su buscador de material (estilo presupuesto) */}
                         {materials.length > 0 && (
                             <div className="space-y-2">
-                                <div className="hidden md:grid grid-cols-[1fr_150px_70px_120px_110px_36px] gap-2 text-xs text-muted-foreground px-1">
+                                <div className="hidden md:grid grid-cols-[1fr_116px_60px_106px_96px_36px] gap-2 text-xs text-muted-foreground px-1">
                                     <span>Material</span>
                                     <span className="text-center">Cantidad</span>
                                     <span className="text-center">Unidad</span>
@@ -643,8 +722,19 @@ export function BudgetEditor({
                                     <span />
                                 </div>
                                 {materials.map((m, i) => (
-                                    <div key={m.uid} className={m.isNew ? "rounded-md bg-green-50 px-1 py-1 ring-1 ring-green-200 dark:bg-green-950/30 dark:ring-green-900" : ""}>
-                                        <div className="grid grid-cols-2 md:grid-cols-[1fr_150px_70px_120px_110px_36px] gap-2 items-center">
+                                    // pb-3: lo que cuelga de una línea (el panel de la condición, o el
+                                    // enlace para crearla) se dibuja DEBAJO de su fila, así que sin aire
+                                    // abajo queda pegado a la línea siguiente y se lee como si fuera de
+                                    // ella. El espacio es lo único que dice de quién es.
+                                    <div
+                                        key={m.uid}
+                                        className={`pb-3 ${
+                                            m.isNew
+                                                ? "rounded-md bg-green-50 px-1 py-1 ring-1 ring-green-200 dark:bg-green-950/30 dark:ring-green-900"
+                                                : ""
+                                        }`}
+                                    >
+                                        <div className="grid grid-cols-2 md:grid-cols-[1fr_116px_60px_106px_96px_36px] gap-2 items-center">
                                             <div className="col-span-2 min-w-0 md:col-span-1">
                                                 {m.isNew && (
                                                     <span className="mb-1 inline-block rounded bg-green-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
@@ -708,12 +798,38 @@ export function BudgetEditor({
                                             muestra pero no se edita acá: se edita en el inventario, una vez
                                             para todos los productos. Solo se ofrece si hay vocabulario de
                                             specs cargado. */}
-                                        {m.familyId !== null ? (
+                                        {m.familyId !== null || m.specFieldKey !== null ? (
                                             (() => {
-                                                const f = familyById.get(m.familyId)
-                                                if (!f) return null
-                                                const fieldLabel =
-                                                    specFields.find((sf) => sf.key === f.specFieldKey)?.label ?? f.specFieldKey
+                                                const f = m.familyId === null ? undefined : familyById.get(m.familyId)
+                                                const fieldKey = f?.specFieldKey ?? m.specFieldKey
+                                                const fieldLabel = specFields.find((sf) => sf.key === fieldKey)?.label ?? fieldKey
+
+                                                // Una fila por opción: qué pidieron, qué sale del depósito y
+                                                // cuánto. Las tres cosas juntas y en ese orden, que es como se
+                                                // lee la condición. Los títulos de columna reemplazan a la
+                                                // explicación: antes había dos párrafos que nadie leía.
+                                                //
+                                                // De la familia sale UN material por variante (el marcado como
+                                                // predeterminado). Las alternativas del inventario no se
+                                                // muestran acá: son ruido para quien está cargando la receta y
+                                                // se ven en la pantalla de familias.
+                                                const filas = f
+                                                    ? Array.from(optionsBySpecValue(f).entries()).map(([specValue, opts]) => {
+                                                          const elegido = opts.find((o) => o.isDefault) ?? opts[0]
+                                                          return {
+                                                              specValue,
+                                                              label: elegido.label,
+                                                              materialId: elegido.materialId as number | null,
+                                                              qty: variantQty(m, specValue),
+                                                          }
+                                                      })
+                                                    : m.options.map((o) => ({
+                                                          specValue: o.specValue,
+                                                          label: o.label,
+                                                          materialId: o.materialId,
+                                                          qty: o.qty,
+                                                      }))
+
                                                 return (
                                                     <div className="mt-1 md:pl-1">
                                                         <div className="space-y-2 rounded-md border border-dashed bg-muted/30 p-2">
@@ -722,131 +838,133 @@ export function BudgetEditor({
                                                                     type="button"
                                                                     onClick={() => toggleVariants(i)}
                                                                     aria-expanded={variantsOpen(i)}
-                                                                    className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
+                                                                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                                                                 >
                                                                     <ChevronRight
-                                                                        className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+                                                                        className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
                                                                             variantsOpen(i) ? "rotate-90" : ""
                                                                         }`}
                                                                     />
-                                                                    {/* El nombre de la familia se repite acá a propósito:
-                                                                        en la columna de material entra truncado y este
-                                                                        panel es el que se lee. */}
-                                                                    <p className="text-xs text-muted-foreground">
-                                                                        Familia{" "}
-                                                                        <span className="font-medium text-foreground">{f.name}</span>
-                                                                        {" · varía según "}
+                                                                    <p className="truncate text-xs text-muted-foreground">
+                                                                        Cambia según{" "}
                                                                         <span className="font-medium text-foreground">{fieldLabel}</span>
-                                                                        {" · "}
-                                                                        {new Set(f.options.map((o) => o.specValue)).size}{" "}
-                                                                        {new Set(f.options.map((o) => o.specValue)).size === 1 ? "variante" : "variantes"}
-                                                                        {" · "}
-                                                                        {f.options.length}{" "}
-                                                                        {f.options.length === 1 ? "material" : "materiales"}
-                                                                        {" · "}
-                                                                        {costStrategySummary(f)}
                                                                     </p>
                                                                 </button>
+                                                                {f ? (
+                                                                    <Link
+                                                                        href="/materials/familias"
+                                                                        className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline"
+                                                                    >
+                                                                        Editar familia
+                                                                    </Link>
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline"
+                                                                        onClick={() => updateMaterial(i, { specFieldKey: null, options: [] })}
+                                                                        title="Esta línea deja de depender de una condición"
+                                                                    >
+                                                                        Quitar
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                             {variantsOpen(i) && (
-                                                                <>
-                                                                    {Array.from(optionsBySpecValue(f).entries()).map(([specValue, options]) => (
-                                                                        <div key={specValue} className="space-y-0.5">
-                                                                            <p className="text-xs font-medium text-muted-foreground">
-                                                                                {variantLabel(f.specFieldKey, specValue)}
-                                                                            </p>
-                                                                            {options.map((o) => (
-                                                                                <div
-                                                                                    key={`${o.specValue}-${o.materialId}`}
-                                                                                    className="grid grid-cols-[1fr_auto] items-center gap-2 text-xs"
+                                                                <div className="space-y-0">
+                                                                    <div className="grid grid-cols-[96px_1fr_56px] items-center gap-2 pb-1 text-[11px] text-muted-foreground">
+                                                                        <span>Si pide</span>
+                                                                        <span>Sale del depósito</span>
+                                                                        <span className="text-center">Cantidad</span>
+                                                                    </div>
+                                                                    {filas.map((fila) => {
+                                                                        // Cantidad efectiva: la de la variante si la
+                                                                        // declara, la de la línea si no. En 0 la fila se
+                                                                        // apaga y dice "no lleva" donde iría el material,
+                                                                        // que es la forma corta de decir la condición.
+                                                                        const efectiva = fila.qty ?? m.qty
+                                                                        const noLleva = efectiva === 0
+                                                                        return (
+                                                                            <div
+                                                                                key={fila.specValue}
+                                                                                className="grid grid-cols-[96px_1fr_56px] items-center gap-2 border-t py-1.5 text-xs"
+                                                                            >
+                                                                                <span
+                                                                                    className={`truncate ${
+                                                                                        noLleva ? "text-muted-foreground" : "text-muted-foreground"
+                                                                                    }`}
                                                                                 >
-                                                                                    <span className="truncate">{o.label}</span>
-                                                                                    <span className="whitespace-nowrap text-muted-foreground">
-                                                                                        {formatArs(o.unitCost)}
-                                                                                    </span>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                    ))}
-                                                                    <p className="text-xs text-muted-foreground">
-                                                                        Se editan en{" "}
-                                                                        <Link href="/materials/familias" className="underline">
-                                                                            familias de materiales
-                                                                        </Link>{" "}
-                                                                        y valen para todos los productos. Si este producto lleva
-                                                                        un material fijo, quitá la familia y elegilo a mano.
-                                                                    </p>
-                                                                </>
+                                                                                    {variantLabel(fieldKey, fila.specValue)}
+                                                                                </span>
+                                                                                <span
+                                                                                    className={`truncate ${
+                                                                                        noLleva ? "text-muted-foreground" : ""
+                                                                                    }`}
+                                                                                >
+                                                                                    {noLleva ? "no lleva" : fila.label}
+                                                                                </span>
+                                                                                <NumericInput
+                                                                                    value={efectiva}
+                                                                                    min={0}
+                                                                                    onChange={(n) =>
+                                                                                        setVariantQty(
+                                                                                            i,
+                                                                                            fila.specValue,
+                                                                                            fila.label,
+                                                                                            fila.materialId,
+                                                                                            n,
+                                                                                        )
+                                                                                    }
+                                                                                    className="h-7 w-full px-1 text-center text-xs"
+                                                                                />
+                                                                            </div>
+                                                                        )
+                                                                    })}
+                                                                </div>
                                                             )}
                                                         </div>
                                                     </div>
                                                 )
                                             })()
-                                        ) : m.specFieldKey !== null ? (
-                                            // Variantes cargadas a mano, antes de que existieran las familias.
-                                            // Se muestran —el pedido las usa para descontar, borrarlas en silencio
-                                            // cambiaría lo que sale del depósito— pero ya no se editan acá: lo que
-                                            // corresponde es rehacerlas como familia, que vale para todos los
-                                            // productos. Lo único que se puede hacer desde la hoja es quitarlas.
+                                        ) : m.materialId !== null && specFields.length > 0 ? (
+                                            // Línea de material fijo. La cantidad puede depender de una
+                                            // respuesta del pedido: la arandela es la misma con las dos
+                                            // grampas, lo que cambia es cuántas van. No es una familia
+                                            // —la familia cambia el material— así que se ofrece aparte.
                                             <div className="mt-1 md:pl-1">
-                                                <div className="space-y-2 rounded-md border border-dashed bg-muted/30 p-2">
-                                                    <div className="flex items-center justify-between gap-2">
+                                                {openQtyVary[m.uid] ? (
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">
+                                                            Cambia según
+                                                        </span>
+                                                        <Select value="" onValueChange={(key) => varyQtyBy(i, key)}>
+                                                            <SelectTrigger className="h-7 w-[190px] text-xs">
+                                                                <SelectValue placeholder="elegí una variación" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {specFields.map((f) => (
+                                                                    <SelectItem key={f.key} value={f.key} className="text-xs">
+                                                                        {f.label}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
                                                         <button
                                                             type="button"
-                                                            onClick={() => toggleVariants(i)}
-                                                            aria-expanded={variantsOpen(i)}
-                                                            className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
+                                                            className="text-xs text-muted-foreground hover:underline"
+                                                            onClick={() => setOpenQtyVary((prev) => ({ ...prev, [m.uid]: false }))}
                                                         >
-                                                            <ChevronRight
-                                                                className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
-                                                                    variantsOpen(i) ? "rotate-90" : ""
-                                                                }`}
-                                                            />
-                                                            <p className="text-xs text-muted-foreground">
-                                                                Variantes cargadas a mano · varía según{" "}
-                                                                <span className="font-medium text-foreground">
-                                                                    {specFields.find((f) => f.key === m.specFieldKey)?.label ?? m.specFieldKey}
-                                                                </span>
-                                                                {" · "}
-                                                                {m.options.length}{" "}
-                                                                {m.options.length === 1 ? "variante" : "variantes"}
-                                                            </p>
+                                                            Cancelar
                                                         </button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-7 shrink-0 text-xs text-muted-foreground"
-                                                            onClick={() => updateMaterial(i, { specFieldKey: null, options: [] })}
-                                                            title="Dejar esta línea con un material fijo"
-                                                        >
-                                                            Quitar variantes
-                                                        </Button>
                                                     </div>
-                                                    {variantsOpen(i) && (
-                                                        <>
-                                                            {m.options.map((o) => (
-                                                                <div
-                                                                    key={o.specValue}
-                                                                    className="grid grid-cols-[110px_1fr] items-center gap-2 text-xs"
-                                                                >
-                                                                    <span className="truncate text-muted-foreground">
-                                                                        {variantLabel(m.specFieldKey, o.specValue)}
-                                                                    </span>
-                                                                    <span className="truncate">{o.label}</span>
-                                                                </div>
-                                                            ))}
-                                                            <p className="text-xs text-muted-foreground">
-                                                                Estas variantes son de antes y no se editan desde acá. Cargá la
-                                                                materia prima en{" "}
-                                                                <Link href="/materials/familias" className="underline">
-                                                                    familias de materiales
-                                                                </Link>{" "}
-                                                                y elegila en esta línea: queda cargada una sola vez y vale para todos
-                                                                los productos.
-                                                            </p>
-                                                        </>
-                                                    )}
-                                                </div>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                                                        onClick={() => setOpenQtyVary((prev) => ({ ...prev, [m.uid]: true }))}
+                                                        title="Cuando esta línea cambia —o no va— según una variación del pedido"
+                                                    >
+                                                        + Depende de una condición
+                                                    </button>
+                                                )}
                                             </div>
                                         ) : null}
                                     </div>
@@ -873,7 +991,7 @@ export function BudgetEditor({
                     <CardContent className="space-y-4">
                         {labor.length > 0 && (
                             <div className="space-y-2">
-                                <div className="hidden md:grid grid-cols-[1fr_90px_120px_110px_36px] gap-2 text-xs text-muted-foreground px-1">
+                                <div className="hidden md:grid grid-cols-[1fr_90px_106px_96px_36px] gap-2 text-xs text-muted-foreground px-1">
                                     <span>Recurso / tarea</span>
                                     <span>Horas</span>
                                     <span>Costo por hora</span>
@@ -881,7 +999,7 @@ export function BudgetEditor({
                                     <span />
                                 </div>
                                 {labor.map((l, i) => (
-                                    <div key={i} className="grid grid-cols-2 md:grid-cols-[1fr_90px_120px_110px_36px] gap-2 items-center">
+                                    <div key={i} className="grid grid-cols-2 md:grid-cols-[1fr_90px_106px_96px_36px] gap-2 items-center">
                                         <div className="col-span-2 min-w-0 md:col-span-1">
                                             <ResourceLineAutocomplete
                                                 value={l.label}

@@ -12,6 +12,11 @@ export interface BomOption {
     label: string
     /** Cuando un color tiene varios materiales, indica cuál se usa por defecto. */
     isDefault?: boolean
+    // Cuánto se usa con esta opción. null/undefined = la cantidad de la línea.
+    // 0 = con esta opción la línea NO VA (ver scripts/34-cantidad-por-variante.sql).
+    // Es lo que permite que una misma respuesta del pedido —la grampa— cambie la
+    // cantidad de otras líneas: 2 arandelas con la recta, 4 con la de L.
+    qty?: number | null
 }
 
 export interface BomLine {
@@ -45,6 +50,13 @@ export interface ResolvedBomLine {
     specValue?: string | null
 }
 
+// La cantidad efectiva de una opción: la suya si la declara, la de la línea si no.
+// Se lee de una función y no en línea porque el 0 es significativo ("no va") y un
+// `option.qty || line.qty` lo convertiría en la cantidad de la línea sin avisar.
+function optionQty(option: BomOption, lineQty: number): number {
+    return option.qty === null || option.qty === undefined ? lineQty : Number(option.qty)
+}
+
 // Devuelve el material real de una línea. El orden de las reglas importa:
 // sin campo de variación, o sin valor en las specs, se comporta igual que antes
 // de que existieran las variantes.
@@ -73,7 +85,7 @@ export function resolveBomLine(line: BomLine, specs: Record<string, unknown>): R
     return {
         materialId: match.materialId,
         label: match.label,
-        qty: line.qty,
+        qty: optionQty(match, line.qty),
         substituted: true,
         unmapped: null,
         familyId: line.familyId ?? null,
@@ -116,7 +128,10 @@ export function resolveBom(
     // Sin repetidos: si tres líneas varían por led_color y el color no está
     // mapeado en ninguna, al taller le alcanza con que se lo digan una vez.
     const unmapped = [...new Set(resolved.map((r) => r.unmapped).filter((u): u is string => u !== null))]
-    // Las líneas sin mapear NO entran al BOM: es preferible que falte a que
-    // aparezca un material que nadie eligió. El aviso viaja en unmapped.
-    return { lines: resolved.filter((r) => r.unmapped === null), unmapped }
+    // Dos motivos distintos para que una línea no entre al BOM:
+    //   - unmapped: la hoja no sabe qué material va. Es preferible que falte a que
+    //     aparezca un material que nadie eligió. El aviso viaja en unmapped.
+    //   - qty 0: la hoja SÍ sabe, y sabe que con esa opción no lleva nada (la tapa
+    //     de acrílico cuando eligieron chapa). No es un aviso: es la receta.
+    return { lines: resolved.filter((r) => r.unmapped === null && r.qtyTotal > 0), unmapped }
 }

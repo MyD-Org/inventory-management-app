@@ -25,7 +25,7 @@ export default async function EditCostPage({ params }: { params: { id: string } 
                 bm.*,
                 COALESCE(
                     json_agg(
-                        json_build_object('specValue', o.spec_value, 'materialId', o.material_id, 'label', o.label)
+                        json_build_object('specValue', o.spec_value, 'materialId', o.material_id, 'label', o.label, 'qty', o.qty)
                         ORDER BY o.id
                     ) FILTER (WHERE o.id IS NOT NULL),
                     '[]'
@@ -68,10 +68,15 @@ export default async function EditCostPage({ params }: { params: { id: string } 
             unitCost: Number(m.unit_cost),
             specFieldKey: m.spec_field_key ?? null,
             familyId: m.family_id ?? null,
-            options: (m.options as Array<{ specValue: string; materialId: number | null; label: string }>).map((o) => ({
+            options: (
+                m.options as Array<{ specValue: string; materialId: number | null; label: string; qty: string | number | null }>
+            ).map((o) => ({
                 specValue: String(o.specValue),
                 materialId: o.materialId == null ? null : Number(o.materialId),
                 label: String(o.label),
+                // numeric llega como string desde el driver; null = usa la cantidad
+                // de la línea (scripts/34-cantidad-por-variante.sql).
+                qty: o.qty === null || o.qty === undefined ? null : Number(o.qty),
             })),
         })),
         labor: labor.map((l) => ({
