@@ -8,7 +8,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Trash2, ExternalLink, PackageX, TriangleAlert, CalendarClock } from "lucide-react"
+import { Trash2, ExternalLink, TriangleAlert, CalendarClock } from "lucide-react"
 import { deleteOrder } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useToast } from "@/hooks/use-toast"
@@ -45,6 +45,15 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
             <div className="border rounded-lg divide-y">
                 {orders.map((o) => {
                     const overdue = isOverdue(o.delivery_date_estimate, o.status)
+                    // Si no hay avisos ni fecha, la segunda línea del celular no
+                    // existe: sin esto la fila quedaba con un renglón vacío abajo.
+                    const faltaFactura = o.status === "por_facturar" && !o.alegra_invoice_id
+                    const faltaRemito = o.status === "por_facturar" && !o.alegra_remission_id
+                    const segundaLinea =
+                        o.has_unmapped ||
+                        faltaFactura ||
+                        faltaRemito ||
+                        Boolean(o.delivery_date_estimate)
                     return (
                         <div
                             key={o.id}
@@ -54,7 +63,7 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                             onKeyDown={(e) => {
                                 if (e.key === "Enter") router.push(`/pedidos/${o.id}`)
                             }}
-                            className="group flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer outline-none focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary first:rounded-t-lg last:rounded-b-lg"
+                            className="group flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-3 sm:px-4 hover:bg-muted/50 cursor-pointer outline-none focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary first:rounded-t-lg last:rounded-b-lg"
                         >
                             <PriorityIcon priority={o.priority} />
                             <StatusIcon status={o.status} />
@@ -64,7 +73,7 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                             </span>
 
                             {/* El cliente manda; lo que mide el trabajo va debajo, en chico. */}
-                            <span className="truncate min-w-0 flex-1">
+                            <span className="truncate min-w-0 flex-1 basis-24">
                                 <span className="block font-display text-[0.97rem] font-semibold leading-tight truncate">
                                     {o.customer_name ?? o.customer_external_id}
                                 </span>
@@ -73,13 +82,17 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                                 </span>
                             </span>
 
-                            {o.needs_review && (
-                                <span className="inline-flex items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive shrink-0 whitespace-nowrap">
-                                    <PackageX className="h-3 w-3" />
-                                    Sin materiales
-                                </span>
-                            )}
-
+                            {/* Los avisos, el estado y la fecha bajan a una segunda
+                                línea en el celular, donde no entran al lado del
+                                cliente. En pantalla ancha `sm:contents` los devuelve a
+                                la fila, como si este div no existiera. */}
+                            <div
+                                className={
+                                    segundaLinea
+                                        ? "order-last basis-full flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:order-none sm:basis-auto sm:contents"
+                                        : "contents"
+                                }
+                            >
                             {!o.needs_review && o.has_unmapped && (
                                 <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800 shrink-0 whitespace-nowrap dark:bg-amber-950/50 dark:text-amber-300">
                                     <TriangleAlert className="h-3 w-3" />
@@ -106,9 +119,9 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                             </span>
 
                             <span
-                                className={`text-xs font-mono tabular-nums flex items-center gap-1 shrink-0 w-20 justify-end ${
-                                    overdue ? "text-destructive font-medium" : "text-muted-foreground"
-                                }`}
+                                className={`text-xs font-mono tabular-nums hidden sm:flex items-center gap-1 shrink-0 w-20 justify-end ${
+                                    o.delivery_date_estimate ? "sm:flex" : ""
+                                } ${overdue ? "text-destructive font-medium" : "text-muted-foreground"}`}
                             >
                                 {o.delivery_date_estimate && (
                                     <>
@@ -117,6 +130,20 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                                     </>
                                 )}
                             </span>
+                            {/* En el celular la fecha va al final de la segunda línea,
+                                empujada a la derecha; en pantalla ancha manda la de
+                                arriba, de ancho fijo, para que las filas se alineen. */}
+                            {o.delivery_date_estimate && (
+                                <span
+                                    className={`text-xs font-mono tabular-nums flex sm:hidden items-center gap-1 shrink-0 ml-auto ${
+                                        overdue ? "text-destructive font-medium" : "text-muted-foreground"
+                                    }`}
+                                >
+                                    <CalendarClock className="h-3 w-3" />
+                                    {formatDate(o.delivery_date_estimate)}
+                                </span>
+                            )}
+                            </div>
 
                             <div className="flex items-center gap-0.5 shrink-0 w-14 justify-end">
                                 {o.source_conversation && (
@@ -126,7 +153,7 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                                         rel="noopener noreferrer"
                                         onClick={(e) => e.stopPropagation()}
                                         title="Ver la conversación en el CRM"
-                                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                        className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                                     >
                                         <Button variant="ghost" size="icon" className="h-7 w-7">
                                             <ExternalLink className="h-3.5 w-3.5" />
@@ -137,7 +164,7 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        className="h-7 w-7 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                                         onClick={(e) => {
                                             e.stopPropagation()
                                             setPendingId(o.id)

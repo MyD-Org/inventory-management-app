@@ -79,7 +79,7 @@ export function OrderMaterials({
         // no-print: al imprimir sale la orden de trabajo (qué armar), no la
         // lista de materiales. Esa es para buscar al depósito, en pantalla.
         <section className="no-print">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mb-2">
                 <button
                     type="button"
                     onClick={() => setAbierto((v) => !v)}
@@ -124,13 +124,13 @@ export function OrderMaterials({
                     {/* Cantidad contra stock: las dos cifras alineadas a la derecha se
                         comparan de un vistazo, que es la pregunta real del depósito.
                         El estado va aparte, en palabras. */}
-                    <div className="grid grid-cols-[minmax(0,1fr)_5rem_5rem_9rem] gap-3 bg-muted/60 px-4 py-2 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
+                    <div className="grid grid-cols-[minmax(0,1fr)_4rem_4rem] sm:grid-cols-[minmax(0,1fr)_5rem_5rem_9rem] gap-2 sm:gap-3 bg-muted/60 px-3 sm:px-4 py-2 font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground">
                         <span>Material</span>
                         {/* "Cantidad" y no "Necesita": la misma columna lleva lo que
                             pide el BOM y lo que se retiró de más, que nadie pidió. */}
                         <span className="text-right">Cantidad</span>
                         <span className="text-right">En stock</span>
-                        <span className="text-right">Estado</span>
+                        <span className="hidden sm:block text-right">Estado</span>
                     </div>
                     {needs.map((n) => {
                         const needKey =
@@ -140,7 +140,7 @@ export function OrderMaterials({
                         return (
                         <div
                             key={needKey}
-                            className="grid grid-cols-[minmax(0,1fr)_5rem_5rem_9rem] items-center gap-3 px-4 py-2.5"
+                            className="grid grid-cols-[minmax(0,1fr)_4rem_4rem] sm:grid-cols-[minmax(0,1fr)_5rem_5rem_9rem] items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5"
                         >
                             <span className="min-w-0 truncate">
                                 {n.label}
@@ -154,12 +154,15 @@ export function OrderMaterials({
                                         {formatStock(n.consumed)} ya descontados
                                     </span>
                                 )}
+                                <span className="block sm:hidden">
+                                    <Estado n={n} />
+                                </span>
                             </span>
                             <span className="text-right font-mono text-sm tabular-nums">{formatStock(n.required)}</span>
                             <span className="text-right">
                                 <Stock available={n.available} falta={n.available !== null && n.available < n.pending} />
                             </span>
-                            <span className="text-right">
+                            <span className="hidden sm:block text-right">
                                 <Estado n={n} />
                             </span>
                         </div>
@@ -169,13 +172,14 @@ export function OrderMaterials({
                     {extras.map((e) => (
                         <div
                             key={`extra:${e.material_id}`}
-                            className="grid grid-cols-[minmax(0,1fr)_5rem_5rem_9rem] items-center gap-3 px-4 py-2.5"
+                            className="grid grid-cols-[minmax(0,1fr)_4rem_4rem] sm:grid-cols-[minmax(0,1fr)_5rem_5rem_9rem] items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5"
                         >
                             <span className="min-w-0 truncate">
                                 {e.label}
                                 <span className="block text-xs text-muted-foreground">
                                     extra, fuera de la lista
                                 </span>
+                                <span className="block sm:hidden text-sm text-emerald-600">retirado</span>
                             </span>
                             <span className="text-right font-mono text-sm tabular-nums text-muted-foreground">
                                 {formatStock(e.quantity)}
@@ -183,7 +187,7 @@ export function OrderMaterials({
                             <span className="text-right">
                                 <Stock available={e.available} />
                             </span>
-                            <span className="text-right text-sm text-emerald-600">retirado</span>
+                            <span className="hidden sm:block text-right text-sm text-emerald-600">retirado</span>
                         </div>
                     ))}
                 </div>

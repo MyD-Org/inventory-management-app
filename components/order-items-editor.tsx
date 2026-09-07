@@ -159,8 +159,11 @@ export function OrderItemsEditor({
             {readOnly && readOnlyMessage && (
                 <p className="mb-3 text-sm text-muted-foreground">{readOnlyMessage}</p>
             )}
-            <div className="border rounded-lg">
-                <table className="w-full table-fixed">
+            {/* La tabla tiene una columna por variante: en el celular no hay
+                forma de que entren todas sin volverlas ilegibles, así que se
+                desplaza en horizontal en vez de aplastarse. */}
+            <div className="border rounded-lg overflow-x-auto">
+                <table className="w-full table-fixed min-w-[38rem]">
                     <thead>
                         <tr className="text-left">
                             <th className="px-3 py-2 text-sm font-medium text-muted-foreground text-right w-[72px]">
