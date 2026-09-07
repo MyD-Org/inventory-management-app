@@ -78,7 +78,7 @@ Server page `app/(dashboard)/gastos/page.tsx`:
 
 1. **Barra superior**: título "Gastos", selector de mes (`‹ septiembre 2026 ›`), botón "Nuevo gasto".
 2. **Total del mes**: monto grande formateado es-AR, arriba de todo (es la primera pregunta al entrar).
-3. **Totales por categoría** (lo primero que se ve según lo pedido): barras horizontales proporcionales al monto del mes. Cada fila: nombre de categoría, monto y % del total. Referencia visual: dashboard por categoría del expense-tracker personal, adaptado al estilo de esta app (tipografía y colores de tema). Monto formateado con función nueva `formatMoney` en `lib/format.ts`, siguiendo el patrón de `formatStock`.
+3. **Totales por categoría** (lo primero que se ve según lo pedido): barras horizontales proporcionales al monto del mes. Cada fila: nombre de categoría, monto y % del total. Referencia visual: dashboard por categoría del expense-tracker personal, adaptado al estilo de esta app (tipografía y colores de tema). Monto formateado con `formatArs` de `lib/format.ts` (ya existe; el plan descartó crear `formatMoney`).
 4. **Detalle del mes**: lista/tabla con fecha, descripción, categoría, medio de pago y monto. Cada fila tiene editar (abre el mismo modal de carga, precargado) y borrar (`ConfirmDialog`, patrón de `components/orders-table.tsx`).
 5. **Categorías**: botón secundario "Categorías" en la barra superior que abre el manager de categorías: crear, renombrar, activar/desactivar. Patrón: `components/material-families-manager.tsx`.
 
