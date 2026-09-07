@@ -2,8 +2,7 @@
 
 import type { ReactNode } from "react"
 import { signOut } from "next-auth/react"
-import { useTheme } from "next-themes"
-import { ClipboardList, ExternalLink, LogOut, Moon, Package, Sun } from "lucide-react"
+import { ClipboardList, ExternalLink, LogOut, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
@@ -13,6 +12,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ThemeMenuItems } from "@/components/theme-menu-items"
 
 // Shell del OPERADOR: sin sidebar. Su trabajo son dos acciones (cargar y
 // descontar stock) y los dos viven en un modal, así que un menú de navegación
@@ -27,8 +27,6 @@ export function OperatorShell({
     children: ReactNode
 }) {
     const initials = user?.name?.slice(0, 2).toUpperCase() || "US"
-    const { theme, setTheme } = useTheme()
-    const esOscuro = theme === "dark"
 
     return (
         <div className="min-h-screen bg-background">
@@ -70,13 +68,8 @@ export function OperatorShell({
                                 <p className="truncate text-xs text-muted-foreground">Operador</p>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                onClick={() => setTheme(esOscuro ? "light" : "dark")}
-                                onSelect={(e) => e.preventDefault()}
-                            >
-                                {esOscuro ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-                                {esOscuro ? "Modo claro" : "Modo oscuro"}
-                            </DropdownMenuItem>
+                            <ThemeMenuItems />
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => signOut()}>
                                 <LogOut className="mr-2 h-4 w-4" />
                                 Cerrar sesión

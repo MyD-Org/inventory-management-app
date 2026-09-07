@@ -12,19 +12,16 @@ import { useEffect, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { signOut } from "next-auth/react"
-import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
-import { ArrowLeftRight, LogOut, Monitor, MoonStar, MoreVertical, Plus, Settings, SlidersHorizontal, Sun } from "lucide-react"
+import { ArrowLeftRight, LogOut, MoreVertical, Plus, Settings, SlidersHorizontal } from "lucide-react"
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ThemeMenuItems } from "@/components/theme-menu-items"
 
 export function OrdersShell({
     user,
@@ -35,9 +32,6 @@ export function OrdersShell({
 }) {
     const router = useRouter()
     const isAdmin = user?.role === "admin"
-    // El submenú se monta recién al abrirlo, ya en el cliente: para entonces
-    // next-themes tiene el tema resuelto y no hay desajuste con el server.
-    const { theme, setTheme } = useTheme()
     // "n" abre el alta desde cualquier pantalla del módulo, como en Linear.
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
@@ -112,26 +106,8 @@ export function OrdersShell({
 
                                 <DropdownMenuSeparator />
 
-                                {/* Las tres opciones van derecho en el menú, sin submenú:
-                                    en una ventana angosta el submenú no tiene lugar para
-                                    abrirse al costado y queda inservible. */}
-                                <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-                                    Apariencia
-                                </DropdownMenuLabel>
-                                <DropdownMenuRadioGroup value={theme ?? "system"} onValueChange={setTheme}>
-                                    <DropdownMenuRadioItem value="light">
-                                        <Sun className="h-4 w-4" />
-                                        Claro
-                                    </DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="dark">
-                                        <MoonStar className="h-4 w-4" />
-                                        Oscuro
-                                    </DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="system">
-                                        <Monitor className="h-4 w-4" />
-                                        El del sistema
-                                    </DropdownMenuRadioItem>
-                                </DropdownMenuRadioGroup>
+                                <ThemeMenuItems />
+
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
                                     <LogOut className="mr-2 h-4 w-4" />
