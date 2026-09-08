@@ -18,6 +18,25 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
 
+  // La URL vieja de Vercel manda a la del dominio propio. El match es por host
+  // EXACTO: los deploys de preview tienen otro hostname
+  // (v0-inventoryapp-git-<rama>-....vercel.app) y siguen abriéndose normal, que
+  // es lo que hace falta para revisar un PR antes de mergearlo.
+  //
+  // 307 y no 308 a propósito: un permanente se queda cacheado en el navegador de
+  // cada uno y, si algún día hay que volver atrás —el dominio se cae, se muda—,
+  // no hay forma de deshacerlo del lado nuestro.
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "v0-inventoryapp.vercel.app" }],
+        destination: "https://app.tevro.com.ar/:path*",
+        permanent: false,
+      },
+    ]
+  },
+
   // Proxy same-origin hacia ai-api (evita CORS): el widget usa baseUrl '/ai-api'.
   async rewrites() {
     const aiApi = process.env.AI_API_BASE_URL
