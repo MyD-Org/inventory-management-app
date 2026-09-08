@@ -26,7 +26,16 @@ export const aiWidgetFlag = flag<boolean>({
   description: "Asistente IA (chat drawer) montado globalmente para admins",
 })
 
-export type FlagKey = "ai_dashboards" | "ai_widget"
+// Gastos operativos del admin. Nace apagado: la sección ya está hecha, pero se
+// muestra recién cuando se decida abrirla, sin tener que revertir el código.
+export const gastosFlag = flag<boolean>({
+  key: "gastos",
+  adapter: vercelAdapter(),
+  defaultValue: false,
+  description: "Sección de Gastos operativos en el menú de Gestión",
+})
+
+export type FlagKey = "ai_dashboards" | "ai_widget" | "gastos"
 
 /**
  * Mapa de flags conocidos, para pasar a componentes cliente (ej. AppShell).
@@ -40,12 +49,16 @@ export async function getFlags(): Promise<Record<FlagKey, boolean>> {
   // escondiendo los ítems de nav gateados. Con AI_FLAGS_LOCAL=true en .env.local se
   // fuerzan todos a true SOLO en esa máquina (no afecta Preview/Production).
   if (process.env.AI_FLAGS_LOCAL === "true") {
-    return { ai_dashboards: true, ai_widget: true }
+    return { ai_dashboards: true, ai_widget: true, gastos: true }
   }
   try {
-    const [ai_dashboards, ai_widget] = await Promise.all([aiDashboardsFlag(), aiWidgetFlag()])
-    return { ai_dashboards, ai_widget }
+    const [ai_dashboards, ai_widget, gastos] = await Promise.all([
+      aiDashboardsFlag(),
+      aiWidgetFlag(),
+      gastosFlag(),
+    ])
+    return { ai_dashboards, ai_widget, gastos }
   } catch {
-    return { ai_dashboards: false, ai_widget: false }
+    return { ai_dashboards: false, ai_widget: false, gastos: false }
   }
 }

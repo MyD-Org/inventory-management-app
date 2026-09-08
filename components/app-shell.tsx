@@ -99,7 +99,7 @@ const sections: NavSection[] = [
       { label: "Familias de Materiales", href: "/materials/familias", icon: Layers, adminOnly: true },
       { label: "Fichas de producto", href: "/fichas", icon: ClipboardList, activePrefixes: ["/fichas/"], adminOnly: true },
       { label: "Mano de Obra", href: "/settings/recursos", icon: HardHat, adminOnly: true },
-      { label: "Gastos", href: "/gastos", icon: Wallet, adminOnly: true },
+      { label: "Gastos", href: "/gastos", icon: Wallet, adminOnly: true, flag: "gastos" },
       // Presupuestos oculto temporalmente (del menú y de la IA). Para reactivar, descomentar
       // esta línea y las tools/prompt de presupuestos en components/ai-assistant.tsx.
       // { label: "Presupuestos", href: "/presupuestos", icon: FileSpreadsheet, activePrefixes: ["/presupuestos/"], adminOnly: true },
