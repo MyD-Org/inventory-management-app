@@ -61,8 +61,10 @@ export const viewport: Viewport = {
 import { Toaster } from "@/components/ui/sonner"
 import { AiAssistant } from "@/components/ai-assistant"
 import { RegisterSW } from "@/components/register-sw"
+import { cookies } from "next/headers"
 import { auth } from "@/auth"
 import { getFlags } from "@/lib/feature-flags"
+import { SIMPLE_VIEW_COOKIE } from "@/lib/view-mode"
 
 export default async function RootLayout({
   children,
@@ -73,7 +75,10 @@ export default async function RootLayout({
   // (no aparece en /login ni para usuarios sin rol admin) y detrás del flag "ai-widget".
   // Uso getFlags() (no aiWidgetFlag() directo) para pasar por su try/catch de seguridad.
   const [session, flags] = await Promise.all([auth(), getFlags()])
-  const isAdmin = session?.user?.role === "admin"
+  // Tampoco en la vista simple: esa es la pantalla del operario, y la burbuja
+  // flotante tapa el botón de la pantalla abajo a la derecha.
+  const vistaSimple = cookies().get(SIMPLE_VIEW_COOKIE)?.value === "1"
+  const isAdmin = session?.user?.role === "admin" && !vistaSimple
   const aiWidgetEnabled = flags.ai_widget
 
   return (
