@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { OperatorStockActions } from "@/components/operator-stock-actions"
-import { OperatorWeekMovements } from "@/components/operator-week-movements"
+import { OperatorRecentMovements } from "@/components/operator-recent-movements"
 import { StatsCards } from "@/components/stats-cards"
 
 import { LowStockAlerts } from "@/components/low-stock-alerts"
@@ -34,7 +34,7 @@ export default async function DashboardPage() {
   if (!session?.user) redirect("/login")
 
   // El operador tiene su propio inicio: los dos botones de stock (que abren el
-  // modal) y los movimientos de la semana. Nada de stats, resumen del mes ni
+  // modal) y los últimos movimientos. Nada de stats, resumen del mes ni
   // alertas.
   if (session.user.role !== "admin") {
     const materials = await getMaterials()
@@ -51,7 +51,7 @@ export default async function DashboardPage() {
           <OperatorStockActions materials={materials} />
 
           <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
-            <OperatorWeekMovements userName={userName} />
+            <OperatorRecentMovements userName={userName} />
           </Suspense>
         </main>
       </div>
