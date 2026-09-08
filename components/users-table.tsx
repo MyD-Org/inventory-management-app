@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Trash2, Loader2, KeyRound, Copy, Check } from "lucide-react"
-import { createUser, deleteUser, resetUserPassword } from "@/lib/actions"
+import { createUser, deleteUser, resetUserPassword, updateUserRole } from "@/lib/actions"
+import { ROLES, roleLabel } from "@/lib/roles"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { toast } from "sonner"
 
@@ -49,6 +50,18 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
     const [resetting, setResetting] = useState(false)
     const [temporal, setTemporal] = useState<{ email: string; password: string } | null>(null)
     const [copiada, setCopiada] = useState(false)
+    const [cambiandoRol, setCambiandoRol] = useState<number | null>(null)
+
+    const cambiarRol = async (id: number, role: string) => {
+        setCambiandoRol(id)
+        const result = await updateUserRole(id, role)
+        setCambiandoRol(null)
+        if (result.error) {
+            toast.error(result.error)
+            return
+        }
+        toast.success(`Ahora es ${roleLabel(role)}`)
+    }
 
     const doReset = async () => {
         if (!pendingReset) return
@@ -128,8 +141,17 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="operator">Operador</SelectItem>
-                                        <SelectItem value="admin">Administrador</SelectItem>
+                                        {/* Qué puede hacer cada rol va escrito acá abajo:
+                                            "Solo pedidos" no se entiende por el nombre y
+                                            elegir mal es dar de más o de menos. */}
+                                        {ROLES.map((r) => (
+                                            <SelectItem key={r.value} value={r.value}>
+                                                <span className="block">{r.label}</span>
+                                                <span className="block text-xs text-muted-foreground">
+                                                    {r.hint}
+                                                </span>
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -156,11 +178,29 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
                             <TableRow key={user.id}>
                                 <TableCell className="font-medium">{user.name}</TableCell>
                                 <TableCell>{user.email}</TableCell>
+                                {/* El rol se edita acá mismo: pasar a alguien a "Solo
+                                    pedidos" no puede obligar a borrar la cuenta y
+                                    volver a crearla. */}
                                 <TableCell>
-                                    <span className={`px-2 py-1 rounded-full text-xs ${user.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-                                        }`}>
-                                        {user.role === 'admin' ? 'Administrador' : 'Operador'}
-                                    </span>
+                                    <Select
+                                        value={user.role}
+                                        disabled={cambiandoRol === user.id}
+                                        onValueChange={(v) => cambiarRol(user.id, v)}
+                                    >
+                                        <SelectTrigger className="h-8 w-[170px] text-sm">
+                                            <SelectValue>{roleLabel(user.role)}</SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {ROLES.map((r) => (
+                                                <SelectItem key={r.value} value={r.value}>
+                                                    <span className="block">{r.label}</span>
+                                                    <span className="block text-xs text-muted-foreground">
+                                                        {r.hint}
+                                                    </span>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </TableCell>
                                 <TableCell>{fecha(user.created_at)}</TableCell>
                                 <TableCell className="text-right">
