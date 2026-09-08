@@ -3,7 +3,8 @@
 import type { ReactNode } from "react"
 import { signOut } from "next-auth/react"
 import Link from "next/link"
-import { ClipboardList, LogOut, Package } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { ClipboardList, LayoutGrid, LogOut, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
@@ -14,6 +15,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ThemeMenuItems } from "@/components/theme-menu-items"
+import { setSimpleView } from "@/lib/view-mode"
 
 // Shell del OPERADOR: sin sidebar. Su trabajo son dos acciones (cargar y
 // descontar stock) y los dos viven en un modal, así que un menú de navegación
@@ -28,6 +30,10 @@ export function OperatorShell({
     children: ReactNode
 }) {
     const initials = user?.name?.slice(0, 2).toUpperCase() || "US"
+    const router = useRouter()
+    // Un admin acá adentro está en "vista simple" y necesita la puerta de
+    // vuelta: sin sidebar, este menú es el único lugar donde puede estar.
+    const isAdmin = user?.role === "admin"
 
     return (
         <div className="min-h-screen bg-background">
@@ -72,9 +78,25 @@ export function OperatorShell({
                         <DropdownMenuContent align="end" className="w-56">
                             <DropdownMenuLabel className="font-normal">
                                 <p className="truncate text-sm font-medium">{user.name}</p>
-                                <p className="truncate text-xs text-muted-foreground">Operador</p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                    {isAdmin ? "Admin · vista simple" : "Operador"}
+                                </p>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
+                            {isAdmin && (
+                                <>
+                                    <DropdownMenuItem
+                                        onClick={() => {
+                                            setSimpleView(false)
+                                            router.refresh()
+                                        }}
+                                    >
+                                        <LayoutGrid className="mr-2 h-4 w-4" />
+                                        Vista completa
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                </>
+                            )}
                             <ThemeMenuItems />
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => signOut()}>

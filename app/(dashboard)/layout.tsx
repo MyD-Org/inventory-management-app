@@ -4,6 +4,7 @@ import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { getFlags } from "@/lib/feature-flags"
 import { AppShell, SIDEBAR_COOKIE } from "@/components/app-shell"
+import { SIMPLE_VIEW_COOKIE } from "@/lib/view-mode"
 import { OperatorShell } from "@/components/operator-shell"
 
 async function getMaterials() {
@@ -32,7 +33,10 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   // El operador no lleva sidebar: su única pantalla es el inicio y las dos
   // acciones de stock son un modal. Ver components/operator-shell.tsx.
-  if (session?.user && session.user.role !== "admin") {
+  // El admin puede pedir esa misma pantalla desde el menú de su avatar
+  // ("Vista simple"): es solo un cambio de shell, no de permisos.
+  const vistaSimple = cookies().get(SIMPLE_VIEW_COOKIE)?.value === "1"
+  if (session?.user && (session.user.role !== "admin" || vistaSimple)) {
     return <OperatorShell user={session.user}>{children}</OperatorShell>
   }
 

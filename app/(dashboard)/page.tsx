@@ -1,6 +1,8 @@
 import { Suspense } from "react"
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
+import { SIMPLE_VIEW_COOKIE } from "@/lib/view-mode"
 import { sql } from "@/lib/database"
 import { OperatorStockActions } from "@/components/operator-stock-actions"
 import { OperatorWeekMovements } from "@/components/operator-week-movements"
@@ -36,7 +38,8 @@ export default async function DashboardPage() {
   // El operador tiene su propio inicio: los dos botones de stock (que abren el
   // modal) y los movimientos de la semana. Nada de stats, resumen del mes ni
   // alertas.
-  if (session.user.role !== "admin") {
+  // Mismo criterio que el layout: el admin en "vista simple" ve este inicio.
+  if (session.user.role !== "admin" || cookies().get(SIMPLE_VIEW_COOKIE)?.value === "1") {
     const materials = await getMaterials()
     // Mismo criterio que la API de movimientos: el nombre es la identidad que
     // queda grabada en stock_movements.user_name.
