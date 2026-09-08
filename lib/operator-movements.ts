@@ -16,7 +16,11 @@ export function notaDeCorreccion(movementId: number) {
     return `${PREFIJO_CORRECCION}${movementId}`
 }
 
-export interface MovimientoDeLaSemana {
+// Cuántos movimientos se traen por lista. Suficiente para cubrir varios días de
+// trabajo sin volver la pantalla un historial.
+export const LIMITE_MOVIMIENTOS = 20
+
+export interface MovimientoReciente {
     id: number
     movement_type: string
     quantity: string
@@ -26,9 +30,9 @@ export interface MovimientoDeLaSemana {
     // Lo hizo el usuario que está mirando. Se calcula en SQL para no mandar al
     // cliente la comparación de nombres.
     mine: boolean
-    // Se puede deshacer: es suyo, es de HOY (no de toda la semana), no viene de
-    // un pedido, no es una corrección y todavía nadie lo corrigió. Las mismas
-    // condiciones que valida deshacerMovimiento().
+    // Se puede revertir: es suyo, es de HOY (aunque la lista muestre días
+    // anteriores), no viene de un pedido, no es una corrección y todavía nadie
+    // lo corrigió. Las mismas condiciones que valida deshacerMovimiento().
     undoable: boolean
 }
 

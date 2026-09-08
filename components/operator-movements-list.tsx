@@ -1,10 +1,10 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { TrendingDown, TrendingUp } from "lucide-react"
 import { UndoMovementButton } from "@/components/undo-movement-button"
 import { formatStock } from "@/lib/format"
-import { TZ, type MovimientoDeLaSemana } from "@/lib/operator-movements"  // módulo puro: no arrastra lib/database al cliente
+import { TZ, type MovimientoReciente } from "@/lib/operator-movements"  // módulo puro: no arrastra lib/database al cliente
 
 const FILTROS = [
     { id: "propios", label: "Propios" },
@@ -14,10 +14,10 @@ const FILTROS = [
 type Filtro = (typeof FILTROS)[number]["id"]
 
 function formatearFecha(iso: string) {
-    // Día abreviado + hora en 24 h: la semana entra en una sola línea corta
-    // ("mié 14:20") sin repetir el mes, que en siete días no aporta nada.
+    // Día y mes + hora en 24 h: la lista ya no está acotada a la semana, así
+    // que el día de la semana solo no alcanza para ubicar el movimiento.
     const d = new Date(iso)
-    const dia = d.toLocaleDateString("es-AR", { weekday: "short", timeZone: TZ })
+    const dia = d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", timeZone: TZ })
     const hora = d.toLocaleTimeString("es-AR", {
         hour: "2-digit",
         minute: "2-digit",
@@ -27,21 +27,24 @@ function formatearFecha(iso: string) {
     return `${dia} ${hora}`
 }
 
-export function OperatorMovementsList({ movimientos }: { movimientos: MovimientoDeLaSemana[] }) {
+export function OperatorMovementsList({
+    propios,
+    todos,
+}: {
+    propios: MovimientoReciente[]
+    todos: MovimientoReciente[]
+}) {
     // Arranca en "Propios": lo primero que se busca acá es el control del
     // trabajo propio. Los de los demás quedan a un clic para el otro caso real,
     // que es "falta stock, ¿quién lo sacó?".
     const [filtro, setFiltro] = useState<Filtro>("propios")
 
-    const visibles = useMemo(
-        () => (filtro === "propios" ? movimientos.filter((m) => m.mine) : movimientos),
-        [filtro, movimientos],
-    )
+    const visibles = filtro === "propios" ? propios : todos
 
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="font-display text-lg font-semibold">Movimientos de la semana</h2>
+                <h2 className="font-display text-lg font-semibold">Últimos movimientos</h2>
 
                 <div className="inline-flex rounded-lg border p-0.5" role="group" aria-label="Filtrar movimientos">
                     {FILTROS.map((f) => (
@@ -65,8 +68,8 @@ export function OperatorMovementsList({ movimientos }: { movimientos: Movimiento
             {visibles.length === 0 ? (
                 <p className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
                     {filtro === "propios"
-                        ? "No hay movimientos propios registrados esta semana."
-                        : "No hay movimientos registrados esta semana."}
+                        ? "Todavía no hay movimientos propios registrados."
+                        : "Todavía no hay movimientos registrados."}
                 </p>
             ) : (
                 <div className="space-y-2">
