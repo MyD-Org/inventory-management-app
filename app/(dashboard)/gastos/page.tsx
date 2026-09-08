@@ -1,7 +1,8 @@
 import Link from "next/link"
-import { redirect } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
+import { getFlags } from "@/lib/feature-flags"
 import { formatArs } from "@/lib/format"
 import { totalesPorCategoria, type CategoriaGasto, type GastoRow } from "@/lib/gastos"
 import { GastosClient } from "@/components/gastos-client"
@@ -37,6 +38,12 @@ export default async function GastosPage({
     const session = await auth()
     if (!session?.user) redirect("/login")
     if (session.user.role !== "admin") redirect("/")
+
+    // Con el flag apagado la sección no existe: sacarla del menú no alcanza,
+    // porque la URL sigue entrando a mano o desde un favorito. 404 y no
+    // redirect, para que no delate que la pantalla está ahí esperando.
+    const { gastos } = await getFlags()
+    if (!gastos) notFound()
 
     const rawMes = typeof searchParams.mes === "string" ? searchParams.mes : ""
     const mes = /^\d{4}-\d{2}$/.test(rawMes) ? rawMes : mesActual()

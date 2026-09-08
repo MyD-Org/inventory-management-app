@@ -13,7 +13,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
-import { ArrowLeftRight, LogOut, MoreVertical, Plus, Settings, SlidersHorizontal } from "lucide-react"
+import { ArrowLeftRight, LogOut, MoreVertical, Package, Plus, Settings, SlidersHorizontal } from "lucide-react"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -56,6 +56,21 @@ export function OrdersShell({
                     </Link>
 
                     <div className="flex items-center gap-1 shrink-0">
+                        {/* Para el operador, pedidos es la pantalla donde cae
+                            después del login: si la vuelta al inventario queda
+                            escondida en el menú de los tres puntos, no la
+                            encuentra. Fijo y con la palabra entera, igual que
+                            el botón de Pedidos del otro lado. El admin llega
+                            desde el sidebar y no lo necesita en la barra. */}
+                        {!isAdmin && (
+                            <Link href="/">
+                                <Button variant="outline" size="sm" className="mr-1">
+                                    <Package className="mr-2 h-4 w-4" />
+                                    <span>Inventario</span>
+                                </Button>
+                            </Link>
+                        )}
+
                         <Link href="/pedidos/nuevo">
                             {/* El atajo se anuncia en el botón: si no, nadie lo descubre.
                                 En pantalla angosta el botón es solo el ícono y la tecla

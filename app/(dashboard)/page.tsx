@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { OperatorStockActions } from "@/components/operator-stock-actions"
+import { OperatorTodayMovements } from "@/components/operator-today-movements"
 import { StatsCards } from "@/components/stats-cards"
 
 import { LowStockAlerts } from "@/components/low-stock-alerts"
@@ -33,19 +34,23 @@ export default async function DashboardPage() {
   if (!session?.user) redirect("/login")
 
   // El operador tiene su propio inicio: los dos botones de stock (que abren el
-  // modal) y los últimos movimientos. Nada de stats, resumen del mes ni alertas.
+  // modal) y lo que hizo él hoy. Nada de stats, resumen del mes ni alertas.
   if (session.user.role !== "admin") {
     const materials = await getMaterials()
+    // Mismo criterio que la API de movimientos: el nombre es la identidad que
+    // queda grabada en stock_movements.user_name.
+    const userName = session.user.name || session.user.email || "Desconocido"
 
     return (
       <div className="bg-background">
-        {/* Mismo ancho que el dashboard del admin: acciones en una barra arriba,
-            movimientos abajo ocupando todo el ancho. */}
-        <main className="container mx-auto px-4 py-6 space-y-6">
+        {/* Una columna angosta y centrada, no el contenedor del admin: con el
+            ancho completo, en escritorio los dos botones quedaban perdidos en
+            una pantalla vacía. */}
+        <main className="mx-auto w-full max-w-2xl px-4 py-6 space-y-6">
           <OperatorStockActions materials={materials} />
 
-          <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-lg" />}>
-            <RecentMovements showViewAll={false} linkToDetail={false} />
+          <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
+            <OperatorTodayMovements userName={userName} />
           </Suspense>
         </main>
       </div>

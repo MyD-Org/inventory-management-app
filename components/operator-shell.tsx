@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react"
 import { signOut } from "next-auth/react"
-import { ClipboardList, ExternalLink, LogOut, Package } from "lucide-react"
+import Link from "next/link"
+import { ClipboardList, LogOut, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
@@ -33,20 +34,26 @@ export function OperatorShell({
             <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-card px-4">
                 <div className="flex items-center gap-2">
                     <Package className="h-5 w-5 shrink-0 text-muted-foreground" />
-                    <p className="text-sm font-semibold leading-tight">Sistema de Inventario</p>
+                    {/* "Inventario" a secas: "Sistema de Inventario" ocupaba
+                        media barra en el teléfono y empujaba al botón de
+                        Pedidos a quedarse sin su palabra. */}
+                    <p className="font-display text-base font-semibold leading-tight">Inventario</p>
                 </div>
 
                 <div className="flex-1" />
 
-                {/* Mismo criterio que la barra del admin: pedidos es otro módulo
-                    con su propio layout y se abre en una pestaña aparte. */}
-                <a href="/pedidos" target="_blank" rel="noopener noreferrer">
+                {/* En la MISMA pestaña, al revés que en la barra del admin: para
+                    el operador pedidos ya no es "el otro módulo que se abre
+                    aparte", es donde arranca después del login. Los dos son
+                    pares y se cruza con un botón de cada lado (el de vuelta
+                    vive en OrdersShell). Con target="_blank" cada cruce le
+                    dejaba una pestaña más abierta. */}
+                <Link href="/pedidos">
                     <Button variant="outline" size="sm">
-                        <ClipboardList className="h-4 w-4 sm:mr-2" />
-                        <span className="hidden sm:inline">Pedidos</span>
-                        <ExternalLink className="ml-1.5 h-3 w-3 text-muted-foreground" />
+                        <ClipboardList className="mr-2 h-4 w-4" />
+                        <span>Pedidos</span>
                     </Button>
-                </a>
+                </Link>
 
                 {/* Nombre y cerrar sesión viven DENTRO del avatar: sueltos en la
                     barra, en pantalla angosta la hacían saltar a dos líneas. */}
