@@ -22,13 +22,14 @@ export function OperatorStockActions({ materials }: { materials: Material[] }) {
 
     return (
         <>
-            {/* Apilados y a todo el ancho, en teléfono y en escritorio: son lo
-                único que hace el operador, así que son la pantalla. Uno arriba
-                del otro (y no en fila) porque arriba/abajo se distingue mejor
-                que izquierda/derecha cuando se toca apurado, y errarle es caro.
-                El de quitar va en destructive —el único color del sistema— por
-                lo mismo: es el que puede hacer daño. */}
-            <div className="flex flex-col gap-3">
+            {/* Son lo único que hace el operador, así que ocupan el ancho
+                completo. En el teléfono van uno arriba del otro: no entran dos
+                al lado y arriba/abajo se distingue mejor cuando se toca
+                apurado. Desde sm, en fila y por mitades, que en un monitor dos
+                barras de punta a punta no se tocan mejor, solo se ven raras.
+                El de quitar va en destructive —el único color del sistema—
+                porque es el que puede hacer daño. */}
+            <div className="grid gap-3 sm:grid-cols-2">
                 <button
                     type="button"
                     onClick={() => setDialog("entrada")}
