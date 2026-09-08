@@ -27,6 +27,7 @@ import {
     type OrderPayload,
 } from '@/lib/orders';
 import { isFixedSpecField } from '@/lib/order-statuses';
+import { canConsumeStock } from '@/lib/roles';
 
 export async function createOrderManual(payload: OrderPayload) {
     const session = await auth();
@@ -665,6 +666,11 @@ export async function consumeOrderMaterials(
 ) {
     const session = await auth();
     if (!session?.user) return { error: 'No autenticado' };
+    // El rol "Solo pedidos" mira, no retira. Va acá y no solo en el botón: la
+    // action se puede llamar sin pasar por la pantalla.
+    if (!canConsumeStock(session.user.role)) {
+        return { error: 'Tu usuario no puede descontar materiales del inventario' };
+    }
 
     const aDescontar = items.filter((i) => Number.isFinite(i.quantity) && i.quantity > 0);
     if (aDescontar.length === 0) return { error: 'No hay nada para descontar' };
@@ -818,16 +824,21 @@ export async function searchInventoryMaterials(q: string) {
 
     try {
         const rows = await sql`
-            SELECT m.id, m.name, COALESCE(i.available_stock, 0) AS available
+            SELECT m.id, m.name, m.barcode, COALESCE(i.available_stock, 0) AS available
             FROM materials m
             LEFT JOIN inventory i ON i.material_id = m.id
             WHERE m.name ILIKE ${`%${term}%`} OR m.barcode ILIKE ${`%${term}%`}
-            ORDER BY m.name ASC
+            ORDER BY
+                -- El código exacto primero: es lo que devuelve la cámara, y si
+                -- queda sepultado entre parecidos hay que buscarlo a ojo.
+                CASE WHEN m.barcode = ${term} THEN 0 ELSE 1 END,
+                m.name ASC
             LIMIT 8
         `;
         return (rows as any[]).map((r) => ({
             material_id: r.id as number,
             label: r.name as string,
+            barcode: (r.barcode as string | null) ?? '',
             available: Number(r.available),
         }));
     } catch (error) {
