@@ -7,6 +7,12 @@
 //
 // A diferencia del detalle, acá nada se guarda hasta apretar "Crear pedido":
 // no queremos pedidos a medio hacer ensuciando el tablero si alguien abandona.
+//
+// En pantalla angosta la tabla no va: con table-fixed, cada spec nueva le
+// roba ancho a las demás y en un teléfono terminan siendo columnas de dos
+// letras. De lg para abajo cada línea es una TARJETA con las specs una debajo
+// de la otra y su etiqueta al lado, que es lo mismo que muestra la tabla
+// puesto en vertical.
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
@@ -41,6 +47,67 @@ function Prop({ label, children }: { label: string; children: React.ReactNode })
     )
 }
 
+// El control de UNA spec, sea celda de la tabla o fila de la tarjeta. Estaba
+// escrito cuatro veces (fila x borrador, y ahora tabla x tarjeta): la lógica de
+// qué pinta cada kind vive acá y sola.
+function SpecControl({
+    field,
+    value,
+    onChange,
+}: {
+    field: SpecField
+    value: string | undefined
+    onChange: (value: string | null) => void
+}) {
+    if (field.kind === "boolean") {
+        return (
+            <label className="flex h-9 items-center cursor-pointer select-none">
+                <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-primary"
+                    checked={value === "con"}
+                    onChange={(e) => onChange(e.target.checked ? "con" : null)}
+                />
+            </label>
+        )
+    }
+
+    if (field.kind === "text") {
+        return (
+            <Input
+                value={value ?? ""}
+                placeholder="—"
+                className="h-9 w-full px-2 text-base"
+                onChange={(e) => onChange(e.target.value || null)}
+            />
+        )
+    }
+
+    return (
+        <Select value={value ?? SIN} onValueChange={(v) => onChange(v === SIN ? null : v)}>
+            <SelectTrigger className="h-9 w-full px-2 text-base">
+                <span className="truncate">
+                    {value ? (
+                        field.labels[value] ?? value
+                    ) : (
+                        <span className="text-muted-foreground/60">—</span>
+                    )}
+                </span>
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value={SIN} className="text-muted-foreground">
+                    Sin especificar
+                </SelectItem>
+                {field.options.map((o) => (
+                    <SelectItem key={o} value={o}>
+                        {field.labels[o] ?? o}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    )
+}
+
 export function NewOrderPage({
     specs,
     products,
@@ -70,7 +137,6 @@ export function NewOrderPage({
     // romperlo; repartiendo el resto, entra siempre.
     const anchoCol = (kind: string) => (kind === "boolean" ? "w-[80px]" : "")
 
-
     function setSpec(idx: number, key: string, value: string | null) {
         setLines((ls) =>
             ls.map((l, i) => {
@@ -81,6 +147,37 @@ export function NewOrderPage({
                 return { ...l, specs: next }
             }),
         )
+    }
+
+    function setBorradorSpec(key: string, value: string | null) {
+        setBorrador((b) => {
+            const next = { ...b.specs }
+            if (value === null || value === SIN || value === "") delete next[key]
+            else next[key] = value
+            return { ...b, specs: next }
+        })
+    }
+
+    function setCantidad(idx: number, value: number) {
+        setLines((ls) => ls.map((l, i) => (i === idx ? { ...l, quantity: value } : l)))
+    }
+
+    function quitar(idx: number) {
+        setLines((ls) => ls.filter((_, i) => i !== idx))
+    }
+
+    // Al elegir el producto la fila se suma sola: sin producto no hay línea y
+    // con producto ya es una, así que confirmarla a mano no decide nada.
+    //
+    // Además cierra un agujero: crear() manda `lines`, y una fila a medio cargar
+    // en el borrador se perdía sin aviso al apretar "Crear pedido".
+    //
+    // La cantidad y las specs tipeadas antes de elegir el producto se llevan
+    // con la fila.
+    function confirmarBorrador(product: string) {
+        setLines((ls) => [...ls, { ...borrador, product }])
+        setBorrador({ product: "", quantity: 1, specs: {} })
+        setAgregando(false)
     }
 
     async function crear() {
@@ -119,8 +216,34 @@ export function NewOrderPage({
         router.push(`/pedidos/${result.id}`)
     }
 
+    // Las specs de una línea, en vertical y con su etiqueta al lado. Es lo que
+    // reemplaza a las columnas de la tabla en la tarjeta.
+    function specsEnVertical(
+        valores: Record<string, string>,
+        onChange: (key: string, value: string | null) => void,
+    ) {
+        if (columnas.length === 0) return null
+        return (
+            <div className="space-y-1.5 border-t pt-2">
+                {columnas.map(([key, field]) => (
+                    <div key={key} className="grid grid-cols-[minmax(0,7rem)_1fr] items-center gap-2">
+                        {/* Sin truncate: en la tabla la etiqueta se corta porque
+                            el ancho es de la columna, pero acá hay lugar para
+                            que baje de línea y "Otras indicaciones" se lea entera. */}
+                        <span className="text-sm leading-tight text-muted-foreground">{field.label}</span>
+                        <SpecControl
+                            field={field}
+                            value={valores[key]}
+                            onChange={(v) => onChange(key, v)}
+                        />
+                    </div>
+                ))}
+            </div>
+        )
+    }
+
     return (
-        <div className="w-full px-8 py-6">
+        <div className="w-full px-4 py-6 sm:px-8">
             <div className="flex items-center gap-1.5 text-base text-muted-foreground mb-5">
                 <Link href="/pedidos" className="hover:text-foreground">
                     Pedidos
@@ -131,10 +254,12 @@ export function NewOrderPage({
 
             <div className="grid gap-8 lg:grid-cols-[1fr_250px] items-start">
                 {/* ---------- Qué armar ---------- */}
-                <div className="min-w-0 space-y-7">
+                {/* En el teléfono va DESPUÉS del cliente (order-2): el pedido se
+                    completa como se cuenta —para quién y recién después qué—, y
+                    en escritorio la columna de la derecha lo deja igual. */}
+                <div className="order-2 min-w-0 space-y-7 lg:order-none">
                     <section>
-
-                        <div className="border rounded-lg">
+                        <div className="hidden rounded-lg border lg:block">
                             <table className="w-full table-fixed">
                                 <thead>
                                     <tr className="text-left">
@@ -168,15 +293,7 @@ export function NewOrderPage({
                                                     min={1}
                                                     value={line.quantity}
                                                     className="h-9 w-full text-base px-2"
-                                                    onChange={(e) =>
-                                                        setLines((ls) =>
-                                                            ls.map((l, i) =>
-                                                                i === idx
-                                                                    ? { ...l, quantity: Number(e.target.value) }
-                                                                    : l,
-                                                            ),
-                                                        )
-                                                    }
+                                                    onChange={(e) => setCantidad(idx, Number(e.target.value))}
                                                 />
                                             </td>
                                             <td className="px-3 py-2 text-base font-medium">
@@ -187,56 +304,11 @@ export function NewOrderPage({
 
                                             {columnas.map(([key, field]) => (
                                                 <td key={key} className="px-3 py-2">
-                                                    {field.kind === "boolean" ? (
-                                                        <label className="flex items-center h-9 cursor-pointer select-none">
-                                                            <input
-                                                                type="checkbox"
-                                                                className="h-4 w-4 accent-primary"
-                                                                checked={line.specs[key] === "con"}
-                                                                onChange={(e) =>
-                                                                    setSpec(idx, key, e.target.checked ? "con" : null)
-                                                                }
-                                                            />
-                                                        </label>
-                                                    ) : field.kind === "text" ? (
-                                                        <Input
-                                                            value={line.specs[key] ?? ""}
-                                                            placeholder="—"
-                                                            className="h-9 text-base w-full px-2"
-                                                            onChange={(e) => setSpec(idx, key, e.target.value)}
-                                                        />
-                                                    ) : (
-                                                        <Select
-                                                            value={line.specs[key] ?? SIN}
-                                                            onValueChange={(v) => setSpec(idx, key, v)}
-                                                        >
-                                                            <SelectTrigger className="h-9 text-base w-full px-2">
-                                                                <span className="truncate">
-                                                                    {line.specs[key] ? (
-                                                                        field.labels[line.specs[key]] ??
-                                                                        line.specs[key]
-                                                                    ) : (
-                                                                        <span className="text-muted-foreground/60">
-                                                                            —
-                                                                        </span>
-                                                                    )}
-                                                                </span>
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem
-                                                                    value={SIN}
-                                                                    className="text-muted-foreground"
-                                                                >
-                                                                    Sin especificar
-                                                                </SelectItem>
-                                                                {field.options.map((o) => (
-                                                                    <SelectItem key={o} value={o}>
-                                                                        {field.labels[o] ?? o}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    )}
+                                                    <SpecControl
+                                                        field={field}
+                                                        value={line.specs[key]}
+                                                        onChange={(v) => setSpec(idx, key, v)}
+                                                    />
                                                 </td>
                                             ))}
 
@@ -246,9 +318,7 @@ export function NewOrderPage({
                                                     size="icon"
                                                     className="h-9 w-8 text-muted-foreground hover:text-destructive"
                                                     title="Quitar"
-                                                    onClick={() =>
-                                                        setLines((ls) => ls.filter((_, i) => i !== idx))
-                                                    }
+                                                    onClick={() => quitar(idx)}
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
                                                 </Button>
@@ -291,100 +361,18 @@ export function NewOrderPage({
                                                         onCancel={() =>
                                                             lines.length > 0 && setAgregando(false)
                                                         }
-                                                        onPick={(product) => {
-                                                            // La fila se suma sola al elegir el
-                                                            // producto: sin producto no hay línea y
-                                                            // con producto ya es una, así que
-                                                            // confirmarla a mano no decide nada.
-                                                            //
-                                                            // Además cerraba un agujero: crear()
-                                                            // manda `lines`, y una fila a medio
-                                                            // cargar en el borrador se perdía sin
-                                                            // aviso al apretar "Crear pedido".
-                                                            //
-                                                            // La cantidad y las specs que se hayan
-                                                            // tipeado antes de elegir el producto se
-                                                            // llevan con la fila.
-                                                            setLines((ls) => [...ls, { ...borrador, product }])
-                                                            setBorrador({ product: "", quantity: 1, specs: {} })
-                                                            setAgregando(false)
-                                                        }}
+                                                        onPick={confirmarBorrador}
                                                     />
                                                 )}
                                             </td>
 
                                             {columnas.map(([key, field]) => (
                                                 <td key={key} className="px-3 py-2">
-                                                    {field.kind === "boolean" ? (
-                                                        <label className="flex items-center h-9 cursor-pointer select-none">
-                                                            <input
-                                                                type="checkbox"
-                                                                className="h-4 w-4 accent-primary"
-                                                                checked={borrador.specs[key] === "con"}
-                                                                onChange={(e) =>
-                                                                    setBorrador((b) => {
-                                                                        const specs = { ...b.specs }
-                                                                        if (e.target.checked) specs[key] = "con"
-                                                                        else delete specs[key]
-                                                                        return { ...b, specs }
-                                                                    })
-                                                                }
-                                                            />
-                                                        </label>
-                                                    ) : field.kind === "text" ? (
-                                                        <Input
-                                                            value={borrador.specs[key] ?? ""}
-                                                            placeholder="—"
-                                                            className="h-9 text-base w-full px-2"
-                                                            onChange={(e) =>
-                                                                setBorrador((b) => {
-                                                                    const specs = { ...b.specs }
-                                                                    if (e.target.value)
-                                                                        specs[key] = e.target.value
-                                                                    else delete specs[key]
-                                                                    return { ...b, specs }
-                                                                })
-                                                            }
-                                                        />
-                                                    ) : (
-                                                        <Select
-                                                            value={borrador.specs[key] ?? SIN}
-                                                            onValueChange={(v) =>
-                                                                setBorrador((b) => {
-                                                                    const specs = { ...b.specs }
-                                                                    if (v === SIN) delete specs[key]
-                                                                    else specs[key] = v
-                                                                    return { ...b, specs }
-                                                                })
-                                                            }
-                                                        >
-                                                            <SelectTrigger className="h-9 text-base w-full px-2">
-                                                                <span className="truncate">
-                                                                    {borrador.specs[key] ? (
-                                                                        field.labels[borrador.specs[key]] ??
-                                                                        borrador.specs[key]
-                                                                    ) : (
-                                                                        <span className="text-muted-foreground/60">
-                                                                            —
-                                                                        </span>
-                                                                    )}
-                                                                </span>
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem
-                                                                    value={SIN}
-                                                                    className="text-muted-foreground"
-                                                                >
-                                                                    Sin especificar
-                                                                </SelectItem>
-                                                                {field.options.map((o) => (
-                                                                    <SelectItem key={o} value={o}>
-                                                                        {field.labels[o] ?? o}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    )}
+                                                    <SpecControl
+                                                        field={field}
+                                                        value={borrador.specs[key]}
+                                                        onChange={(v) => setBorradorSpec(key, v)}
+                                                    />
                                                 </td>
                                             ))}
 
@@ -406,6 +394,92 @@ export function NewOrderPage({
                             </table>
                         </div>
 
+                        {/* ---------- Lo mismo, en tarjetas, para el teléfono ---------- */}
+                        <div className="space-y-3 lg:hidden">
+                            {lines.map((line, idx) => (
+                                <div key={idx} className="space-y-2 rounded-lg border p-3">
+                                    <div className="flex items-start gap-2">
+                                        <p className="min-w-0 flex-1 break-words text-base font-medium">
+                                            {line.product}
+                                        </p>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                                            title="Quitar"
+                                            onClick={() => quitar(idx)}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+
+                                    <div className="grid grid-cols-[minmax(0,7rem)_1fr] items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">Cantidad</span>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            inputMode="numeric"
+                                            value={line.quantity}
+                                            className="h-9 w-24 px-2 text-base"
+                                            onChange={(e) => setCantidad(idx, Number(e.target.value))}
+                                        />
+                                    </div>
+
+                                    {specsEnVertical(line.specs, (key, v) => setSpec(idx, key, v))}
+                                </div>
+                            ))}
+
+                            {agregando && (
+                                <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                                    {borrador.product ? (
+                                        <button
+                                            type="button"
+                                            className="block w-full break-words text-left text-base font-medium hover:underline"
+                                            title="Cambiar producto"
+                                            onClick={() => setBorrador((b) => ({ ...b, product: "" }))}
+                                        >
+                                            {borrador.product}
+                                        </button>
+                                    ) : (
+                                        // Sin autoFocus en el teléfono: abrir el teclado solo
+                                        // tapa media pantalla antes de que se vea qué es esto.
+                                        <div className="flex">
+                                            <ProductPicker
+                                                products={products}
+                                                onCancel={() => lines.length > 0 && setAgregando(false)}
+                                                onPick={confirmarBorrador}
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-[minmax(0,7rem)_1fr] items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">Cantidad</span>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            inputMode="numeric"
+                                            value={borrador.quantity}
+                                            className="h-9 w-24 px-2 text-base"
+                                            onChange={(e) =>
+                                                setBorrador((b) => ({
+                                                    ...b,
+                                                    quantity: Number(e.target.value),
+                                                }))
+                                            }
+                                        />
+                                    </div>
+
+                                    {specsEnVertical(borrador.specs, setBorradorSpec)}
+                                </div>
+                            )}
+
+                            {lines.length === 0 && !agregando && (
+                                <div className="rounded-lg border px-3 py-6 text-center text-base text-muted-foreground">
+                                    Todavía no agregaste ningún producto.
+                                </div>
+                            )}
+                        </div>
+
                         {!agregando && (
                             <Button
                                 variant="ghost"
@@ -419,13 +493,16 @@ export function NewOrderPage({
                         )}
                     </section>
 
-                    <div className="flex items-center gap-2">
-                        <Link href="/pedidos">
-                            <Button variant="ghost" size="sm" disabled={saving}>
+                    {/* En el teléfono "Crear pedido" ocupa el ancho y va primero:
+                        es el botón que se busca, y con el pulgar en el borde
+                        derecho Cancelar quedaba justo debajo del dedo. */}
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+                        <Link href="/pedidos" className="sm:w-auto">
+                            <Button variant="ghost" size="sm" className="w-full sm:w-auto" disabled={saving}>
                                 Cancelar
                             </Button>
                         </Link>
-                        <Button size="sm" onClick={crear} disabled={saving}>
+                        <Button size="sm" className="w-full sm:w-auto" onClick={crear} disabled={saving}>
                             {saving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
                             Crear pedido
                         </Button>
@@ -433,7 +510,7 @@ export function NewOrderPage({
                 </div>
 
                 {/* ---------- Propiedades ---------- */}
-                <aside className="lg:border-l lg:pl-5 lg:sticky lg:top-4 space-y-3">
+                <aside className="order-1 space-y-3 lg:order-none lg:border-l lg:pl-5 lg:sticky lg:top-4">
                     <CustomerPicker value={customer} onChange={setCustomer} />
 
                     <Textarea
