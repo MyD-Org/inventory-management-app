@@ -141,6 +141,17 @@
 
   body {
     @apply bg-background text-foreground;
+    /* Se comporta como app, no como página web:
+       - touch-action: manipulation mata el zoom por doble toque (el que se
+         dispara solo cuando el operario toca dos botones seguidos rápido) sin
+         tocar el scroll;
+       - overscroll-behavior-y saca el rebote elástico al llegar al final de la
+         lista, que instalada se ve como si la app se despegara de la pantalla;
+       - el highlight gris del tap es de navegador; los botones ya tienen su
+         propio estado :active. */
+    touch-action: manipulation;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Barras de scroll finas y del color del borde, en vez de la barra gris
