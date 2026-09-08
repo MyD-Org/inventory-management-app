@@ -22,6 +22,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ThemeMenuItems } from "@/components/theme-menu-items"
+import { isOrdersOnly } from "@/lib/roles"
 
 export function OrdersShell({
     user,
@@ -32,6 +33,10 @@ export function OrdersShell({
 }) {
     const router = useRouter()
     const isAdmin = user?.role === "admin"
+    // "Solo pedidos": el inventario no le abre, así que los dos accesos que
+    // cruzan al otro módulo sobran. Un link que lleva a un redirect es peor que
+    // no tenerlo: parece que algo se rompió.
+    const soloPedidos = isOrdersOnly(user?.role)
     // "n" abre el alta desde cualquier pantalla del módulo, como en Linear.
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
@@ -62,7 +67,7 @@ export function OrdersShell({
                             encuentra. Fijo y con la palabra entera, igual que
                             el botón de Pedidos del otro lado. El admin llega
                             desde el sidebar y no lo necesita en la barra. */}
-                        {!isAdmin && (
+                        {!isAdmin && !soloPedidos && (
                             <Link href="/">
                                 <Button variant="outline" size="sm" className="mr-1">
                                     <Package className="mr-2 h-4 w-4" />
@@ -112,12 +117,14 @@ export function OrdersShell({
                                         </Link>
                                     </DropdownMenuItem>
                                 )}
-                                <DropdownMenuItem asChild>
-                                    <Link href="/">
-                                        <ArrowLeftRight className="mr-2 h-4 w-4" />
-                                        Ir al inventario
-                                    </Link>
-                                </DropdownMenuItem>
+                                {!soloPedidos && (
+                                    <DropdownMenuItem asChild>
+                                        <Link href="/">
+                                            <ArrowLeftRight className="mr-2 h-4 w-4" />
+                                            Ir al inventario
+                                        </Link>
+                                    </DropdownMenuItem>
+                                )}
 
                                 <DropdownMenuSeparator />
 

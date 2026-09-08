@@ -8,14 +8,21 @@
 // hay que borrar antes de escribir.
 
 import { useEffect, useRef, useState } from "react"
+import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useListNavigation } from "@/hooks/use-list-navigation"
-import { Loader2, Plus, X } from "lucide-react"
+import { Camera, Loader2, X } from "lucide-react"
 import { consumeOrderMaterials, searchInventoryMaterials } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import type { MaterialNeed } from "@/lib/orders"
+
+// zxing pesa: se carga recién cuando alguien abre la cámara, no en cada pedido.
+const CameraBarcodeScanner = dynamic(
+    () => import("@/components/camera-barcode-scanner").then((m) => m.CameraBarcodeScanner),
+    { ssr: false },
+)
 
 interface Alternative {
     material_id: number
@@ -49,11 +56,20 @@ function abreviarUnidad(unit: string | null): string {
     return u
 }
 
+interface Hallazgo {
+    material_id: number
+    label: string
+    barcode: string
+    available: number
+}
+
 function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEstan: number[] }) {
     const [query, setQuery] = useState("")
-    const [results, setResults] = useState<{ material_id: number; label: string; available: number }[]>([])
+    const [results, setResults] = useState<Hallazgo[]>([])
     const [buscando, setBuscando] = useState(false)
     const [abierto, setAbierto] = useState(false)
+    const [camaraAbierta, setCamaraAbierta] = useState(false)
+    const [aviso, setAviso] = useState<string | null>(null)
     const boxRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
@@ -77,6 +93,52 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
         return () => document.removeEventListener("mousedown", fuera)
     }, [])
 
+    function agregar(r: Hallazgo) {
+        onPick({
+            key: `extra:${r.material_id}`,
+            material_id: r.material_id,
+            label: r.label,
+            available: r.available,
+            qty: "1",
+            unit: "u.",
+            pending: null,
+            alternatives: [],
+        })
+        setQuery("")
+        setResults([])
+        setAviso(null)
+        setAbierto(false)
+    }
+
+    // Lo que llega de la cámara es un código exacto, no algo a medio escribir:
+    // si hay un material con ese código se agrega solo, sin pasar por la lista.
+    // Si no, el código queda escrito en el campo para seguir a mano.
+    async function escaneado(code: string) {
+        const codigo = code.trim()
+        setCamaraAbierta(false)
+        setQuery(codigo)
+        setBuscando(true)
+        const encontrados = await searchInventoryMaterials(codigo)
+        setBuscando(false)
+        setResults(encontrados)
+
+        const exacto = encontrados.find((r) => r.barcode.trim() === codigo)
+        if (exacto && yaEstan.includes(exacto.material_id)) {
+            setAviso(`${exacto.label} ya está en la lista`)
+            return
+        }
+        if (exacto) {
+            agregar(exacto)
+            return
+        }
+        setAviso(
+            encontrados.length > 0
+                ? "Ningún material tiene ese código exacto. Elegí de la lista."
+                : `No hay ningún material con el código ${codigo}`,
+        )
+        setAbierto(true)
+    }
+
     // La lista se arma acá y no dentro del JSX: el teclado necesita el mismo
     // arreglo que se dibuja para saber qué está eligiendo.
     const opciones = results.filter((r) => !yaEstan.includes(r.material_id))
@@ -88,33 +150,59 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
         onSelect: (i) => {
             const r = opciones[i]
             if (!r) return
-            onPick({ key: `extra:${r.material_id}`, ...r, qty: "1", unit: "u.", pending: null, alternatives: [] })
-            setQuery("")
-            setAbierto(false)
+            agregar(r)
         },
         onClose: () => setAbierto(false),
     })
 
     return (
         <div ref={boxRef} className="relative">
-            <Input
-                value={query}
-                autoComplete="off"
-                placeholder="Agregar otro material del inventario"
-                className="h-9 text-base"
-                onFocus={() => setAbierto(true)}
-                onKeyDown={nav.onKeyDown}
-                role="combobox"
-                aria-expanded={listaAbierta}
-                aria-autocomplete="list"
-                onChange={(e) => {
-                    setQuery(e.target.value)
-                    setAbierto(true)
-                }}
-            />
+            <div className="flex gap-2">
+                <Input
+                    value={query}
+                    autoComplete="off"
+                    placeholder="Agregar otro material: nombre o código"
+                    className="h-9 flex-1 text-base"
+                    onFocus={() => setAbierto(true)}
+                    onKeyDown={nav.onKeyDown}
+                    role="combobox"
+                    aria-expanded={listaAbierta}
+                    aria-autocomplete="list"
+                    onChange={(e) => {
+                        setQuery(e.target.value)
+                        setAviso(null)
+                        setAbierto(true)
+                    }}
+                />
+                <Button
+                    type="button"
+                    size="icon"
+                    variant={camaraAbierta ? "secondary" : "outline"}
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => {
+                        setAviso(null)
+                        setCamaraAbierta((v) => !v)
+                    }}
+                    title="Escanear con la cámara"
+                    aria-label="Escanear con la cámara"
+                >
+                    <Camera className="h-4 w-4" />
+                </Button>
+            </div>
             {buscando && (
-                <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
+                <Loader2 className="absolute right-12 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
             )}
+
+            {camaraAbierta && (
+                <div className="mt-2">
+                    <CameraBarcodeScanner
+                        onDetect={escaneado}
+                        onClose={() => setCamaraAbierta(false)}
+                    />
+                </div>
+            )}
+
+            {aviso && <p className="mt-1 text-sm text-muted-foreground">{aviso}</p>}
 
             {listaAbierta && (
                 <div
@@ -133,13 +221,16 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
                                 className={`flex w-full items-center gap-2 px-3 py-1.5 text-left ${
                                     nav.active === i ? "bg-muted" : ""
                                 }`}
-                                onClick={() => {
-                                    onPick({ key: `extra:${r.material_id}`, ...r, qty: "1", unit: "u.", pending: null, alternatives: [] })
-                                    setQuery("")
-                                    setAbierto(false)
-                                }}
+                                onClick={() => agregar(r)}
                             >
-                                <span className="text-base flex-1 min-w-0 truncate">{r.label}</span>
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-base">{r.label}</span>
+                                    {r.barcode && (
+                                        <span className="block truncate font-mono text-xs text-muted-foreground">
+                                            {r.barcode}
+                                        </span>
+                                    )}
+                                </span>
                                 <span className="text-sm text-muted-foreground shrink-0">
                                     {r.available} en stock
                                 </span>

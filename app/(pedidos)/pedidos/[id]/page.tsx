@@ -16,6 +16,7 @@ import { RemissionButton } from "@/components/remission-button"
 import { DocumentStaleTag } from "@/components/document-stale-tag"
 import { EmissionSlot, OrderEmissionProvider } from "@/components/order-emission"
 import { OrderMaterials } from "@/components/order-materials"
+import { canConsumeStock } from "@/lib/roles"
 import { DateField, PriorityField, TextField } from "@/components/order-props-editor"
 import { OrderCustomerField } from "@/components/order-customer-field"
 import { OrderActivity } from "@/components/order-activity"
@@ -342,7 +343,12 @@ export default async function OrderDetailPage({
                     </section>
 
                     {/* 2. Materiales a utilizar, con su estado de stock */}
-                    <OrderMaterials orderId={order.id} needs={needs} extras={extras} />
+                    <OrderMaterials
+                        orderId={order.id}
+                        needs={needs}
+                        extras={extras}
+                        canConsume={canConsumeStock(session?.user?.role)}
+                    />
 
                     {/* 3. Quién hizo qué, y las notas del taller */}
                     <OrderActivity orderId={order.id} events={events} />

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/auth"
+import { canConsumeStock } from "@/lib/roles"
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +12,11 @@ export async function POST(request: NextRequest) {
     const session = await auth()
     if (!session?.user) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 })
+    }
+    // El rol "Solo pedidos" no mueve stock por ningún lado: su pantalla no
+    // tiene el formulario, pero la ruta se puede llamar igual.
+    if (!canConsumeStock(session.user.role)) {
+      return NextResponse.json({ error: "Tu usuario no puede mover stock" }, { status: 403 })
     }
     const user_name = session.user.name || session.user.email || "Desconocido"
 

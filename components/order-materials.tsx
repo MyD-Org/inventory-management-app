@@ -54,11 +54,19 @@ export function OrderMaterials({
     orderId,
     needs,
     extras = [],
+    canConsume = true,
 }: {
     orderId: number
     needs: MaterialNeed[]
     /** Lo retirado por este pedido que no estaba en la lista de materiales. */
     extras?: ExtraConsumed[]
+    /**
+     * Si puede descontar del inventario. En false la sección queda de lectura:
+     * la lista y el stock se siguen viendo (hay que saber si el material está
+     * para armar el pedido), pero no hay puerta para retirarlo. Es el rol
+     * "Solo pedidos". El server lo vuelve a verificar en consumeOrderMaterials.
+     */
+    canConsume?: boolean
 }) {
     const router = useRouter()
     const { toast } = useToast()
@@ -112,10 +120,12 @@ export function OrderMaterials({
                     {todoDescontado && (
                         <span className="text-sm text-emerald-600">Ya descontado del inventario</span>
                     )}
-                    <Button variant="outline" size="sm" onClick={() => setDialogo(true)}>
-                        <PackageMinus className="mr-1.5 h-3.5 w-3.5" />
-                        {descontables.length === 0 ? "Retirar más materiales" : "Descontar del inventario"}
-                    </Button>
+                    {canConsume && (
+                        <Button variant="outline" size="sm" onClick={() => setDialogo(true)}>
+                            <PackageMinus className="mr-1.5 h-3.5 w-3.5" />
+                            {descontables.length === 0 ? "Retirar más materiales" : "Descontar del inventario"}
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -193,6 +203,7 @@ export function OrderMaterials({
                 </div>
             )}
 
+            {canConsume && (
             <Dialog open={dialogo} onOpenChange={setDialogo}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
@@ -215,6 +226,7 @@ export function OrderMaterials({
                     />
                 </DialogContent>
             </Dialog>
+            )}
         </section>
     )
 }

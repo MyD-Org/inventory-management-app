@@ -493,16 +493,16 @@ export function NewOrderPage({
                         )}
                     </section>
 
-                    {/* En el teléfono "Crear pedido" ocupa el ancho y va primero:
-                        es el botón que se busca, y con el pulgar en el borde
-                        derecho Cancelar quedaba justo debajo del dedo. */}
-                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
-                        <Link href="/pedidos" className="sm:w-auto">
-                            <Button variant="ghost" size="sm" className="w-full sm:w-auto" disabled={saving}>
+                    {/* Los dos botones a la derecha, también en el teléfono: es
+                        donde cae el pulgar y donde termina de leerse el
+                        formulario. Cancelar queda a la izquierda de Crear. */}
+                    <div className="flex items-center justify-end gap-2">
+                        <Link href="/pedidos">
+                            <Button variant="ghost" size="sm" disabled={saving}>
                                 Cancelar
                             </Button>
                         </Link>
-                        <Button size="sm" className="w-full sm:w-auto" onClick={crear} disabled={saving}>
+                        <Button size="sm" onClick={crear} disabled={saving}>
                             {saving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
                             Crear pedido
                         </Button>

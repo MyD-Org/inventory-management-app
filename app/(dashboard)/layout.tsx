@@ -1,11 +1,13 @@
 import type { ReactNode } from "react"
 import { cookies } from "next/headers"
+import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { getFlags } from "@/lib/feature-flags"
 import { AppShell, SIDEBAR_COOKIE } from "@/components/app-shell"
 import { SIMPLE_VIEW_COOKIE } from "@/lib/view-mode"
 import { OperatorShell } from "@/components/operator-shell"
+import { isOrdersOnly } from "@/lib/roles"
 
 async function getMaterials() {
   try {
@@ -24,6 +26,12 @@ async function getMaterials() {
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const session = await auth()
+
+  // El rol "Solo pedidos" no tiene nada que ver acá: todo este módulo es el
+  // inventario. Se corta ANTES de leer materiales, así ni siquiera se consulta
+  // la base por datos que no va a ver.
+  if (isOrdersOnly(session?.user?.role)) redirect("/pedidos")
+
   const [materials, flags] = await Promise.all([getMaterials(), getFlags()])
 
   // El sidebar plegado se recuerda en una cookie y NO en localStorage: leerlo acá

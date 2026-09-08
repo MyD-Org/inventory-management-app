@@ -45,6 +45,7 @@ export async function authenticate(
 import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
 import { revalidatePath } from 'next/cache';
+import { isRole } from '@/lib/roles';
 
 export async function createUser(formData: FormData) {
     const session = await auth();
@@ -62,6 +63,11 @@ export async function createUser(formData: FormData) {
     if (!name || !email || !password || !role) {
         return { error: 'Faltan campos requeridos' };
     }
+    // El rol llega del formulario: se valida contra la lista, o cualquiera con
+    // la consola abierta se inventa uno que ninguna pantalla sabe interpretar.
+    if (!isRole(role)) {
+        return { error: 'Rol inválido' };
+    }
 
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -76,6 +82,42 @@ export async function createUser(formData: FormData) {
     } catch (error) {
         console.error('Error creating user:', error);
         return { error: 'Error al crear usuario. El email podría estar duplicado.' };
+    }
+}
+
+// Cambiar el rol de alguien que ya existe. Se hace desde la lista de usuarios:
+// pasar a "Solo pedidos" a quien ya estaba trabajando no puede obligar a borrar
+// la cuenta y crearla de nuevo (perdería la contraseña que ya sabe).
+export async function updateUserRole(userId: number, role: string) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
+    if (!isRole(role)) {
+        return { error: 'Rol inválido' };
+    }
+
+    const sql = neon(process.env.DATABASE_URL!);
+
+    try {
+        const [user] = await sql`SELECT id, role FROM users WHERE id = ${userId}`;
+        if (!user) return { error: 'El usuario no existe' };
+
+        // Quedarse sin ningún admin deja la configuración sin dueño y no hay
+        // pantalla para volver atrás: habría que entrar por la base.
+        if (user.role === 'admin' && role !== 'admin') {
+            const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin'`;
+            if (count <= 1) {
+                return { error: 'Es el único administrador: primero hacé admin a otra persona' };
+            }
+        }
+
+        await sql`UPDATE users SET role = ${role} WHERE id = ${userId}`;
+        revalidatePath('/settings/users');
+        return { success: true };
+    } catch (error) {
+        console.error('Error cambiando el rol:', error);
+        return { error: 'No se pudo cambiar el rol' };
     }
 }
 
