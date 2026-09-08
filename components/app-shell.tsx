@@ -394,9 +394,21 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
       <p className="hidden text-xs uppercase tracking-wide text-muted-foreground lg:block">{date}</p>
       <div className="flex-1" />
       {/* El módulo de pedidos es de otro público (el taller) y tiene su propio
-          layout: se abre en una pestaña aparte para no perder lo que estabas
-          haciendo en inventario. */}
-      <a href="/pedidos" target="_blank" rel="noopener noreferrer">
+          layout: en escritorio se abre en una pestaña aparte para no perder lo
+          que estabas haciendo en inventario.
+          En el teléfono NO: ahí no hay pestañas que conservar, y abrir un
+          documento nuevo deja la pantalla en blanco hasta que el server termina
+          de armar el tablero. En la misma pestaña, Next navega por adentro y se
+          ve el esqueleto de /pedidos (app/(pedidos)/loading.tsx) sin parpadeo.
+          Instalada como app es peor todavía: target="_blank" la saca de la
+          ventana propia y la tira al navegador. */}
+      <Link href="/pedidos" className="lg:hidden">
+        <Button variant="outline" size="sm">
+          <ClipboardList className="mr-2 h-4 w-4" />
+          <span>Pedidos</span>
+        </Button>
+      </Link>
+      <a href="/pedidos" target="_blank" rel="noopener noreferrer" className="hidden lg:block">
         <Button variant="outline" size="sm">
           <ClipboardList className="mr-2 h-4 w-4" />
           <span>Pedidos</span>
