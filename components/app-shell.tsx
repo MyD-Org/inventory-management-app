@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { signOut } from "next-auth/react"
 import {
   LayoutGrid,
@@ -26,12 +26,23 @@ import {
   ChevronRight,
   ClipboardList,
   ExternalLink,
+  Smartphone,
   type LucideIcon,
 } from "lucide-react"
 import type { FlagKey } from "@/lib/feature-flags"
+import { setSimpleView } from "@/lib/view-mode"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { ThemeMenuItems } from "@/components/theme-menu-items"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { StockMovementDialog } from "@/components/stock-movement-dialog"
 import { Plus } from "lucide-react"
 
@@ -146,6 +157,7 @@ function SidebarContent({
   collapsed?: boolean
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const isAdmin = user?.role === "admin"
   const initials = user?.name?.slice(0, 2).toUpperCase() || "US"
   const [quickDialog, setQuickDialog] = useState<"entrada" | "salida" | null>(null)
@@ -262,37 +274,82 @@ function SidebarContent({
             collapsed ? "flex-col items-center gap-2 px-2" : "items-center gap-3 px-4"
           }`}
         >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2b2018] text-xs font-bold text-[#f3ead9]">
-                {initials}
-              </div>
-            </TooltipTrigger>
-            {/* Plegado el nombre no se ve; el tooltip es la única forma de saber
-                con qué usuario estás trabajando. */}
-            {collapsed && (
-              <TooltipContent side="right">
-                {user.name} · {user.role === "admin" ? "Admin" : "Operador"}
-              </TooltipContent>
-            )}
-          </Tooltip>
+          {/* La apariencia vive acá adentro y no solo en la barra de arriba: en
+              celular el botón de tema de la barra no se muestra (no entra al
+              lado de Pedidos), así que este menú es la única forma de cambiarla. */}
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Abrir menú de la cuenta"
+                    className={`flex min-w-0 items-center rounded-lg text-left transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      collapsed ? "justify-center" : "flex-1 gap-3 p-1"
+                    }`}
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2b2018] text-xs font-bold text-[#f3ead9]">
+                      {initials}
+                    </span>
+                    {!collapsed && (
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{user.name}</span>
+                        <span className="block truncate text-xs text-sidebar-foreground/60">
+                          {user.role === "admin" ? "Admin" : "Operador"}
+                        </span>
+                      </span>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              {/* Plegado el nombre no se ve; el tooltip es la única forma de saber
+                  con qué usuario estás trabajando. */}
+              {collapsed && (
+                <TooltipContent side="right">
+                  {user.name} · {user.role === "admin" ? "Admin" : "Operador"}
+                </TooltipContent>
+              )}
+            </Tooltip>
+            <DropdownMenuContent align="start" side="top" className="w-56">
+              <DropdownMenuLabel className="font-normal">
+                <p className="truncate text-sm font-medium">{user.name}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {user.role === "admin" ? "Admin" : "Operador"}
+                </p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {/* La vista del operario a mano para el admin: sin sidebar y con
+                  el inicio de dos botones. Escribe la cookie y refresca; el
+                  layout (server) la lee y vuelve a decidir el shell. */}
+              <DropdownMenuItem
+                onClick={() => {
+                  setSimpleView(true)
+                  router.refresh()
+                }}
+              >
+                <Smartphone className="mr-2 h-4 w-4" />
+                Vista simple
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <ThemeMenuItems />
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => signOut()}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Cerrar sesión
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{user.name}</p>
-              <p className="truncate text-xs text-sidebar-foreground/60">
-                {user.role === "admin" ? "Admin" : "Operador"}
-              </p>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden shrink-0 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:inline-flex"
+              onClick={() => signOut()}
+              title="Cerrar sesión"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            onClick={() => signOut()}
-            title="Cerrar sesión"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
         </div>
       )}
 
@@ -332,19 +389,25 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick} title="Abrir menú">
         <Menu className="h-5 w-5" />
       </Button>
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{date}</p>
+      {/* La fecha es puro contexto: en celular ocupa media barra y empuja los
+          botones, así que solo se muestra de lg para arriba. */}
+      <p className="hidden text-xs uppercase tracking-wide text-muted-foreground lg:block">{date}</p>
       <div className="flex-1" />
       {/* El módulo de pedidos es de otro público (el taller) y tiene su propio
           layout: se abre en una pestaña aparte para no perder lo que estabas
           haciendo en inventario. */}
       <a href="/pedidos" target="_blank" rel="noopener noreferrer">
         <Button variant="outline" size="sm">
-          <ClipboardList className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">Pedidos</span>
+          <ClipboardList className="mr-2 h-4 w-4" />
+          <span>Pedidos</span>
           <ExternalLink className="ml-1.5 h-3 w-3 text-muted-foreground" />
         </Button>
       </a>
-      <ThemeToggle />
+      {/* En celular la apariencia se cambia desde el menú del usuario (abajo
+          del sidebar), para no amontonar botones en una barra de 378px. */}
+      <div className="hidden lg:block">
+        <ThemeToggle />
+      </div>
     </header>
   )
 }
