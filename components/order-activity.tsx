@@ -14,6 +14,7 @@ import { NotePhotoGallery } from "@/components/note-photo-gallery"
 import { Textarea } from "@/components/ui/textarea"
 import { addOrderNote, deleteOrderNote } from "@/lib/order-actions"
 import { subirFotos } from "@/lib/note-photos"
+import { eventIsVisible } from "@/lib/order-notes"
 import { useToast } from "@/hooks/use-toast"
 import { STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
 import type { OrderEvent } from "@/lib/order-events"
@@ -306,9 +307,9 @@ export function OrderActivity({
     const [soloNotas, setSoloNotas] = useState(true)
     const [abierto, setAbierto] = useState(true)
 
-    // Una nota sin texto no se dibuja. Pasó con las notas viejas migradas: el
-    // recuadro vacío ocupaba media pantalla para no decir nada.
-    const conContenido = events.filter((e) => e.kind !== "note" || Boolean(e.body?.trim()))
+    // La regla de qué se dibuja vive en lib/order-notes: la misma la usa la
+    // versión impresa, y cuando estaba duplicada se desincronizaron.
+    const conContenido = events.filter(eventIsVisible)
     const visibles = soloNotas ? conContenido.filter((e) => e.kind === "note") : conContenido
 
     // Agrupado por día, conservando el orden que trajo la consulta.
