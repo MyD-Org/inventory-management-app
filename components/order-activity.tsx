@@ -5,13 +5,16 @@
 // recuadro con el nombre de quien la dejó — lo que alguien escribió a mano pesa
 // más que un cambio de campo.
 
-import { useState } from "react"
-import { ChevronRight, Trash2 } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Camera, ChevronRight, ImagePlus, Loader2, Trash2, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { NotePhotoGallery } from "@/components/note-photo-gallery"
 import { Textarea } from "@/components/ui/textarea"
 import { addOrderNote, deleteOrderNote } from "@/lib/order-actions"
+import { subirFotos } from "@/lib/note-photos"
+import { eventIsVisible } from "@/lib/order-notes"
 import { useToast } from "@/hooks/use-toast"
 import { STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
 import type { OrderEvent } from "@/lib/order-events"
@@ -255,7 +258,9 @@ function Nota({ e, puedeBorrar, onBorrar }: { e: OrderEvent; puedeBorrar: boolea
                     </button>
                 )}
             </div>
-            <p className="mt-2 whitespace-pre-wrap text-sm">{e.body}</p>
+            {/* El texto solo si hay: una nota puede ser nada más que una foto. */}
+            {e.body && <p className="mt-2 whitespace-pre-wrap text-sm">{e.body}</p>}
+            <NotePhotoGallery photos={e.photos} />
         </div>
     )
 }
@@ -279,15 +284,32 @@ export function OrderActivity({
     // La nota que se está por borrar, esperando confirmación.
     const [aBorrar, setABorrar] = useState<OrderEvent | null>(null)
     const [borrando, setBorrando] = useState(false)
+    // Las fotos elegidas, todavía en el navegador: no se suben al elegirlas sino
+    // al apretar "Dejar nota", así arrepentirse no deja archivos huérfanos en el
+    // Blob. `preview` es un blob: local que hay que revocar al sacar la foto.
+    const [fotos, setFotos] = useState<{ id: string; file: File; preview: string }[]>([])
+    const [subiendo, setSubiendo] = useState<{ hechas: number; total: number } | null>(null)
+    const galeriaRef = useRef<HTMLInputElement>(null)
+    const camaraRef = useRef<HTMLInputElement>(null)
+
+    // Si alguien se va del pedido con fotos elegidas y sin dejar la nota, los
+    // blob: locales quedarían tomando memoria hasta recargar la página.
+    const fotosRef = useRef(fotos)
+    fotosRef.current = fotos
+    useEffect(() => {
+        return () => {
+            for (const f of fotosRef.current) URL.revokeObjectURL(f.preview)
+        }
+    }, [])
     // Abierta y en "Notas" desde el arranque: lo que se viene a leer del
     // pedido son los mensajes que alguien dejó a mano, no el registro de campos
     // cambiados. Los cambios siguen a un clic, en "Historial".
     const [soloNotas, setSoloNotas] = useState(true)
     const [abierto, setAbierto] = useState(true)
 
-    // Una nota sin texto no se dibuja. Pasó con las notas viejas migradas: el
-    // recuadro vacío ocupaba media pantalla para no decir nada.
-    const conContenido = events.filter((e) => e.kind !== "note" || Boolean(e.body?.trim()))
+    // La regla de qué se dibuja vive en lib/order-notes: la misma la usa la
+    // versión impresa, y cuando estaba duplicada se desincronizaron.
+    const conContenido = events.filter(eventIsVisible)
     const visibles = soloNotas ? conContenido.filter((e) => e.kind === "note") : conContenido
 
     // Agrupado por día, conservando el orden que trajo la consulta.
@@ -299,17 +321,73 @@ export function OrderActivity({
         else dias.push({ dia, eventos: [e] })
     }
 
+    // Cuántas fotos entran. Mismo número que valida addOrderNote: acá es para
+    // no dejar elegir la novena, allá para que no entre por otra puerta.
+    const MAX_FOTOS = 8
+
+    function agregarFotos(lista: FileList | null) {
+        if (!lista || lista.length === 0) return
+        const nuevas = Array.from(lista)
+            .filter((f) => f.type.startsWith("image/"))
+            .slice(0, MAX_FOTOS - fotos.length)
+        if (nuevas.length === 0) {
+            toast.error(`No entran más de ${MAX_FOTOS} fotos en una nota`)
+            return
+        }
+        setFotos((prev) => [
+            ...prev,
+            ...nuevas.map((file) => ({
+                id: `${file.name}-${file.lastModified}-${Math.random()}`,
+                file,
+                preview: URL.createObjectURL(file),
+            })),
+        ])
+    }
+
+    function sacarFoto(id: string) {
+        setFotos((prev) => {
+            const va = prev.find((f) => f.id === id)
+            if (va) URL.revokeObjectURL(va.preview)
+            return prev.filter((f) => f.id !== id)
+        })
+    }
+
     async function dejarNota() {
         const cuerpo = texto.trim()
-        if (!cuerpo) return
+        // Una foto sola alcanza: "así llegó la pieza" no necesita texto.
+        if (!cuerpo && fotos.length === 0) return
         setGuardando(true)
-        const result = await addOrderNote(orderId, cuerpo)
+
+        let subidas: Awaited<ReturnType<typeof subirFotos>> = []
+        if (fotos.length > 0) {
+            setSubiendo({ hechas: 0, total: fotos.length })
+            try {
+                subidas = await subirFotos(
+                    fotos.map((f) => f.file),
+                    (hechas, total) => setSubiendo({ hechas, total }),
+                )
+            } catch (error) {
+                setSubiendo(null)
+                setGuardando(false)
+                // La nota NO se guarda si las fotos no subieron: guardarla sin
+                // ellas dejaría la mitad del mensaje y nadie se enteraría.
+                toast.error("No se pudieron subir las fotos", {
+                    description: error instanceof Error ? error.message : "Probá de nuevo",
+                })
+                return
+            }
+            setSubiendo(null)
+        }
+
+        const result = await addOrderNote(orderId, cuerpo, subidas)
         setGuardando(false)
         if (result.error) {
             toast.error("No se pudo guardar la nota", { description: result.error })
             return
         }
         setTexto("")
+        for (const f of fotos) URL.revokeObjectURL(f.preview)
+        setFotos([])
         router.refresh()
     }
 
@@ -413,12 +491,93 @@ export function OrderActivity({
                     aria-label="Nueva nota"
                     className="min-h-16 resize-none border-0 bg-transparent px-3.5 py-3 text-sm focus-visible:ring-0 dark:bg-transparent"
                 />
-                <div className="flex items-center border-t bg-muted/40 px-3 py-2">
+                {/* Las fotos elegidas, antes de subir. */}
+                {fotos.length > 0 && (
+                    <div className="flex flex-wrap gap-2 border-t px-3 py-2.5">
+                        {fotos.map((f) => (
+                            <div key={f.id} className="relative">
+                                <img
+                                    src={f.preview}
+                                    alt=""
+                                    className="h-16 w-16 rounded-md border object-cover"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => sacarFoto(f.id)}
+                                    disabled={guardando}
+                                    aria-label={`Sacar ${f.file.name}`}
+                                    className="absolute -right-1.5 -top-1.5 rounded-full border bg-background p-0.5 text-muted-foreground shadow-sm outline-none hover:text-destructive focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                <div className="flex items-center gap-1 border-t bg-muted/40 px-3 py-2">
+                    {/* Dos entradas y no una: el `capture` del segundo abre la
+                        cámara derecho, sin pasar por el selector de archivos.
+                        En escritorio no sirve, así que ese botón es solo mobile. */}
+                    <input
+                        ref={galeriaRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        hidden
+                        onChange={(e) => {
+                            agregarFotos(e.target.files)
+                            // Se limpia para que elegir la MISMA foto dos veces
+                            // seguidas vuelva a disparar el onChange.
+                            e.target.value = ""
+                        }}
+                    />
+                    <input
+                        ref={camaraRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        hidden
+                        onChange={(e) => {
+                            agregarFotos(e.target.files)
+                            e.target.value = ""
+                        }}
+                    />
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => camaraRef.current?.click()}
+                        disabled={guardando || fotos.length >= MAX_FOTOS}
+                        className="gap-1.5 sm:hidden"
+                    >
+                        <Camera className="h-4 w-4" />
+                        Cámara
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => galeriaRef.current?.click()}
+                        disabled={guardando || fotos.length >= MAX_FOTOS}
+                        className="gap-1.5"
+                    >
+                        <ImagePlus className="h-4 w-4" />
+                        Foto
+                    </Button>
+
+                    {subiendo && (
+                        <span className="ml-1 inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Subiendo {Math.min(subiendo.hechas + 1, subiendo.total)} de {subiendo.total}
+                        </span>
+                    )}
+
                     <Button
                         size="sm"
                         className="ml-auto"
                         onClick={dejarNota}
-                        disabled={guardando || !texto.trim()}
+                        disabled={guardando || (!texto.trim() && fotos.length === 0)}
                     >
                         {guardando ? "Guardando…" : "Dejar nota"}
                     </Button>

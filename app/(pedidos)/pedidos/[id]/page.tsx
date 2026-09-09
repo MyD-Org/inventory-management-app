@@ -20,7 +20,8 @@ import { canConsumeStock } from "@/lib/roles"
 import { DateField, PriorityField, TextField } from "@/components/order-props-editor"
 import { OrderCustomerField } from "@/components/order-customer-field"
 import { OrderActivity } from "@/components/order-activity"
-import { describeDrift, listDocumentDrift, listOrderEvents } from "@/lib/order-events"
+import { describeDrift, listDocumentDrift, listOrderEvents, type OrderEvent } from "@/lib/order-events"
+import { noteHasContent } from "@/lib/order-notes"
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,11 @@ export const dynamic = 'force-dynamic';
 // Sin importes: este módulo no maneja plata.
 
 const PRIORITY_LABELS: Record<string, string> = { baja: "Baja", normal: "Normal", alta: "Alta" }
+
+/** Qué notas salen en el papel: las que tienen algo que decir, texto o fotos. */
+function esNotaImprimible(e: OrderEvent): boolean {
+    return e.kind === "note" && noteHasContent(e)
+}
 
 function formatDate(d: string | null): string {
     if (!d) return "—"
@@ -409,16 +415,27 @@ export default async function OrderDetailPage({
                         el resto son datos de referencia. */}
                     {/* En papel salen las notas, que son instrucciones para el taller.
                         Los cambios de campo no: eso se consulta en pantalla. */}
-                    {events.filter((e) => e.kind === "note").length > 0 && (
+                    {/* Una nota que es solo foto no tiene texto que imprimir, y sin
+                        este filtro salía como "Dalila:" y nada. La foto no va al
+                        papel, así que se avisa que hay que mirar la pantalla. */}
+                    {events.filter(esNotaImprimible).length > 0 && (
                         <div className="hidden print:block border-t pt-2 mb-3 space-y-1.5">
                             {events
-                                .filter((e) => e.kind === "note")
+                                .filter(esNotaImprimible)
                                 .slice()
                                 .reverse()
                                 .map((e) => (
                                     <div key={e.id} className="text-base">
                                         <span className="font-medium">{e.actor_name}: </span>
                                         {e.body}
+                                        {e.photos.length > 0 && (
+                                            <span className="italic">
+                                                {e.body ? " " : ""}
+                                                [{e.photos.length}{" "}
+                                                {e.photos.length === 1 ? "foto" : "fotos"} en el
+                                                pedido]
+                                            </span>
+                                        )}
                                     </div>
                                 ))}
                         </div>

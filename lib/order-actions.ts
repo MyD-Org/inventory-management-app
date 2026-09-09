@@ -6,8 +6,9 @@
 // para que cargar un pedido a mano y recibirlo del bot den el mismo resultado.
 
 import { revalidatePath } from 'next/cache';
+import { del } from '@vercel/blob';
 import { auth } from '@/auth';
-import { logOrderEvent, logOrderEvents } from '@/lib/order-events';
+import { addEventPhotos, eventPhotoPaths, logOrderEvent, logOrderEvents } from '@/lib/order-events';
 import { sql } from '@/lib/database';
 import { invoiceOrder } from '@/lib/invoicing';
 import { remitOrder } from '@/lib/remissions';
@@ -957,18 +958,49 @@ export async function searchInventoryMaterials(q: string) {
 
 // Dejar una nota en el pedido. No se edita ni se borra: si se pudiera cambiar
 // después, la historia dejaría de servir justo cuando hace falta.
-export async function addOrderNote(orderId: number, body: string) {
+/** Una foto ya subida al Blob, tal como la devuelve el cliente. */
+export interface NotePhotoInput {
+    url: string;
+    pathname: string;
+    width?: number | null;
+    height?: number | null;
+}
+
+// Cuántas fotos entran en una nota. El límite es de encuadre, no técnico: si
+// hacen falta más de ocho fotos para explicar algo, son varias notas.
+const MAX_FOTOS = 8;
+
+export async function addOrderNote(orderId: number, body: string, photos: NotePhotoInput[] = []) {
     const session = await auth();
     if (!session?.user) return { error: 'No autenticado' };
 
     const texto = body.trim();
-    if (!texto) return { error: 'La nota está vacía' };
+    // Una nota puede ser SOLO una foto: "así llegó la pieza" no necesita texto.
+    // Lo que no puede es estar vacía de las dos cosas.
+    if (!texto && photos.length === 0) return { error: 'La nota está vacía' };
     if (texto.length > 2000) return { error: 'La nota es demasiado larga' };
+    if (photos.length > MAX_FOTOS) {
+        return { error: `No se pueden adjuntar más de ${MAX_FOTOS} fotos en una nota` };
+    }
+
+    // Las URL tienen que ser del Blob de este proyecto. El cliente las manda, y
+    // sin este control cualquiera con sesión podría dejar apuntada la nota a una
+    // imagen de afuera, que después el pedido pintaría como propia.
+    const fueraDeLugar = photos.find((f) => !/^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//.test(f.url));
+    if (fueraDeLugar) return { error: 'Una de las fotos no es del almacenamiento de la app' };
 
     const [order] = await sql`SELECT id FROM orders WHERE id = ${orderId}`;
     if (!order) return { error: 'El pedido no existe' };
 
-    await logOrderEvent(orderId, { kind: 'note', body: texto });
+    const eventId = await logOrderEvent(orderId, { kind: 'note', body: texto });
+    // Sin id no hay a qué colgar las fotos. La nota ya se perdió (logOrderEvent
+    // no voltea la operación), así que decirlo es mejor que guardar una nota
+    // muda con las fotos sueltas.
+    if (photos.length > 0) {
+        if (!eventId) return { error: 'No se pudo guardar la nota' };
+        await addEventPhotos(eventId, photos);
+    }
+
     revalidatePath(`/pedidos/${orderId}`);
     return { ok: true };
 }
@@ -996,7 +1028,23 @@ export async function deleteOrderNote(orderId: number, eventId: number) {
         return { error: 'Solo podés borrar tus propias notas' };
     }
 
+    // Los archivos primero, porque después de borrar la fila ya no se sabe
+    // cuáles eran. El CASCADE de la migración 39 limpia la tabla, no el Blob.
+    const paths = await eventPhotoPaths(eventId);
+
     await sql`DELETE FROM order_events WHERE id = ${eventId}`;
+
+    if (paths.length > 0) {
+        // Un archivo que no se pudo borrar del Blob NO puede resucitar la nota:
+        // lo que se pidió es que el mensaje desaparezca del pedido, y ya
+        // desapareció. Queda un huérfano en el store y se loguea.
+        try {
+            await del(paths);
+        } catch (error) {
+            console.error('No se pudieron borrar las fotos de la nota del Blob:', error);
+        }
+    }
+
     revalidatePath(`/pedidos/${orderId}`);
     return { ok: true };
 }
