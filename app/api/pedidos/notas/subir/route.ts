@@ -38,14 +38,16 @@ export async function POST(request: Request): Promise<NextResponse> {
                     addRandomSuffix: true,
                 }
             },
-            // El Blob avisa cuando el archivo terminó de subir; no hay nada que
-            // hacer con el aviso. La foto se ata a la nota en addOrderNote, con
-            // la URL que el cliente recibe de vuelta.
+            // NO se define onUploadCompleted. El Blob puede avisar por webhook
+            // cuando el archivo terminó de subir, pero no hace falta: la foto se
+            // ata a la nota en addOrderNote, con la URL que el cliente recibe de
+            // vuelta. Definirlo vacío pedía un webhook al aire en producción y
+            // en local imprimía un warning en cada subida, porque el Blob no
+            // puede llamar de vuelta a localhost.
             //
-            // La subida arranca cuando se aprieta "Dejar nota", no al elegir la
+            // (La subida arranca cuando se aprieta "Dejar nota", no al elegir la
             // foto: si arrancara al elegirla, cada arrepentimiento dejaría un
-            // archivo huérfano en el store que nadie borra nunca.
-            onUploadCompleted: async () => {},
+            // archivo huérfano en el store que nadie borra nunca.)
         })
 
         return NextResponse.json(result)
