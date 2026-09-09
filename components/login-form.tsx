@@ -4,9 +4,10 @@ import { useFormState, useFormStatus } from 'react-dom';
 import { authenticate } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/password-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Mail, Lock } from 'lucide-react';
+import { Loader2, Mail } from 'lucide-react';
 
 export function LoginForm() {
     const [errorMessage, dispatch] = useFormState(authenticate, undefined);
@@ -31,18 +32,13 @@ export function LoginForm() {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="password">Contraseña</Label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                id="password"
-                                type="password"
-                                name="password"
-                                placeholder="••••••"
-                                required
-                                minLength={4}
-                                className="pl-9"
-                            />
-                        </div>
+                        <PasswordInput
+                            id="password"
+                            name="password"
+                            placeholder="••••••"
+                            required
+                            minLength={4}
+                        />
                     </div>
 
                     {errorMessage && (

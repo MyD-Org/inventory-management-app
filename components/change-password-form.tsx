@@ -3,10 +3,10 @@
 import { useFormState, useFormStatus } from 'react-dom';
 import { changePassword } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/password-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, Lock } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { signOut } from 'next-auth/react';
 import { useToast } from '@/hooks/use-toast';
@@ -54,44 +54,29 @@ export function ChangePasswordForm({ temporal = false }: { temporal?: boolean })
                 <form ref={formRef} action={dispatch} className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="currentPassword">Contraseña Actual</Label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                id="currentPassword"
-                                type="password"
-                                name="currentPassword"
-                                required
-                                className="pl-9"
-                            />
-                        </div>
+                        <PasswordInput
+                            id="currentPassword"
+                            name="currentPassword"
+                            required
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="newPassword">Nueva Contraseña</Label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                id="newPassword"
-                                type="password"
-                                name="newPassword"
-                                required
-                                minLength={6}
-                                className="pl-9"
-                            />
-                        </div>
+                        <PasswordInput
+                            id="newPassword"
+                            name="newPassword"
+                            required
+                            minLength={6}
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="confirmPassword">Confirmar Nueva Contraseña</Label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                id="confirmPassword"
-                                type="password"
-                                name="confirmPassword"
-                                required
-                                minLength={6}
-                                className="pl-9"
-                            />
-                        </div>
+                        <PasswordInput
+                            id="confirmPassword"
+                            name="confirmPassword"
+                            required
+                            minLength={6}
+                        />
                     </div>
                     <SubmitButton />
                 </form>
