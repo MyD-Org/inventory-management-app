@@ -396,7 +396,12 @@ export default async function OrderDetailPage({
                     />
 
                     {/* 3. Quién hizo qué, y las notas del taller */}
-                    <OrderActivity orderId={order.id} events={events} />
+                    <OrderActivity
+                        orderId={order.id}
+                        events={events}
+                        currentEmail={session?.user?.email ?? null}
+                        isAdmin={isAdmin}
+                    />
 
                     {/* 4. Avisos, al final */}
                     {/* En papel las propiedades van en una línea al pie, no en

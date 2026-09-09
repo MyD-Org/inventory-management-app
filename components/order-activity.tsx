@@ -6,11 +6,12 @@
 // más que un cambio de campo.
 
 import { useState } from "react"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { addOrderNote } from "@/lib/order-actions"
+import { addOrderNote, deleteOrderNote } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import { STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
 import type { OrderEvent } from "@/lib/order-events"
@@ -219,10 +220,10 @@ function Cambio({ e }: { e: OrderEvent }) {
     )
 }
 
-function Nota({ e }: { e: OrderEvent }) {
+function Nota({ e, puedeBorrar, onBorrar }: { e: OrderEvent; puedeBorrar: boolean; onBorrar: () => void }) {
     const anonimo = e.actor_name === SIN_AUTOR
     return (
-        <div className="relative my-2 rounded-lg border bg-muted/40 px-3.5 py-3">
+        <div className="group relative my-2 rounded-lg border bg-muted/40 px-3.5 py-3">
             <span className="absolute -left-[22px] top-4 h-2.5 w-2.5 rounded-full border-2 border-foreground bg-foreground" />
             <div className="flex items-center gap-2.5">
                 {!anonimo && (
@@ -240,17 +241,44 @@ function Nota({ e }: { e: OrderEvent }) {
                     {anonimo ? "Nota anterior, sin autor registrado" : e.actor_name}
                 </span>
                 <span className="ml-auto font-mono text-xs text-muted-foreground">{hora(e.created_at)}</span>
+                {/* El tacho aparece al pasar por encima en escritorio; en el
+                    teléfono no hay hover, así que ahí queda siempre visible. */}
+                {puedeBorrar && (
+                    <button
+                        type="button"
+                        onClick={onBorrar}
+                        aria-label="Borrar nota"
+                        title="Borrar nota"
+                        className="-my-1 -mr-1.5 shrink-0 rounded p-1 text-muted-foreground outline-none transition-opacity hover:text-destructive focus-visible:ring-2 focus-visible:ring-primary sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                    >
+                        <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                )}
             </div>
             <p className="mt-2 whitespace-pre-wrap text-sm">{e.body}</p>
         </div>
     )
 }
 
-export function OrderActivity({ orderId, events }: { orderId: number; events: OrderEvent[] }) {
+export function OrderActivity({
+    orderId,
+    events,
+    currentEmail = null,
+    isAdmin = false,
+}: {
+    orderId: number
+    events: OrderEvent[]
+    /** Para saber cuáles notas son propias: solo esas se pueden borrar. */
+    currentEmail?: string | null
+    isAdmin?: boolean
+}) {
     const router = useRouter()
     const { toast } = useToast()
     const [texto, setTexto] = useState("")
     const [guardando, setGuardando] = useState(false)
+    // La nota que se está por borrar, esperando confirmación.
+    const [aBorrar, setABorrar] = useState<OrderEvent | null>(null)
+    const [borrando, setBorrando] = useState(false)
     // Abierta y en "Notas" desde el arranque: lo que se viene a leer del
     // pedido son los mensajes que alguien dejó a mano, no el registro de campos
     // cambiados. Los cambios siguen a un clic, en "Historial".
@@ -282,6 +310,25 @@ export function OrderActivity({ orderId, events }: { orderId: number; events: Or
             return
         }
         setTexto("")
+        router.refresh()
+    }
+
+    // La misma regla que el servidor: la propia, o cualquiera si sos admin. Acá
+    // solo decide si se dibuja el botón — quien manda es la server action.
+    function puedeBorrar(e: OrderEvent): boolean {
+        return isAdmin || (Boolean(currentEmail) && e.actor_email === currentEmail)
+    }
+
+    async function borrarNota() {
+        if (!aBorrar) return
+        setBorrando(true)
+        const result = await deleteOrderNote(orderId, aBorrar.id)
+        setBorrando(false)
+        if (result.error) {
+            toast.error("No se pudo borrar la nota", { description: result.error })
+            return
+        }
+        setABorrar(null)
         router.refresh()
     }
 
@@ -342,7 +389,16 @@ export function OrderActivity({ orderId, events }: { orderId: number; events: Or
                     {/* La línea vertical cose los eventos del día. */}
                     <div className="relative pl-6 before:absolute before:bottom-1.5 before:left-2 before:top-1.5 before:w-px before:bg-border">
                         {eventos.map((e) =>
-                            e.kind === "note" ? <Nota key={e.id} e={e} /> : <Cambio key={e.id} e={e} />,
+                            e.kind === "note" ? (
+                                <Nota
+                                    key={e.id}
+                                    e={e}
+                                    puedeBorrar={puedeBorrar(e)}
+                                    onBorrar={() => setABorrar(e)}
+                                />
+                            ) : (
+                                <Cambio key={e.id} e={e} />
+                            ),
                         )}
                     </div>
                 </div>
@@ -369,6 +425,17 @@ export function OrderActivity({ orderId, events }: { orderId: number; events: Or
                 </div>
             </div>
             )}
+
+            <ConfirmDialog
+                open={aBorrar !== null}
+                onOpenChange={(open) => !open && setABorrar(null)}
+                title="¿Borrar esta nota?"
+                description="La nota desaparece del pedido y no se puede recuperar."
+                confirmLabel={borrando ? "Borrando…" : "Borrar"}
+                destructive
+                loading={borrando}
+                onConfirm={borrarNota}
+            />
         </section>
     )
 }
