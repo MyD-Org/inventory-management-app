@@ -910,6 +910,79 @@ export async function consumedMaterials(orderId: number): Promise<ConsumedMateri
     }))
 }
 
+export interface OrderItemRecipe {
+    order_item_id: number
+    line_no: number
+    product: string
+    /** Unidades pedidas de este producto: el tope al devolver la línea entera. */
+    quantity: number
+    lines: Array<{
+        material_id: number | null
+        label: string
+        qty_per_unit: number
+        /** Alternativas de la familia: lo que pudo haber salido en su lugar. */
+        alternative_ids: number[]
+    }>
+}
+
+// La receta de cada producto del pedido, por unidad. Es lo que permite decir
+// "devuelvo 2 de las 3 luminarias" y que salga la lista de materiales sola.
+//
+// qty_per_unit ya está guardado al explotar el BOM (scripts/14-pedidos.sql), así
+// que no hay que dividir por la cantidad de la línea ni arrastrar errores de
+// redondeo con los materiales que se miden.
+export async function orderItemRecipes(orderId: number): Promise<OrderItemRecipe[]> {
+    const rows = await sql`
+        SELECT
+            oi.id AS order_item_id,
+            oi.line_no,
+            oi.product,
+            oi.quantity,
+            oim.material_id,
+            oim.label,
+            oim.qty_per_unit,
+            oim.family_id,
+            oim.spec_value,
+            -- Las alternativas del mismo color, que es lo que el depósito pudo
+            -- haber retirado en lugar del material que resolvió el BOM.
+            COALESCE((
+                SELECT array_agg(fo.material_id ORDER BY fo.is_default DESC, fo.id ASC)
+                FROM material_family_options fo
+                WHERE fo.family_id = oim.family_id
+                  AND fo.spec_value = oim.spec_value
+                  AND fo.material_id <> COALESCE(oim.material_id, -1)
+            ), ARRAY[]::integer[]) AS alternative_ids
+        FROM order_items oi
+        JOIN order_item_materials oim ON oim.order_item_id = oi.id
+        WHERE oi.order_id = ${orderId}
+        ORDER BY oi.line_no ASC, oim.id ASC
+    `
+
+    const items = new Map<number, OrderItemRecipe>()
+    for (const r of rows as any[]) {
+        const id = r.order_item_id as number
+        let item = items.get(id)
+        if (!item) {
+            item = {
+                order_item_id: id,
+                line_no: Number(r.line_no),
+                product: r.product as string,
+                quantity: Number(r.quantity),
+                lines: [],
+            }
+            items.set(id, item)
+        }
+        item.lines.push({
+            material_id: r.material_id === null ? null : Number(r.material_id),
+            label: r.label as string,
+            qty_per_unit: Number(r.qty_per_unit),
+            alternative_ids: ((r.alternative_ids as number[] | null) ?? []).map(Number),
+        })
+    }
+
+    return [...items.values()]
+}
+
 export interface ExtraConsumed {
     material_id: number
     label: string

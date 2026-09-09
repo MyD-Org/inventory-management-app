@@ -13,11 +13,14 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Loader2 } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2, Undo2 } from "lucide-react"
 import { returnOrderMaterials } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import { formatStock } from "@/lib/format"
-import type { ConsumedMaterial } from "@/lib/orders"
+import { recipeReturnQuantities } from "@/lib/returns"
+import type { ConsumedMaterial, OrderItemRecipe } from "@/lib/orders"
 
 interface Row {
     material_id: number
@@ -31,16 +34,21 @@ interface Row {
 export function ReturnMaterialsForm({
     orderId,
     consumed,
+    recipes = [],
     onDone,
     onCancel,
 }: {
     orderId: number
     consumed: ConsumedMaterial[]
+    /** Receta por unidad de cada producto: permite devolver por producto. */
+    recipes?: OrderItemRecipe[]
     onDone: () => void
     onCancel?: () => void
 }) {
     const { toast } = useToast()
     const [saving, setSaving] = useState(false)
+    const [itemId, setItemId] = useState<string>("")
+    const [unidades, setUnidades] = useState<string>("")
     // Arranca en cero y no en "todo": devolver es la excepción, y quien entra acá
     // sabe cuántas trae en la mano. Sugerir el total invita a devolver de más de
     // un enter.
@@ -58,6 +66,39 @@ export function ReturnMaterialsForm({
     const parsear = (q: string) => {
         const n = Number(q)
         return Number.isFinite(n) ? n : NaN
+    }
+
+    const productoElegido = recipes.find((r) => String(r.order_item_id) === itemId) ?? null
+    const unidadesNum = parsear(unidades)
+    const unidadesValidas =
+        !Number.isNaN(unidadesNum) &&
+        unidadesNum > 0 &&
+        productoElegido !== null &&
+        unidadesNum <= productoElegido.quantity
+
+    // Llena las cantidades con la receta del producto. PISA lo que hubiera cargado
+    // a mano: elegir un producto es empezar de nuevo desde su receta, y mezclarlo
+    // con lo anterior daría un total que nadie pidió. Después se corrige fila por
+    // fila, que es para lo que están los inputs.
+    const cargarReceta = () => {
+        if (!productoElegido || !unidadesValidas) return
+        const sugerido = recipeReturnQuantities(
+            productoElegido.lines,
+            unidadesNum,
+            consumed.map((c) => ({ material_id: c.material_id, label: c.label, consumed: c.consumed })),
+        )
+        setRows((rs) =>
+            rs.map((r) => {
+                const qty = sugerido.get(r.material_id)
+                return { ...r, qty: qty === undefined || qty <= 0 ? "" : String(qty) }
+            }),
+        )
+        const sinNada = [...sugerido.values()].every((v) => v <= 0)
+        if (sugerido.size === 0 || sinNada) {
+            toast.error("No hay nada para devolver de ese producto", {
+                description: "Sus materiales no figuran entre lo que este pedido retiró del depósito.",
+            })
+        }
     }
 
     const errorDe = (r: Row): string | null => {
@@ -103,6 +144,66 @@ export function ReturnMaterialsForm({
 
     return (
         <>
+            {/* Devolver por producto: elegís cuántas unidades vuelven y la receta
+                llena las cantidades. No manda nada por su cuenta —solo completa el
+                formulario de abajo— porque al desarmar siempre hay algo que no
+                vuelve, y eso se corrige acá antes de confirmar. */}
+            {recipes.length > 0 && (
+                <div className="space-y-2 rounded-md border p-3">
+                    <Label className="text-base">Devolver la receta de un producto</Label>
+                    <div className="flex flex-wrap items-end gap-2">
+                        <div className="min-w-[200px] flex-1">
+                            <Select value={itemId} onValueChange={setItemId}>
+                                <SelectTrigger className="h-9 w-full text-base">
+                                    <SelectValue placeholder="Elegí el producto">
+                                        <span className="block truncate text-left">
+                                            {productoElegido?.product}
+                                        </span>
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {recipes.map((r) => (
+                                        <SelectItem key={r.order_item_id} value={String(r.order_item_id)}>
+                                            <span className="truncate">{r.product}</span>
+                                            <span className="ml-2 shrink-0 text-sm text-muted-foreground">
+                                                {formatStock(r.quantity)} en el pedido
+                                            </span>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="w-24">
+                            <Input
+                                type="number"
+                                min={0}
+                                max={productoElegido?.quantity}
+                                value={unidades}
+                                placeholder="Unidades"
+                                onChange={(e) => setUnidades(e.target.value)}
+                                className="h-9 text-base"
+                            />
+                        </div>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={cargarReceta}
+                            disabled={!unidadesValidas}
+                        >
+                            <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+                            Cargar receta
+                        </Button>
+                    </div>
+                    {productoElegido && (
+                        <p className="text-sm text-muted-foreground">
+                            {unidades.trim() !== "" && !unidadesValidas
+                                ? `El pedido tiene ${formatStock(productoElegido.quantity)} de este producto.`
+                                : `Llena las cantidades de abajo con la receta. Podés corregirlas antes de confirmar: lo que se rompió al desarmar no vuelve.`}
+                        </p>
+                    )}
+                </div>
+            )}
+
             <div className="max-h-[60vh] space-y-2.5 overflow-y-auto pr-1">
                 {rows.map((r, idx) => {
                     const error = errorDe(r)

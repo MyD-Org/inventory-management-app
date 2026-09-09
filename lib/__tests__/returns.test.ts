@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { planReturn, type ReturnableMaterial } from "@/lib/returns"
+import { planReturn, recipeReturnQuantities, type ReturnableMaterial } from "@/lib/returns"
 
 // El caso real: el taller retiró 3 placas por el pedido y al final no van.
 const retirado: ReturnableMaterial[] = [
@@ -86,6 +86,129 @@ describe("planReturn", () => {
         })
         expect(planReturn(retirado, [{ material_id: 11, quantity: NaN }])).toEqual({
             error: "No hay nada para devolver",
+        })
+    })
+})
+
+// Una luminaria que lleva 1 placa y 0,5 m de perfil por unidad. El pedido es de 3
+// y se retiraron los materiales de las 3.
+const receta = [
+    { material_id: 11, qty_per_unit: 1 },
+    { material_id: 20, qty_per_unit: 0.5 },
+]
+const retiradoDeLas3: ReturnableMaterial[] = [
+    { material_id: 11, label: "Placa 1 led cálida", consumed: 3 },
+    { material_id: 20, label: "Perfil de aluminio", consumed: 1.5 },
+]
+
+describe("recipeReturnQuantities", () => {
+    it("multiplica la receta por las unidades que vuelven", () => {
+        const s = recipeReturnQuantities(receta, 2, retiradoDeLas3)
+        expect(s.get(11)).toBe(2)
+        expect(s.get(20)).toBe(1)
+    })
+
+    it("devuelve la receta entera cuando vuelven todas las unidades", () => {
+        const s = recipeReturnQuantities(receta, 3, retiradoDeLas3)
+        expect(s.get(11)).toBe(3)
+        expect(s.get(20)).toBe(1.5)
+    })
+
+    it("nunca propone más de lo que el pedido tiene afuera del depósito", () => {
+        // Se retiró para una sola unidad, pero vuelven las 3: solo se puede
+        // devolver lo que salió.
+        const retiradoDeUna: ReturnableMaterial[] = [
+            { material_id: 11, label: "Placa 1 led cálida", consumed: 1 },
+            { material_id: 20, label: "Perfil de aluminio", consumed: 0.5 },
+        ]
+        const s = recipeReturnQuantities(receta, 3, retiradoDeUna)
+        expect(s.get(11)).toBe(1)
+        expect(s.get(20)).toBe(0.5)
+    })
+
+    it("omite el material que el pedido nunca retiró", () => {
+        const s = recipeReturnQuantities(receta, 2, [
+            { material_id: 11, label: "Placa 1 led cálida", consumed: 3 },
+        ])
+        expect(s.get(11)).toBe(2)
+        expect(s.has(20)).toBe(false)
+    })
+
+    it("usa la alternativa de la familia si es la que salió del depósito", () => {
+        // El BOM resolvió la placa Samsung, pero el depósito retiró la Cree.
+        const s = recipeReturnQuantities(
+            [{ material_id: 11, qty_per_unit: 1, alternative_ids: [12] }],
+            2,
+            [{ material_id: 12, label: "Placa 1 led cálida — Cree", consumed: 2 }],
+        )
+        expect(s.has(11)).toBe(false)
+        expect(s.get(12)).toBe(2)
+    })
+
+    it("completa con la alternativa cuando el material de la línea no alcanza", () => {
+        // Salieron 1 Samsung y 1 Cree para cubrir las 2 unidades.
+        const s = recipeReturnQuantities(
+            [{ material_id: 11, qty_per_unit: 1, alternative_ids: [12] }],
+            2,
+            [
+                { material_id: 11, label: "Samsung", consumed: 1 },
+                { material_id: 12, label: "Cree", consumed: 1 },
+            ],
+        )
+        expect(s.get(11)).toBe(1)
+        expect(s.get(12)).toBe(1)
+    })
+
+    it("reparte el material que comparten dos líneas sin pasarse del tope", () => {
+        // El mismo tornillo en dos líneas de la receta: 2 por unidad en total,
+        // pero el pedido solo tiene 3 afuera.
+        const s = recipeReturnQuantities(
+            [
+                { material_id: 50, qty_per_unit: 1 },
+                { material_id: 50, qty_per_unit: 1 },
+            ],
+            2,
+            [{ material_id: 50, label: "Tornillo", consumed: 3 }],
+        )
+        expect(s.get(50)).toBe(3)
+    })
+
+    it("ignora las líneas sin material mapeado", () => {
+        const s = recipeReturnQuantities(
+            [
+                { material_id: null, qty_per_unit: 1 },
+                { material_id: 11, qty_per_unit: 1 },
+            ],
+            2,
+            retiradoDeLas3,
+        )
+        expect(s.size).toBe(1)
+        expect(s.get(11)).toBe(2)
+    })
+
+    it("no sugiere nada con unidades vacías, cero o negativas", () => {
+        expect(recipeReturnQuantities(receta, 0, retiradoDeLas3).size).toBe(0)
+        expect(recipeReturnQuantities(receta, -1, retiradoDeLas3).size).toBe(0)
+        expect(recipeReturnQuantities(receta, NaN, retiradoDeLas3).size).toBe(0)
+    })
+
+    it("ignora las líneas con cantidad por unidad en cero", () => {
+        // qty 0 en una variante significa "con esta opción la línea no va".
+        const s = recipeReturnQuantities([{ material_id: 11, qty_per_unit: 0 }], 2, retiradoDeLas3)
+        expect(s.size).toBe(0)
+    })
+
+    it("lo sugerido pasa planReturn, que es quien lo va a validar", () => {
+        const s = recipeReturnQuantities(receta, 3, retiradoDeLas3)
+        const plan = planReturn(
+            retiradoDeLas3,
+            [...s.entries()].map(([material_id, quantity]) => ({ material_id, quantity })),
+        )
+        expect(plan).toEqual({
+            items: [
+                { material_id: 11, quantity: 3 },
+                { material_id: 20, quantity: 1.5 },
+            ],
         })
     })
 })

@@ -13,7 +13,7 @@ import { ChevronRight, PackageMinus, PackagePlus } from "lucide-react"
 import { ConsumeMaterialsForm } from "@/components/consume-materials-form"
 import { ReturnMaterialsForm } from "@/components/return-materials-form"
 import { useToast } from "@/hooks/use-toast"
-import type { ConsumedMaterial, ExtraConsumed, MaterialNeed } from "@/lib/orders"
+import type { ConsumedMaterial, ExtraConsumed, MaterialNeed, OrderItemRecipe } from "@/lib/orders"
 import { formatStock } from "@/lib/format"
 
 // Dos datos distintos, dos columnas: cuánto hay en el depósito (Stock) y en qué
@@ -56,6 +56,7 @@ export function OrderMaterials({
     needs,
     extras = [],
     consumed = [],
+    recipes = [],
     canConsume = true,
 }: {
     orderId: number
@@ -67,6 +68,8 @@ export function OrderMaterials({
      * Es lo que se puede devolver: sale de los movimientos, no del BOM.
      */
     consumed?: ConsumedMaterial[]
+    /** Receta por unidad de cada producto, para devolver "2 de las 3 luminarias". */
+    recipes?: OrderItemRecipe[]
     /**
      * Si puede descontar del inventario. En false la sección queda de lectura:
      * la lista y el stock se siguen viendo (hay que saber si el material está
@@ -260,6 +263,7 @@ export function OrderMaterials({
                     <ReturnMaterialsForm
                         orderId={orderId}
                         consumed={consumed}
+                        recipes={recipes}
                         onCancel={() => setDevolucion(false)}
                         onDone={() => {
                             setDevolucion(false)
