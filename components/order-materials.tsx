@@ -205,7 +205,7 @@ export function OrderMaterials({
 
             {canConsume && (
             <Dialog open={dialogo} onOpenChange={setDialogo}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="sm:max-w-3xl max-h-[92vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Descontar del inventario</DialogTitle>
                     </DialogHeader>

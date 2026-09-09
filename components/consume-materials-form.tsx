@@ -28,6 +28,7 @@ interface Alternative {
     material_id: number
     label: string
     available: number | null
+    barcode: string
 }
 
 interface Row {
@@ -38,6 +39,8 @@ interface Row {
     available: number | null
     /** Cómo se mide el material, ya abreviado ("u.", "m", "kg"). */
     unit: string
+    /** Código de barras, para ir a buscarlo al depósito. '' si el material no tiene. */
+    barcode: string
     /** Lo que pide el pedido. null en las filas agregadas a mano. */
     pending: number | null
     /** Opciones cuando la línea viene de una familia con varios materiales por color. */
@@ -101,6 +104,7 @@ function AgregarMaterial({ onPick, yaEstan }: { onPick: (r: Row) => void; yaEsta
             available: r.available,
             qty: "1",
             unit: "u.",
+            barcode: r.barcode,
             pending: null,
             alternatives: [],
         })
@@ -271,6 +275,7 @@ export function ConsumeMaterialsForm({
                         qty: String(Math.min(n.pending, n.available ?? n.pending)),
                         available: n.available,
                         unit: abreviarUnidad(n.unit),
+                        barcode: n.barcode,
                         pending: n.pending,
                         alternatives: n.alternatives,
                     }
@@ -323,7 +328,7 @@ export function ConsumeMaterialsForm({
 
     return (
         <>
-            <div className="space-y-2.5 max-h-[50vh] overflow-y-auto">
+            <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
                 {rows.map((r, idx) => {
                     const error = errorDe(r)
                     const showSelector = r.alternatives.length > 1
@@ -358,6 +363,7 @@ export function ConsumeMaterialsForm({
                                                               material_id: selected.material_id,
                                                               label: selected.label,
                                                               available: selected.available,
+                                                              barcode: selected.barcode,
                                                           }
                                                         : x,
                                                 ),
@@ -388,6 +394,14 @@ export function ConsumeMaterialsForm({
                                     </Select>
                                 ) : (
                                     <div className="text-base truncate">{r.label}</div>
+                                )}
+                                {/* El código es con lo que se encuentra el material en el
+                                    depósito: va debajo del nombre, en monoespaciada, para
+                                    poder compararlo dígito a dígito con la etiqueta. */}
+                                {r.barcode && (
+                                    <div className="font-mono text-sm text-muted-foreground truncate">
+                                        {r.barcode}
+                                    </div>
                                 )}
                                 {error ? (
                                     <div className="text-sm text-destructive">{error}</div>

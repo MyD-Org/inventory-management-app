@@ -709,8 +709,10 @@ export interface MaterialNeed {
     /** Origen de la alternativa, para ofrecer otras opciones al consumir. */
     family_id: number | null
     spec_value: string | null
+    /** Código de barras del material, para buscarlo en el depósito. '' si no tiene. */
+    barcode: string
     /** Otros materiales posibles para el mismo color/familia. */
-    alternatives: Array<{ material_id: number; label: string; available: number | null }>
+    alternatives: Array<{ material_id: number; label: string; available: number | null; barcode: string }>
 }
 
 // Estado de cada material del pedido: cuánto necesita, cuánto ya se descontó y
@@ -730,6 +732,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
             oim.spec_value,
             COALESCE(i.available_stock, 0) AS available,
             m.unit_of_measure AS unit,
+            m.barcode,
             (oim.material_id IS NOT NULL AND i.id IS NOT NULL) AS en_inventario
         FROM order_item_materials oim
         JOIN order_items oi ON oi.id = oim.order_item_id
@@ -743,7 +746,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
     const familyIds = [...new Set(familyRows.map((r) => r.family_id as number))]
     const specValues = [...new Set(familyRows.map((r) => r.spec_value as string))]
 
-    const alternativesByFamilySpec = new Map<string, Array<{ material_id: number; label: string; available: number | null }>>()
+    const alternativesByFamilySpec = new Map<string, Array<{ material_id: number; label: string; available: number | null; barcode: string }>>()
     if (familyIds.length > 0 && specValues.length > 0) {
         const altRows = await sql`
             SELECT
@@ -751,6 +754,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
                 fo.spec_value,
                 fo.material_id,
                 m.name AS label,
+                m.barcode,
                 i.available_stock
             FROM material_family_options fo
             JOIN materials m ON m.id = fo.material_id
@@ -766,6 +770,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
                 material_id: r.material_id as number,
                 label: r.label as string,
                 available: r.available_stock == null ? null : Number(r.available_stock),
+                barcode: (r.barcode as string | null) ?? '',
             })
             alternativesByFamilySpec.set(key, list)
         }
@@ -793,6 +798,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
                 pending: 0,
                 available: r.en_inventario ? Number(r.available) : null,
                 unit: (r.unit as string | null) ?? null,
+                barcode: (r.barcode as string | null) ?? '',
                 family_id: r.family_id as number,
                 spec_value: r.spec_value as string,
                 alternatives,
@@ -806,6 +812,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
                 pending: 0,
                 available: r.en_inventario ? Number(r.available) : null,
                 unit: (r.unit as string | null) ?? null,
+                barcode: (r.barcode as string | null) ?? '',
                 family_id: null,
                 spec_value: null,
                 alternatives: [],
