@@ -41,6 +41,8 @@ export function MaterialLineAutocomplete({
     catalog,
     families = [],
     linked,
+    freeText = false,
+    placeholder = "Buscar material (nombre o código)…",
     onPick,
     onPickFamily,
     onText,
@@ -49,6 +51,11 @@ export function MaterialLineAutocomplete({
     catalog: MaterialSearchResult[] // inventario completo, cargado una vez por el editor
     families?: FamilySearchResult[] // familias de materiales; vacío si el que llama no las usa
     linked: boolean // true si el texto actual corresponde a un material elegido de la lista
+    // true donde escribir algo que no es del inventario es una carga válida y no un
+    // error a corregir (Otros costos: "flete" es una línea perfectamente legítima).
+    // Sin esto el campo se pinta de rojo y avisa que el material no existe.
+    freeText?: boolean
+    placeholder?: string
     onPick: (m: MaterialSearchResult) => void
     onPickFamily?: (f: FamilySearchResult) => void
     onText: (text: string) => void
@@ -67,7 +74,7 @@ export function MaterialLineAutocomplete({
     // Busca por nombre y por código de barras, difuso y sin acentos.
     const matches = fuzzyFilter(catalog, value, ["name", "barcode"], 12)
     const familyMatches = onPickFamily ? fuzzyFilter(families, value, ["name"], 4) : []
-    const invalid = value.trim() !== "" && !linked
+    const invalid = !freeText && value.trim() !== "" && !linked
 
     // Las familias van primero en la lista, así que también primero en el
     // recorrido con las flechas: el índice de teclado es familias + materiales.
@@ -104,7 +111,7 @@ export function MaterialLineAutocomplete({
                 role="combobox"
                 aria-expanded={open}
                 aria-autocomplete="list"
-                placeholder="Buscar material (nombre o código)…"
+                placeholder={placeholder}
                 aria-invalid={invalid}
                 className={invalid ? "border-destructive focus-visible:ring-destructive" : undefined}
             />
@@ -173,7 +180,11 @@ export function MaterialLineAutocomplete({
                         </button>
                     ))}
                     {value.trim() !== "" && matches.length === 0 && familyMatches.length === 0 && (
-                        <p className="px-3 pt-2.5 text-sm text-muted-foreground">Ese material no existe en el inventario.</p>
+                        <p className="px-3 pt-2.5 text-sm text-muted-foreground">
+                            {freeText
+                                ? "No hay un material con ese nombre. Podés dejarlo como costo escrito a mano."
+                                : "Ese material no existe en el inventario."}
+                        </p>
                     )}
                     {/* El cálculo de costos solo usa materiales del inventario: acceso directo a crearlo. */}
                     <Link

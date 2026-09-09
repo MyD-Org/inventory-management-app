@@ -90,6 +90,12 @@ export default async function EditCostPage({ params }: { params: { id: string } 
         extras: extras.map((e) => ({
             label: e.label,
             amount: Number(e.amount),
+            // Vínculo opcional con una materia prima del inventario
+            // (scripts/36-otros-costos-material.sql). Las fichas viejas traen NULL
+            // y siguen siendo un importe escrito a mano.
+            materialId: e.material_id ?? null,
+            qty: e.qty === null || e.qty === undefined ? 1 : Number(e.qty),
+            unitCost: e.unit_cost === null || e.unit_cost === undefined ? 0 : Number(e.unit_cost),
         })),
         alegraItemId: row.alegra_item_id ?? null,
     }
