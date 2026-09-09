@@ -5,6 +5,7 @@ const pedido = (over: Partial<SearchableOrder> = {}): SearchableOrder => ({
     order_number: 128,
     customer_name: "Juan Pérez",
     customer_external_id: "CLI-7",
+    reference: "OC-4821",
     status: "por_facturar",
     items: [{ product: "Fuente switching 24V 6.5A" }],
     ...over,
@@ -26,6 +27,13 @@ describe("matchesOrderQuery", () => {
         expect(matchesOrderQuery(pedido(), "perez")).toBe(true)
         expect(matchesOrderQuery(pedido(), "PÉREZ")).toBe(true)
         expect(matchesOrderQuery(pedido(), "CLI-7")).toBe(true)
+    })
+
+    it("encuentra por la referencia, entera o por un pedazo", () => {
+        expect(matchesOrderQuery(pedido(), "OC-4821")).toBe(true)
+        expect(matchesOrderQuery(pedido(), "4821")).toBe(true)
+        // Sin referencia cargada no la encuentra por el código de otro pedido.
+        expect(matchesOrderQuery(pedido({ reference: null }), "4821")).toBe(false)
     })
 
     it("encuentra por producto", () => {

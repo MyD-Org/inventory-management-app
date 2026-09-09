@@ -12,6 +12,8 @@ export interface SearchableOrder {
     order_number: number
     customer_name: string | null
     customer_external_id: string
+    /** Código externo del pedido (orden de compra del cliente, expediente). */
+    reference: string | null
     status: OrderStatus
     items: { product: string }[]
 }
@@ -27,8 +29,7 @@ function normalize(s: string): string {
 
 // Todo lo que identifica al pedido, aplanado en un solo texto. Entra también la
 // referencia: el código del otro lado es justamente por donde busca quien llega
-// con la orden de compra del cliente en la mano. El estado entra
-// DOS veces: la etiqueta que se ve ("Preparando entrega") y la clave cruda
+// con la orden de compra del cliente en la mano. El estado entra DOS veces: la etiqueta que se ve ("Preparando entrega") y la clave cruda
 // ("por facturar"), porque en el taller se lo sigue nombrando por la clave.
 function haystack(o: SearchableOrder): string {
     return normalize(
@@ -36,6 +37,7 @@ function haystack(o: SearchableOrder): string {
             String(o.order_number),
             o.customer_name ?? "",
             o.customer_external_id,
+            o.reference ?? "",
             STATUS_LABELS[o.status] ?? "",
             o.status.replace(/_/g, " "),
             ...o.items.map((i) => i.product),
