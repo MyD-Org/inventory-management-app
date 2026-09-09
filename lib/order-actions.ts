@@ -972,3 +972,31 @@ export async function addOrderNote(orderId: number, body: string) {
     revalidatePath(`/pedidos/${orderId}`);
     return { ok: true };
 }
+
+// Borrar una nota. Solo la propia, o cualquiera si sos admin: una nota es lo que
+// alguien escribió a mano, no un cambio de campo — el resto de la historia no se
+// toca desde ningún lado.
+//
+// El borrado es de verdad (DELETE, no un flag): lo que se quiere es que el
+// mensaje desaparezca de la pantalla del pedido, y una nota tachada seguiría
+// contando lo que se quiso sacar.
+export async function deleteOrderNote(orderId: number, eventId: number) {
+    const session = await auth();
+    if (!session?.user) return { error: 'No autenticado' };
+
+    const [nota] = await sql`
+        SELECT id, actor_email FROM order_events
+        WHERE id = ${eventId} AND order_id = ${orderId} AND kind = 'note'
+    `;
+    if (!nota) return { error: 'La nota no existe' };
+
+    const email = session.user.email ?? null;
+    const esAutor = Boolean(email) && nota.actor_email === email;
+    if (!esAutor && session.user.role !== 'admin') {
+        return { error: 'Solo podés borrar tus propias notas' };
+    }
+
+    await sql`DELETE FROM order_events WHERE id = ${eventId}`;
+    revalidatePath(`/pedidos/${orderId}`);
+    return { ok: true };
+}
