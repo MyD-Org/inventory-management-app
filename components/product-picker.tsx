@@ -115,13 +115,17 @@ export function ProductPicker({
 
     useEffect(() => {
         function onClickOutside(e: MouseEvent) {
+            const campo = boxRef.current
+            // Esta misma instancia puede estar oculta por CSS (es la copia
+            // de tabla/tarjeta que no corresponde al ancho actual). Si está
+            // oculta, cualquier click real del usuario cae "afuera" de su
+            // campo — sin este corte, cancelaba el alta que se estaba
+            // haciendo en la OTRA instancia (la visible) antes de que el
+            // click llegara a confirmar el producto elegido.
+            if (!campo || campo.offsetParent === null) return
             const t = e.target as Node
             // El menú ya no es hijo del campo: hay que preguntarle a los dos.
-            if (
-                boxRef.current &&
-                !boxRef.current.contains(t) &&
-                !menuRef.current?.contains(t)
-            ) {
+            if (!campo.contains(t) && !menuRef.current?.contains(t)) {
                 setOpen(false)
                 onCancel?.()
             }
