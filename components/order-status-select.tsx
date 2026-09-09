@@ -18,12 +18,15 @@ export function OrderStatusSelect({
     status,
     hasInvoice = false,
     hasRemission = false,
+    forStock = false,
 }: {
     id: number
     status: OrderStatus
     /** Qué documentos YA existen: define qué va a emitirse al pasar a facturar. */
     hasInvoice?: boolean
     hasRemission?: boolean
+    /** Producción propia: no se factura; su final es "En depósito". */
+    forStock?: boolean
 }) {
     const router = useRouter()
     const { setEmitiendo } = useOrderEmission()
@@ -79,7 +82,11 @@ export function OrderStatusSelect({
                 <span>{STATUS_LABELS[value]}</span>
             </SelectTrigger>
             <SelectContent>
-                {ORDER_STATUSES.map((s) => (
+                {ORDER_STATUSES.filter((s) =>
+                    forStock
+                        ? s !== "por_facturar" && s !== "listo_para_retirar"
+                        : s !== "en_deposito",
+                ).map((s) => (
                     <SelectItem key={s} value={s} className="text-base">
                         <span className="flex items-center gap-2">
                             <StatusIcon status={s} />
