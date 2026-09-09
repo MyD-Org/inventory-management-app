@@ -20,6 +20,7 @@ export type OrderEventKind =
     | "item_updated"
     | "item_removed"
     | "materials_consumed"
+    | "materials_returned"
     | "invoice"
     | "note"
 

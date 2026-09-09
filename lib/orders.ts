@@ -826,13 +826,23 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
     const alternativeIds = [...groups.values()].flatMap((g) => g.alternatives.map((a) => a.material_id))
     const allIds = [...new Set([...materialIds, ...alternativeIds])]
 
+    // NETO: salidas menos entradas. Devolver material al depósito escribe una
+    // entrada por el pedido (ver returnOrderMaterials), y si no se restara acá el
+    // pedido seguiría figurando como descontado con el material de vuelta en el
+    // estante. GREATEST(...,0) porque una devolución de más —material que se
+    // retiró antes de que existiera el vínculo con el pedido— no puede dejar lo
+    // consumido en negativo y hacer que el pedido pida de más.
     const consumedByMaterial = new Map<number, number>()
     if (allIds.length > 0) {
         const consumedRows = await sql`
-            SELECT material_id, COALESCE(SUM(quantity), 0) AS consumed
+            SELECT
+                material_id,
+                GREATEST(COALESCE(SUM(
+                    CASE WHEN movement_type = 'salida' THEN quantity ELSE -quantity END
+                ), 0), 0) AS consumed
             FROM stock_movements
             WHERE order_id = ${orderId}
-              AND movement_type = 'salida'
+              AND movement_type IN ('salida', 'entrada')
               AND material_id = ANY(${allIds})
             GROUP BY material_id
         `
@@ -852,6 +862,125 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
     }
 
     return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label))
+}
+
+export interface ConsumedMaterial {
+    material_id: number
+    label: string
+    /** Neto retirado por este pedido: salidas menos lo ya devuelto. Siempre > 0. */
+    consumed: number
+    unit: string | null
+    barcode: string
+}
+
+// Lo que HOY está afuera del depósito por este pedido, material por material.
+//
+// Es la lista para devolver, y por eso sale de los movimientos y no del BOM: lo
+// que se puede devolver es lo que realmente se retiró, sin importar si estaba en
+// la lista de materiales (una alternativa de familia, un extra que se rompió) ni
+// cuánto pedía la receta. Un material devuelto entero queda en cero y desaparece
+// de la lista por el HAVING.
+export async function consumedMaterials(orderId: number): Promise<ConsumedMaterial[]> {
+    const rows = await sql`
+        SELECT
+            sm.material_id,
+            m.name AS label,
+            m.unit_of_measure AS unit,
+            m.barcode,
+            COALESCE(SUM(
+                CASE WHEN sm.movement_type = 'salida' THEN sm.quantity ELSE -sm.quantity END
+            ), 0) AS consumed
+        FROM stock_movements sm
+        JOIN materials m ON m.id = sm.material_id
+        WHERE sm.order_id = ${orderId}
+          AND sm.movement_type IN ('salida', 'entrada')
+        GROUP BY sm.material_id, m.name, m.unit_of_measure, m.barcode
+        HAVING COALESCE(SUM(
+            CASE WHEN sm.movement_type = 'salida' THEN sm.quantity ELSE -sm.quantity END
+        ), 0) > 0
+        ORDER BY m.name ASC
+    `
+
+    return (rows as any[]).map((r) => ({
+        material_id: r.material_id as number,
+        label: r.label as string,
+        consumed: Number(r.consumed),
+        unit: (r.unit as string | null) ?? null,
+        barcode: (r.barcode as string | null) ?? '',
+    }))
+}
+
+export interface OrderItemRecipe {
+    order_item_id: number
+    line_no: number
+    product: string
+    /** Unidades pedidas de este producto: el tope al devolver la línea entera. */
+    quantity: number
+    lines: Array<{
+        material_id: number | null
+        label: string
+        qty_per_unit: number
+        /** Alternativas de la familia: lo que pudo haber salido en su lugar. */
+        alternative_ids: number[]
+    }>
+}
+
+// La receta de cada producto del pedido, por unidad. Es lo que permite decir
+// "devuelvo 2 de las 3 luminarias" y que salga la lista de materiales sola.
+//
+// qty_per_unit ya está guardado al explotar el BOM (scripts/14-pedidos.sql), así
+// que no hay que dividir por la cantidad de la línea ni arrastrar errores de
+// redondeo con los materiales que se miden.
+export async function orderItemRecipes(orderId: number): Promise<OrderItemRecipe[]> {
+    const rows = await sql`
+        SELECT
+            oi.id AS order_item_id,
+            oi.line_no,
+            oi.product,
+            oi.quantity,
+            oim.material_id,
+            oim.label,
+            oim.qty_per_unit,
+            oim.family_id,
+            oim.spec_value,
+            -- Las alternativas del mismo color, que es lo que el depósito pudo
+            -- haber retirado en lugar del material que resolvió el BOM.
+            COALESCE((
+                SELECT array_agg(fo.material_id ORDER BY fo.is_default DESC, fo.id ASC)
+                FROM material_family_options fo
+                WHERE fo.family_id = oim.family_id
+                  AND fo.spec_value = oim.spec_value
+                  AND fo.material_id <> COALESCE(oim.material_id, -1)
+            ), ARRAY[]::integer[]) AS alternative_ids
+        FROM order_items oi
+        JOIN order_item_materials oim ON oim.order_item_id = oi.id
+        WHERE oi.order_id = ${orderId}
+        ORDER BY oi.line_no ASC, oim.id ASC
+    `
+
+    const items = new Map<number, OrderItemRecipe>()
+    for (const r of rows as any[]) {
+        const id = r.order_item_id as number
+        let item = items.get(id)
+        if (!item) {
+            item = {
+                order_item_id: id,
+                line_no: Number(r.line_no),
+                product: r.product as string,
+                quantity: Number(r.quantity),
+                lines: [],
+            }
+            items.set(id, item)
+        }
+        item.lines.push({
+            material_id: r.material_id === null ? null : Number(r.material_id),
+            label: r.label as string,
+            qty_per_unit: Number(r.qty_per_unit),
+            alternative_ids: ((r.alternative_ids as number[] | null) ?? []).map(Number),
+        })
+    }
+
+    return [...items.values()]
 }
 
 export interface ExtraConsumed {
@@ -874,12 +1003,16 @@ export async function extraConsumedMaterials(orderId: number): Promise<ExtraCons
             m.name AS label,
             m.unit_of_measure AS unit,
             MAX(i.available_stock) AS available,
-            COALESCE(SUM(sm.quantity), 0) AS quantity
+            -- Neto, igual que en materialNeeds: un extra devuelto entero deja de
+            -- ser un extra y desaparece de la lista por el HAVING de abajo.
+            COALESCE(SUM(
+                CASE WHEN sm.movement_type = 'salida' THEN sm.quantity ELSE -sm.quantity END
+            ), 0) AS quantity
         FROM stock_movements sm
         JOIN materials m ON m.id = sm.material_id
         LEFT JOIN inventory i ON i.material_id = sm.material_id
         WHERE sm.order_id = ${orderId}
-          AND sm.movement_type = 'salida'
+          AND sm.movement_type IN ('salida', 'entrada')
           AND NOT EXISTS (
               SELECT 1
               FROM order_item_materials oim
@@ -897,7 +1030,9 @@ export async function extraConsumedMaterials(orderId: number): Promise<ExtraCons
               WHERE oi.order_id = ${orderId} AND fo.material_id = sm.material_id
           )
         GROUP BY sm.material_id, m.name, m.unit_of_measure
-        HAVING COALESCE(SUM(sm.quantity), 0) > 0
+        HAVING COALESCE(SUM(
+            CASE WHEN sm.movement_type = 'salida' THEN sm.quantity ELSE -sm.quantity END
+        ), 0) > 0
         ORDER BY m.name ASC
     `
 

@@ -13,6 +13,7 @@ import { invoiceOrder } from '@/lib/invoicing';
 import { remitOrder } from '@/lib/remissions';
 import {
     addOrderItemInternal,
+    consumedMaterials,
     createOrder,
     deleteOrderItemInternal,
     diffSpecs,
@@ -28,6 +29,7 @@ import {
 } from '@/lib/orders';
 import { isFixedSpecField } from '@/lib/order-statuses';
 import { canConsumeStock } from '@/lib/roles';
+import { planReturn } from '@/lib/returns';
 
 export async function createOrderManual(payload: OrderPayload) {
     const session = await auth();
@@ -787,10 +789,14 @@ export async function listOrdersWithPendingMaterials() {
                 JOIN order_items oi ON oi.id = oim.order_item_id
                 WHERE oi.order_id = o.id AND oim.material_id IS NOT NULL
                 GROUP BY oim.material_id
+                -- Neto: lo devuelto al depósito vuelve a estar pendiente, así el
+                -- pedido reaparece en "descontar los materiales de un pedido".
                 HAVING SUM(oim.qty_total) > COALESCE((
-                    SELECT SUM(sm.quantity) FROM stock_movements sm
+                    SELECT SUM(
+                        CASE WHEN sm.movement_type = 'salida' THEN sm.quantity ELSE -sm.quantity END
+                    ) FROM stock_movements sm
                     WHERE sm.order_id = o.id AND sm.material_id = oim.material_id
-                      AND sm.movement_type = 'salida'
+                      AND sm.movement_type IN ('salida', 'entrada')
                 ), 0)
               )
             ORDER BY o.created_at DESC
@@ -811,6 +817,102 @@ export async function getOrderNeeds(orderId: number) {
     const session = await auth();
     if (!session?.user) return [];
     return materialNeeds(orderId);
+}
+
+// Lo que hoy está afuera del depósito por este pedido, para armar la devolución.
+export async function getOrderConsumed(orderId: number) {
+    const session = await auth();
+    if (!session?.user) return [];
+    return consumedMaterials(orderId);
+}
+
+// Devolver al inventario material que se había retirado por un pedido: el taller
+// sacó 3 placas, al final no van, y vuelven al estante.
+//
+// Se registra como una ENTRADA vinculada al pedido, sin tocar la salida original:
+// en el historial del inventario quedan los dos movimientos, que es lo que pasó de
+// verdad. Lo consumido por el pedido es el neto de ambos, así que la lista de
+// materiales vuelve a mostrar el material como pendiente.
+//
+// El tope es lo NETO retirado por este pedido, no el stock: no se puede devolver
+// lo que este pedido nunca sacó. Devolver de más sería una entrada de material que
+// vino de otro lado, y eso es un ajuste de inventario, no una devolución.
+export async function returnOrderMaterials(
+    orderId: number,
+    items: { material_id: number; quantity: number }[],
+) {
+    const session = await auth();
+    if (!session?.user) return { error: 'No autenticado' };
+    // Mismo permiso que retirar: quien puede sacar del depósito puede devolverlo.
+    // El rol "Solo pedidos" no toca el stock en ninguna dirección.
+    if (!canConsumeStock(session.user.role)) {
+        return { error: 'Tu usuario no puede mover materiales del inventario' };
+    }
+
+    const userName = session.user.name || session.user.email || 'Desconocido';
+
+    try {
+        const [order] = await sql`
+            SELECT order_number FROM orders WHERE id = ${orderId}
+        `;
+        if (!order) return { error: 'El pedido no existe' };
+
+        // Se valida TODO contra lo retirado antes de tocar nada, igual que al
+        // descontar: media devolución aplicada es peor que ninguna. La regla vive
+        // en lib/returns.ts, sin base de datos.
+        const plan = planReturn(await consumedMaterials(orderId), items);
+        if ('error' in plan) return { error: plan.error };
+        const aDevolver = plan.items;
+
+        for (const item of aDevolver) {
+            const [inv] = await sql`
+                SELECT current_stock FROM inventory WHERE material_id = ${item.material_id}
+            `;
+            if (!inv) return { error: 'Ese material ya no está en el inventario' };
+            const previo = Number(inv.current_stock);
+            const nuevo = previo + item.quantity;
+
+            await sql`
+                INSERT INTO stock_movements (
+                    material_id, movement_type, quantity, previous_stock, new_stock,
+                    reference_number, notes, user_name, order_id
+                )
+                VALUES (
+                    ${item.material_id}, 'entrada', ${item.quantity}, ${previo}, ${nuevo},
+                    ${`Pedido #${order.order_number}`},
+                    ${`Devolución al depósito de material retirado por el pedido #${order.order_number}`},
+                    ${userName}, ${orderId}
+                )
+            `;
+            await sql`
+                UPDATE inventory SET current_stock = ${nuevo}, last_updated = NOW()
+                WHERE material_id = ${item.material_id}
+            `;
+        }
+
+        // logOrderEvent traga sus propios errores a propósito, así que si falta
+        // aplicar la migración que suma 'materials_returned' al CHECK, la
+        // devolución igual queda hecha: lo único que se pierde es el renglón en la
+        // actividad del pedido. El movimiento de inventario, que es el dato duro,
+        // queda igual en /movimientos.
+        await logOrderEvent(orderId, {
+            kind: 'materials_returned',
+            newValue: String(aDevolver.length),
+        });
+
+        revalidatePath(`/pedidos/${orderId}`);
+        revalidatePath('/inventory');
+        revalidatePath('/movimientos');
+        return { ok: true, count: aDevolver.length };
+    } catch (error) {
+        console.error('Error en returnOrderMaterials:', error);
+        const { message } = (error ?? {}) as { message?: string };
+
+        return {
+            error: 'No se pudo devolver al inventario',
+            detail: process.env.NODE_ENV === 'production' ? undefined : message,
+        };
+    }
 }
 
 // Materiales del inventario, para agregar una fila al descuento que no venía

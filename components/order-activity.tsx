@@ -171,6 +171,12 @@ function Cambio({ e }: { e: OrderEvent }) {
                         descontó <Val>{nuevo} {Number(nuevo) === 1 ? "material" : "materiales"}</Val> del inventario
                     </>
                 )
+            case "materials_returned":
+                return (
+                    <>
+                        devolvió <Val>{nuevo} {Number(nuevo) === 1 ? "material" : "materiales"}</Val> al inventario
+                    </>
+                )
             case "invoice":
                 return <>emitió la factura <Val>{nuevo}</Val></>
             default:

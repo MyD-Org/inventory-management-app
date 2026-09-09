@@ -9,10 +9,11 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ChevronRight, PackageMinus } from "lucide-react"
+import { ChevronRight, PackageMinus, PackagePlus } from "lucide-react"
 import { ConsumeMaterialsForm } from "@/components/consume-materials-form"
+import { ReturnMaterialsForm } from "@/components/return-materials-form"
 import { useToast } from "@/hooks/use-toast"
-import type { ExtraConsumed, MaterialNeed } from "@/lib/orders"
+import type { ConsumedMaterial, ExtraConsumed, MaterialNeed, OrderItemRecipe } from "@/lib/orders"
 import { formatStock } from "@/lib/format"
 
 // Dos datos distintos, dos columnas: cuánto hay en el depósito (Stock) y en qué
@@ -54,12 +55,21 @@ export function OrderMaterials({
     orderId,
     needs,
     extras = [],
+    consumed = [],
+    recipes = [],
     canConsume = true,
 }: {
     orderId: number
     needs: MaterialNeed[]
     /** Lo retirado por este pedido que no estaba en la lista de materiales. */
     extras?: ExtraConsumed[]
+    /**
+     * Lo que hoy está afuera del depósito por este pedido, material por material.
+     * Es lo que se puede devolver: sale de los movimientos, no del BOM.
+     */
+    consumed?: ConsumedMaterial[]
+    /** Receta por unidad de cada producto, para devolver "2 de las 3 luminarias". */
+    recipes?: OrderItemRecipe[]
     /**
      * Si puede descontar del inventario. En false la sección queda de lectura:
      * la lista y el stock se siguen viendo (hay que saber si el material está
@@ -74,6 +84,7 @@ export function OrderMaterials({
     // va a buscar al depósito, no cada vez que se mira el pedido.
     const [abierto, setAbierto] = useState(false)
     const [dialogo, setDialogo] = useState(false)
+    const [devolucion, setDevolucion] = useState(false)
 
     const descontables = needs.filter((n) => n.material_id !== null && n.pending > 0)
     const conFaltante = needs.filter((n) => n.available !== null && n.pending > n.available)
@@ -124,6 +135,15 @@ export function OrderMaterials({
                         <Button variant="outline" size="sm" onClick={() => setDialogo(true)}>
                             <PackageMinus className="mr-1.5 h-3.5 w-3.5" />
                             {descontables.length === 0 ? "Retirar más materiales" : "Descontar del inventario"}
+                        </Button>
+                    )}
+                    {/* Solo si hay algo afuera del depósito por este pedido: sin retiro
+                        no hay nada que devolver y el botón sería una puerta a una
+                        lista vacía. */}
+                    {canConsume && consumed.length > 0 && (
+                        <Button variant="outline" size="sm" onClick={() => setDevolucion(true)}>
+                            <PackagePlus className="mr-1.5 h-3.5 w-3.5" />
+                            Devolver al inventario
                         </Button>
                     )}
                 </div>
@@ -221,6 +241,32 @@ export function OrderMaterials({
                         onCancel={() => setDialogo(false)}
                         onDone={() => {
                             setDialogo(false)
+                            router.refresh()
+                        }}
+                    />
+                </DialogContent>
+            </Dialog>
+            )}
+
+            {canConsume && (
+            <Dialog open={devolucion} onOpenChange={setDevolucion}>
+                <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Devolver al inventario</DialogTitle>
+                    </DialogHeader>
+
+                    <p className="-mt-2 text-base text-muted-foreground">
+                        Productos de los que ya se retiró material. Al devolver vuelve al depósito
+                        como una entrada de stock; el retiro original queda en el historial.
+                    </p>
+
+                    <ReturnMaterialsForm
+                        orderId={orderId}
+                        consumed={consumed}
+                        recipes={recipes}
+                        onCancel={() => setDevolucion(false)}
+                        onDone={() => {
+                            setDevolucion(false)
                             router.refresh()
                         }}
                     />

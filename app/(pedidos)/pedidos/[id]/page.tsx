@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { unstable_noStore } from "next/cache"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
-import { extraConsumedMaterials, getSpecs, listSellableProducts, materialNeeds, readOrder, reconcileOrderBoms } from "@/lib/orders"
+import { consumedMaterials, extraConsumedMaterials, getSpecs, listSellableProducts, materialNeeds, orderItemRecipes, readOrder, reconcileOrderBoms } from "@/lib/orders"
 import { orderNeedsReview } from "@/lib/order-statuses"
 import { STATUS_LABELS } from "@/lib/order-statuses"
 import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
@@ -105,9 +105,13 @@ export default async function OrderDetailPage({
 
     // Los productos del selector salen del CATÁLOGO de Alegra, no de las hojas
     // de costo: un producto existe porque se vende, y la hoja es opcional.
-    const [needs, extras, vocab, products, events, invoiceDrift, remissionDrift] = await Promise.all([
+    const [needs, extras, consumed, recipes, vocab, products, events, invoiceDrift, remissionDrift] = await Promise.all([
         materialNeeds(id),
         extraConsumedMaterials(id),
+        // Lo que hoy está afuera del depósito por el pedido: es lo devolvible.
+        consumedMaterials(id),
+        // La receta por unidad de cada producto, para devolver por producto.
+        orderItemRecipes(id),
         getSpecs(),
         listSellableProducts(),
         listOrderEvents(id),
@@ -347,6 +351,8 @@ export default async function OrderDetailPage({
                         orderId={order.id}
                         needs={needs}
                         extras={extras}
+                        consumed={consumed}
+                        recipes={recipes}
                         canConsume={canConsumeStock(session?.user?.role)}
                     />
 
