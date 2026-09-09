@@ -167,7 +167,17 @@ export interface BudgetPayload {
         family_id?: number | null;
     }>;
     labor: Array<{ resource_id: number | null; label: string; hours: number; hourly_rate: number }>;
-    extras: Array<{ label: string; amount: number }>;
+    // Otros costos. material_id opcional: la línea puede ser texto libre (flete,
+    // tercerizado) o estar vinculada a una materia prima del inventario, y en ese
+    // caso amount = qty * unit_cost (snapshot, como en materials). Vinculada o no,
+    // una línea de acá es SOLO costo: no entra al BOM ni descuenta stock.
+    extras: Array<{
+        label: string;
+        amount: number;
+        material_id?: number | null;
+        qty?: number | null;
+        unit_cost?: number | null;
+    }>;
 }
 
 function validBudgetPayload(p: BudgetPayload): string | null {
@@ -204,6 +214,10 @@ function validBudgetPayload(p: BudgetPayload): string | null {
     }
     for (const e of p.extras) {
         if (!e.label?.trim() || !Number.isFinite(e.amount) || e.amount < 0) return 'Hay costos adicionales inválidos';
+        if (e.material_id != null) {
+            if (!Number.isFinite(e.qty ?? NaN) || (e.qty as number) < 0) return `La cantidad de "${e.label.trim()}" es inválida`;
+            if (!Number.isFinite(e.unit_cost ?? NaN) || (e.unit_cost as number) < 0) return `El costo unitario de "${e.label.trim()}" es inválido`;
+        }
     }
     return null;
 }
@@ -290,8 +304,8 @@ export async function saveBudget(id: number | null, payload: BudgetPayload) {
         }
         for (const e of payload.extras) {
             await sql`
-                INSERT INTO budget_extras (budget_id, label, amount)
-                VALUES (${budgetId}, ${e.label.trim()}, ${e.amount})
+                INSERT INTO budget_extras (budget_id, label, amount, material_id, qty, unit_cost)
+                VALUES (${budgetId}, ${e.label.trim()}, ${e.amount}, ${e.material_id ?? null}, ${e.material_id == null ? null : (e.qty ?? 0)}, ${e.material_id == null ? null : (e.unit_cost ?? 0)})
             `;
         }
 

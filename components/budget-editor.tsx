@@ -85,8 +85,21 @@ interface LaborLine {
 
 interface ExtraLine {
     label: string
+    // Total de la línea. Escrito a mano en las líneas sueltas; en las vinculadas
+    // a un material lo manda qty * unitCost (ver extraAmount).
     amount: number
+    // Materia prima del inventario que origina el costo. null = costo escrito a
+    // mano de toda la vida (flete, tercerizado). Vinculada, el costo unitario sale
+    // del inventario y se refresca con "Actualizar precios".
+    // OJO: una línea de Otros Costos es SOLO costo. No entra al BOM del pedido y
+    // no se descuenta del depósito, esté vinculada o no.
+    materialId: number | null
+    qty: number
+    unitCost: number
 }
+
+// Cuánto suma una línea de Otros Costos.
+const extraAmount = (e: ExtraLine): number => (e.materialId !== null ? e.qty * e.unitCost : e.amount)
 
 export interface BudgetEditorData {
     id: number
@@ -97,7 +110,9 @@ export interface BudgetEditorData {
     // Sin uid: se lo pone el editor al montar (es identidad de UI, no de datos).
     materials: Array<Omit<MaterialLine, "uid">>
     labor: LaborLine[]
-    extras: ExtraLine[]
+    // Los campos de material son opcionales: las fichas guardadas antes de
+    // scripts/36-otros-costos-material.sql solo tienen etiqueta e importe.
+    extras: Array<Partial<ExtraLine> & { label: string; amount: number }>
     alegraItemId: number | null
 }
 
@@ -160,7 +175,15 @@ export function BudgetEditor({
         () => (budget?.materials ?? []).map((m) => applyFamily({ ...m, uid: newUid() })),
     )
     const [labor, setLabor] = useState<LaborLine[]>(budget?.labor ?? [])
-    const [extras, setExtras] = useState<ExtraLine[]>(budget?.extras ?? [])
+    const [extras, setExtras] = useState<ExtraLine[]>(
+        () =>
+            (budget?.extras ?? []).map((e) => ({
+                ...e,
+                materialId: e.materialId ?? null,
+                qty: e.qty ?? 1,
+                unitCost: e.unitCost ?? 0,
+            })),
+    )
     const [saving, setSaving] = useState(false)
     const [confirmOpen, setConfirmOpen] = useState(false)
     const [deleting, setDeleting] = useState(false)
@@ -483,7 +506,31 @@ export function BudgetEditor({
     }
 
     // ── Otros costos ─────────────────────────────────────────────────────────
-    const addExtra = () => setExtras((prev) => [...prev, { label: "", amount: 0 }])
+    const addExtra = () =>
+        setExtras((prev) => [...prev, { label: "", amount: 0, materialId: null, qty: 1, unitCost: 0 }])
+
+    // Elegir una materia prima del inventario en la línea i: trae nombre y costo
+    // unitario, y el importe pasa a calcularse cantidad × costo.
+    const pickExtraMaterial = (i: number, r: MaterialSearchResult) => {
+        setExtras((prev) =>
+            prev.map((e, idx) =>
+                idx === i
+                    ? {
+                          ...e,
+                          materialId: r.id,
+                          label: r.name,
+                          unitCost: Number(r.unit_cost),
+                          qty: e.qty > 0 ? e.qty : 1,
+                      }
+                    : e,
+            ),
+        )
+    }
+
+    // Escribir libre desvincula la línea: vuelve a ser un costo cargado a mano.
+    const setExtraText = (i: number, text: string) => {
+        setExtras((prev) => prev.map((e, idx) => (idx === i ? { ...e, materialId: null, label: text } : e)))
+    }
     const updateExtra = (i: number, patch: Partial<ExtraLine>) => {
         setExtras((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...patch } : e)))
     }
@@ -504,6 +551,9 @@ export function BudgetEditor({
             const family = m.familyId !== null ? familyById.get(m.familyId) : undefined
             for (const o of family?.options ?? []) ids.add(o.materialId)
         }
+        // Las líneas de Otros costos vinculadas a una materia prima también tienen
+        // costo del inventario: se actualizan con el mismo botón.
+        for (const e of extras) if (e.materialId !== null) ids.add(e.materialId)
         if (ids.size === 0) {
             toast("Sin materiales del inventario", { description: "No hay líneas vinculadas para actualizar." })
             return
@@ -533,6 +583,13 @@ export function BudgetEditor({
                     : m
             }),
         )
+        setExtras((prev) =>
+            prev.map((e) =>
+                e.materialId !== null && costs[e.materialId] !== undefined
+                    ? { ...e, unitCost: costs[e.materialId] }
+                    : e,
+            ),
+        )
         toast.success("Precios actualizados", { description: "Costos tomados del inventario actual." })
     }
 
@@ -540,7 +597,7 @@ export function BudgetEditor({
     const totals = useMemo(() => {
         const materialsTotal = materials.reduce((acc, m) => acc + m.qty * m.unitCost, 0)
         const laborTotal = labor.reduce((acc, l) => acc + l.hours * l.hourlyRate, 0)
-        const extrasTotal = extras.reduce((acc, e) => acc + e.amount, 0)
+        const extrasTotal = extras.reduce((acc, e) => acc + extraAmount(e), 0)
         const cost = materialsTotal + laborTotal + extrasTotal
         const salePrice = cost * (1 + (Number.isFinite(marginPct) ? marginPct : 0) / 100)
         return { materialsTotal, laborTotal, extrasTotal, cost, salePrice, profit: salePrice - cost }
@@ -616,7 +673,13 @@ export function BudgetEditor({
                 hours: l.hours,
                 hourly_rate: l.hourlyRate,
             })),
-            extras: extras.map((e) => ({ label: e.label, amount: e.amount })),
+            extras: extras.map((e) => ({
+                label: e.label,
+                amount: extraAmount(e),
+                material_id: e.materialId,
+                qty: e.materialId === null ? null : e.qty,
+                unit_cost: e.materialId === null ? null : e.unitCost,
+            })),
         }
         setSaving(true)
         const result = await saveBudget(budget?.id ?? null, payload)
@@ -1054,22 +1117,71 @@ export function BudgetEditor({
                     <CardContent className="space-y-4">
                         {extras.length > 0 && (
                             <div className="space-y-2">
+                                <div className="hidden md:grid grid-cols-[1fr_116px_106px_96px_36px] gap-2 text-xs text-muted-foreground px-1">
+                                    <span>Concepto o material</span>
+                                    <span className="text-center">Cantidad</span>
+                                    <span className="text-center">Costo unitario</span>
+                                    <span className="text-right">Importe</span>
+                                    <span />
+                                </div>
                                 {extras.map((e, i) => (
-                                    <div key={i} className="grid grid-cols-[1fr_130px_36px] gap-2 items-center">
-                                        <Input
-                                            value={e.label}
-                                            onChange={(ev) => updateExtra(i, { label: ev.target.value })}
-                                            placeholder="Ej: flete, pintura, tercerizado…"
-                                        />
-                                        <NumericInput
-                                            value={e.amount}
-                                            onChange={(n) => updateExtra(i, { amount: n })}
-                                        />
+                                    <div
+                                        key={i}
+                                        className="grid grid-cols-2 md:grid-cols-[1fr_116px_106px_96px_36px] gap-2 items-center"
+                                    >
+                                        {/* El mismo buscador que Materiales, pero acá escribir algo que no
+                                            está en el inventario es una carga válida: "flete" no es un
+                                            error. Elegir un material vincula la línea y el importe pasa a
+                                            salir de cantidad × costo del inventario. */}
+                                        <div className="col-span-2 min-w-0 md:col-span-1">
+                                            <MaterialLineAutocomplete
+                                                value={e.label}
+                                                catalog={materialsCatalog}
+                                                linked={e.materialId !== null}
+                                                freeText
+                                                placeholder="Ej: flete, tercerizado… o buscá un material"
+                                                onPick={(r) => pickExtraMaterial(i, r)}
+                                                onText={(t) => setExtraText(i, t)}
+                                            />
+                                        </div>
+                                        {e.materialId !== null ? (
+                                            <>
+                                                <NumericInput
+                                                    value={e.qty}
+                                                    onChange={(n) => updateExtra(i, { qty: n })}
+                                                    withSteppers
+                                                />
+                                                <NumericInput
+                                                    value={e.unitCost}
+                                                    onChange={(n) => updateExtra(i, { unitCost: n })}
+                                                    className="text-center"
+                                                />
+                                                <span className="text-sm text-right font-medium">
+                                                    {formatArs(extraAmount(e))}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            // Costo escrito a mano: no hay cantidad ni costo unitario que
+                                            // mostrar, se carga el importe y listo.
+                                            <>
+                                                <span className="hidden md:block" />
+                                                <span className="hidden md:block" />
+                                                <NumericInput
+                                                    value={e.amount}
+                                                    onChange={(n) => updateExtra(i, { amount: n })}
+                                                    className="text-right"
+                                                />
+                                            </>
+                                        )}
                                         <Button variant="ghost" size="icon" onClick={() => removeExtra(i)}>
                                             <Trash2 className="w-4 h-4 text-destructive" />
                                         </Button>
                                     </div>
                                 ))}
+                                <p className="px-1 text-xs text-muted-foreground">
+                                    Los materiales que pongas acá suman al costo pero NO se descuentan del
+                                    depósito: para eso van en Materiales.
+                                </p>
                             </div>
                         )}
                         <Button variant="outline" size="sm" onClick={addExtra}>
