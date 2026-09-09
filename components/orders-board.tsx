@@ -61,7 +61,7 @@ export function isOverdue(d: string | null, status: string): boolean {
     return eta < today
 }
 
-export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
+export function OrdersBoard({ cards, query = "" }: { cards: BoardCard[]; query?: string }) {
     const router = useRouter()
     const { toast } = useToast()
     const [dragging, setDragging] = useState<number | null>(null)
@@ -100,6 +100,38 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
 
     // Las tarjetas llegan filtradas desde OrdersView.
     const visible = cards
+
+    // "Cancelado" no es una columna del flujo: aparece SOLO cuando llega alguna
+    // tarjeta cancelada, y eso pasa únicamente si la buscaste (OrdersView las
+    // saca del tablero mientras no haya búsqueda). Va última, después de
+    // "Retirado", para no meterse en el camino de lo que está en curso.
+    const columns: OrderStatus[] = visible.some((c) => statusOf(c) === "cancelado")
+        ? [...BOARD_STATUSES, "cancelado"]
+        : BOARD_STATUSES
+
+    // El tablero scrollea a lo ancho, así que la columna con los resultados
+    // puede quedar fuera de la pantalla: buscás algo, aparece —pero mirando las
+    // primeras columnas vacías parece que la búsqueda no hizo nada. Al buscar
+    // llevamos la vista a la primera columna que tenga algo; al borrar la
+    // búsqueda, de vuelta al principio.
+    const scrollerRef = useRef<HTMLDivElement>(null)
+    const columnRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+    useEffect(() => {
+        const scroller = scrollerRef.current
+        if (!scroller) return
+        if (!query) {
+            scroller.scrollTo({ left: 0, behavior: "smooth" })
+            return
+        }
+        const first = columns.find((s) => visible.some((c) => statusOf(c) === s))
+        const el = first ? columnRefs.current[first] : null
+        // Sin resultados no se mueve nada: saltar a un tablero vacío no informa.
+        if (!el) return
+        const delta = el.getBoundingClientRect().left - scroller.getBoundingClientRect().left
+        scroller.scrollTo({ left: scroller.scrollLeft + delta, behavior: "smooth" })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [query, cards])
 
     async function move(id: number, status: OrderStatus) {
         if ((cards.find((c) => c.id === id)?.status ?? null) === status) return
@@ -146,12 +178,15 @@ export function OrdersBoard({ cards }: { cards: BoardCard[] }) {
 
     return (
         <>
-            <div className="flex-1 min-h-0 flex gap-5 overflow-x-auto scrollbar-hide pb-2">
-                {BOARD_STATUSES.map((status) => {
+            <div ref={scrollerRef} className="flex-1 min-h-0 flex gap-5 overflow-x-auto scrollbar-hide pb-2">
+                {columns.map((status) => {
                     const column = visible.filter((c) => statusOf(c) === status)
                     return (
                         <div
                             key={status}
+                            ref={(el) => {
+                                columnRefs.current[status] = el
+                            }}
                             onDragOver={(e) => {
                                 e.preventDefault()
                                 setOver(status)

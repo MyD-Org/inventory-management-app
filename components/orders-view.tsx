@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 import { orderNeedsReview } from "@/lib/order-statuses"
+import { matchesOrderQuery } from "@/lib/order-search"
 import { OrdersBoard, isOverdue, type BoardCard } from "@/components/orders-board"
 import { OrdersTable } from "@/components/orders-table"
 
@@ -80,18 +81,22 @@ export function OrdersView({
         activos: cards.length,
     }
 
-    const q = query.trim().toLowerCase()
+    const q = query.trim()
     const visible = cards.filter((c) => {
         if (filter === "vencidos" && !isLate(c)) return false
         if (filter === "alta" && c.priority !== "alta") return false
         if (filter === "sin_materiales" && !c.needs_review) return false
-        if (!q) return true
-        return (
-            String(c.order_number).includes(q) ||
-            (c.customer_name ?? "").toLowerCase().includes(q) ||
-            c.customer_external_id.toLowerCase().includes(q)
-        )
+        return matchesOrderQuery(c, q)
     })
+
+    // Los cancelados no viven en el tablero: son un cementerio que estorba el
+    // trabajo del día. Pero si los BUSCÁS aparecen —con su propia columna al
+    // final—, porque buscar algo y que no esté es peor que verlo de más.
+    // Alcanza con que haya texto en el buscador: los chips de filtro no son un
+    // pedido de ver cancelados.
+    const boardCards = q ? visible : visible.filter((c) => c.status !== "cancelado")
+    // El contador acompaña a lo que estás viendo, no a lo que matcheó por dentro.
+    const mostrados = lista ? visible.length : boardCards.length
 
     const filtrando = Boolean(filter) || q !== ""
 
@@ -119,7 +124,7 @@ export function OrdersView({
                         ref={searchRef}
                         data-orders-search
                         className="pl-8 h-9 text-base"
-                        placeholder="Buscar por número o cliente"
+                        placeholder="Buscar"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                     />
@@ -135,7 +140,7 @@ export function OrdersView({
                 {filtrando && (
                     <>
                         <span className="text-sm text-muted-foreground tabular-nums">
-                            {visible.length} de {cards.length}
+                            {mostrados} de {cards.length}
                         </span>
                         <button
                             type="button"
@@ -156,7 +161,7 @@ export function OrdersView({
                     <OrdersTable orders={visible} isAdmin={isAdmin} />
                 </div>
             ) : (
-                <OrdersBoard cards={visible.filter((c) => c.status !== "cancelado")} />
+                <OrdersBoard cards={boardCards} query={q} />
             )}
         </>
     )
