@@ -21,6 +21,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { ChevronRight, Loader2, Plus, Trash2 } from "lucide-react"
 import { createOrderManual } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
@@ -127,6 +129,7 @@ export function NewOrderPage({
     // Fila en blanco que se completa dentro de la tabla y se suma al confirmar.
     const [borrador, setBorrador] = useState<Line>({ product: "", quantity: 1, specs: {} })
     const [saving, setSaving] = useState(false)
+    const [paraStock, setParaStock] = useState(false)
 
     const columnas = Object.entries(specs)
     // Anchos: solo se fijan los extremos (cantidad, producto y acciones). Las
@@ -185,7 +188,7 @@ export function NewOrderPage({
         // Se valida al apretar y NO apagando el botón. Un botón deshabilitado no
         // dice qué le falta: hay que recorrer el formulario adivinando cuál de los
         // dos datos es el que lo tiene trabado. Acá se nombra el que falta.
-        if (!customer) {
+        if (!paraStock && !customer) {
             toast.error("Falta el cliente", { description: "Elegí para quién es el pedido." })
             return
         }
@@ -198,11 +201,14 @@ export function NewOrderPage({
         const result = await createOrderManual({
             external_id: "",
             origin: "manual",
-            customer: {
-                external_id: customer.external_id,
-                name: customer.name,
-                phone: customer.phone,
-            },
+            for_stock: paraStock,
+            customer: paraStock
+                ? { external_id: "", name: null, phone: null }
+                : {
+                      external_id: customer!.external_id,
+                      name: customer!.name,
+                      phone: customer!.phone,
+                  },
             items: lines,
             delivery_date_estimate: eta || null,
             priority,
@@ -513,7 +519,18 @@ export function NewOrderPage({
 
                 {/* ---------- Propiedades ---------- */}
                 <aside className="order-1 space-y-3 lg:order-none lg:border-l lg:pl-5 lg:sticky lg:top-4">
-                    <CustomerPicker value={customer} onChange={setCustomer} />
+                    <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+                        <Label htmlFor="para-stock" className="text-base cursor-pointer">
+                            Producción para stock
+                        </Label>
+                        <Switch
+                            id="para-stock"
+                            checked={paraStock}
+                            onCheckedChange={setParaStock}
+                        />
+                    </div>
+
+                    {!paraStock && <CustomerPicker value={customer} onChange={setCustomer} />}
 
                     <Textarea
                         rows={2}
