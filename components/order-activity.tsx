@@ -38,6 +38,7 @@ const CAMPOS: Record<string, string> = {
     customer_phone: "el teléfono",
     priority: "la prioridad",
     delivery_date_estimate: "la entrega",
+    reference: "la referencia",
     notes: "las notas",
     invoice_terms: "las condiciones de la factura",
     invoice_notes: "la nota de la factura",

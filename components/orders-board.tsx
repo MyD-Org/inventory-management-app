@@ -19,6 +19,8 @@ export interface BoardCard {
     external_id: string
     customer_name: string | null
     customer_external_id: string
+    /** Código externo del pedido, si lo tiene. Se ve en la lista. */
+    reference: string | null
     status: OrderStatus
     priority: string
     delivery_date_estimate: string | null

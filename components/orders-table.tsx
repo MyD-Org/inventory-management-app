@@ -77,8 +77,12 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                                 <span className="block font-display text-[0.97rem] font-semibold leading-tight truncate">
                                     {o.customer_name ?? o.customer_external_id}
                                 </span>
-                                <span className="block text-xs text-muted-foreground font-mono tabular-nums">
+                                <span className="block text-xs text-muted-foreground font-mono tabular-nums truncate">
                                     {o.units} u.
+                                    {/* La referencia va al lado del trabajo y no en
+                                        una línea propia: es un dato de identificación,
+                                        se lee de reojo cuando se busca por ella. */}
+                                    {o.reference && <> · Ref. {o.reference}</>}
                                 </span>
                             </span>
 

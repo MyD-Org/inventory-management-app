@@ -121,6 +121,7 @@ export function NewOrderPage({
     const [priority, setPriority] = useState("normal")
     const [eta, setEta] = useState("")
     const [notes, setNotes] = useState("")
+    const [reference, setReference] = useState("")
     const [lines, setLines] = useState<Line[]>([])
     const [agregando, setAgregando] = useState(true)
     // Fila en blanco que se completa dentro de la tabla y se suma al confirmar.
@@ -205,6 +206,7 @@ export function NewOrderPage({
             items: lines,
             delivery_date_estimate: eta || null,
             priority,
+            reference: reference || null,
             notes: notes || null,
         })
         setSaving(false)
@@ -539,6 +541,18 @@ export function NewOrderPage({
                                     ))}
                                 </SelectContent>
                             </Select>
+                        </Prop>
+
+                        {/* Referencia: el código del otro lado (orden de compra,
+                            expediente). Opcional; también se puede cargar después
+                            desde el detalle. */}
+                        <Prop label="Referencia">
+                            <Input
+                                value={reference}
+                                onChange={(e) => setReference(e.target.value)}
+                                placeholder="Sin referencia"
+                                className="h-7 border-0 bg-transparent px-1.5 -ml-1.5 text-base hover:bg-muted focus-visible:ring-0 w-full"
+                            />
                         </Prop>
 
                         <Prop label="Entrega">
