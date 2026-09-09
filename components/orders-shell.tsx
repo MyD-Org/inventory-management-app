@@ -117,7 +117,11 @@ export function OrdersShell({
                                         </Link>
                                     </DropdownMenuItem>
                                 )}
-                                {!soloPedidos && (
+                                {/* El operador ya tiene el botón "Inventario"
+                                    fijo en la barra: repetirlo acá es ruido.
+                                    Para el admin, que no lo tiene, este es el
+                                    único cruce al otro módulo. */}
+                                {isAdmin && (
                                     <DropdownMenuItem asChild>
                                         <Link href="/">
                                             <ArrowLeftRight className="mr-2 h-4 w-4" />
