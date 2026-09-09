@@ -293,7 +293,7 @@ export function NewOrderPage({
                                                 <Input
                                                     type="number"
                                                     min={1}
-                                                    value={line.quantity}
+                                                    value={line.quantity || ""}
                                                     className="h-9 w-full text-base px-2"
                                                     onChange={(e) => setCantidad(idx, Number(e.target.value))}
                                                 />
@@ -334,7 +334,7 @@ export function NewOrderPage({
                                                 <Input
                                                     type="number"
                                                     min={1}
-                                                    value={borrador.quantity}
+                                                    value={borrador.quantity || ""}
                                                     className="h-9 w-full text-base px-2"
                                                     onChange={(e) =>
                                                         setBorrador((b) => ({
@@ -421,7 +421,7 @@ export function NewOrderPage({
                                             type="number"
                                             min={1}
                                             inputMode="numeric"
-                                            value={line.quantity}
+                                            value={line.quantity || ""}
                                             className="h-9 w-24 px-2 text-base"
                                             onChange={(e) => setCantidad(idx, Number(e.target.value))}
                                         />
@@ -460,7 +460,7 @@ export function NewOrderPage({
                                             type="number"
                                             min={1}
                                             inputMode="numeric"
-                                            value={borrador.quantity}
+                                            value={borrador.quantity || ""}
                                             className="h-9 w-24 px-2 text-base"
                                             onChange={(e) =>
                                                 setBorrador((b) => ({
