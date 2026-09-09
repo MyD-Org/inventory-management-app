@@ -356,6 +356,7 @@ export async function updateOrderFields(
         customer_phone?: string | null;
         priority?: string;
         delivery_date_estimate?: string | null;
+        reference?: string | null;
         notes?: string | null;
         invoice_terms?: string | null;
         invoice_notes?: string | null;
@@ -372,7 +373,7 @@ export async function updateOrderFields(
     const [antes] = await sql`
         SELECT customer_name, customer_external_id, customer_phone, priority,
                delivery_date_estimate::text AS delivery_date_estimate,
-               notes, invoice_terms, invoice_notes
+               reference, notes, invoice_terms, invoice_notes
         FROM orders WHERE id = ${id}
     `;
 
@@ -397,6 +398,11 @@ export async function updateOrderFields(
                     WHEN ${patch.delivery_date_estimate === undefined} THEN delivery_date_estimate
                     WHEN ${patch.delivery_date_estimate ?? ''} = '' THEN NULL
                     ELSE ${patch.delivery_date_estimate ?? null}::date
+                END,
+                reference = CASE
+                    WHEN ${patch.reference === undefined} THEN reference
+                    WHEN ${patch.reference?.trim() ?? ''} = '' THEN NULL
+                    ELSE ${patch.reference?.trim() ?? null}
                 END,
                 notes = CASE
                     WHEN ${patch.notes === undefined} THEN notes

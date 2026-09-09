@@ -87,6 +87,8 @@ export async function POST(request: NextRequest) {
         items,
         delivery_date_estimate: vacioEsNull(body?.delivery_date_estimate),
         priority: vacioEsNull(body?.priority) ?? undefined,
+        // El CRM puede mandar el número con el que él nombra al pedido.
+        reference: vacioEsNull(body?.reference),
         notes: vacioEsNull(body?.notes),
         source_conversation: vacioEsNull(body?.source_conversation),
     }

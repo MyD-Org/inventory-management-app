@@ -430,6 +430,7 @@ export default async function OrderDetailPage({
                         {order.delivery_date_estimate && (
                             <>{" · "}Entrega estimada {formatDate(order.delivery_date_estimate)}</>
                         )}
+                        {order.reference && <>{" · "}Ref. {order.reference}</>}
                     </div>
                 </div>
 
@@ -494,6 +495,19 @@ export default async function OrderDetailPage({
                                 </p>
                             </Prop>
                         )}
+                        {/* El código con el que el cliente nombra al pedido (orden de
+                            compra, expediente). Editable acá: entra después del alta,
+                            cuando llega el papel. */}
+                        <Prop label="Referencia">
+                            <TextField
+                                id={order.id}
+                                value={order.reference}
+                                field="reference"
+                                placeholder="Sin referencia"
+                                label="Referencia"
+                                saved="Referencia actualizada"
+                            />
+                        </Prop>
                         <Prop label="Origen">{order.origin}</Prop>
                     </div>
                 </aside>

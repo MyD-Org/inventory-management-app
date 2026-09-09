@@ -84,12 +84,16 @@ export function TextField({
     field,
     placeholder,
     label,
+    // El aviso de guardado se arma con el label ("Teléfono actualizado"), que en
+    // femenino no concuerda. Los campos femeninos pasan el texto ya escrito.
+    saved,
 }: {
     id: number
     value: string | null
-    field: "customer_name" | "customer_phone"
+    field: "customer_name" | "customer_phone" | "reference"
     placeholder: string
     label: string
+    saved?: string
 }) {
     const save = useSaver(id)
     const [v, setV] = useState(value ?? "")
@@ -101,7 +105,7 @@ export function TextField({
             onChange={(e) => setV(e.target.value)}
             onBlur={() => {
                 if ((value ?? "") === v) return
-                save({ [field]: v } as any, `${label} actualizado`)
+                save({ [field]: v } as any, saved ?? `${label} actualizado`)
             }}
             className="h-7 border-0 bg-transparent px-1.5 -ml-1.5 text-base hover:bg-muted focus-visible:ring-0 w-full"
         />

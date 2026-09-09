@@ -283,6 +283,8 @@ export interface Order {
     priority: string
     delivery_date_estimate: string | null
     source_conversation: string | null
+    /** Código externo del pedido (orden de compra del cliente, expediente, etc.). */
+    reference: string | null
     notes: string | null
     invoice_terms: string | null
     invoice_notes: string | null
@@ -351,7 +353,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
                customer_phone, status, priority,
                -- ::text para no arrastrar corrimiento de zona: es una fecha, no un instante
                delivery_date_estimate::text AS delivery_date_estimate,
-               source_conversation, notes, invoice_terms, invoice_notes, created_at, updated_at,
+               source_conversation, reference, notes, invoice_terms, invoice_notes, created_at, updated_at,
                alegra_invoice_id, alegra_invoice_number, invoice_warnings, invoice_stale,
                alegra_remission_id, alegra_remission_number, remission_stale,
                modified_at::text AS modified_at,
@@ -610,7 +612,7 @@ export async function createOrder(payload: OrderPayload) {
     const inserted = await sql`
         INSERT INTO orders (
             external_id, origin, customer_external_id, customer_name, customer_phone,
-            status, priority, delivery_date_estimate, source_conversation, notes
+            status, priority, delivery_date_estimate, source_conversation, reference, notes
         )
         VALUES (
             ${externalId},
@@ -622,6 +624,7 @@ export async function createOrder(payload: OrderPayload) {
             ${payload.priority || "normal"},
             ${payload.delivery_date_estimate || null},
             ${payload.source_conversation ?? null},
+            ${payload.reference?.trim() || null},
             ${payload.notes ?? null}
         )
         ON CONFLICT (external_id) DO NOTHING

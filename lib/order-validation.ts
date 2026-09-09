@@ -65,6 +65,8 @@ export interface OrderPayload {
     }
     items: OrderItemPayload[]
     delivery_date_estimate?: string | null
+    /** Código con el que identifica al pedido el sistema del cliente. Texto libre. */
+    reference?: string | null
     priority?: string
     notes?: string | null
     source_conversation?: string | null

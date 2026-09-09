@@ -1,0 +1,12 @@
+-- Referencia del pedido: el código con el que lo identifica el otro lado.
+--
+-- El pedido ya tiene dos números: order_number (el nuestro, correlativo) y
+-- external_id (la clave de idempotencia del bot, generada). Ninguno de los dos
+-- sirve para lo que hace falta acá: cuando el pedido llega con una orden de
+-- compra, un remito o un número de expediente del cliente, hay que poder
+-- anotarlo y después encontrar el pedido por ese código.
+--
+-- Es texto libre y NO es UNIQUE, por el mismo motivo que en alegra_items: el
+-- código lo dicta un sistema ajeno, puede repetirse (dos pedidos de la misma
+-- orden de compra) o venir mal tipeado, y no queremos que eso trabe el alta.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS reference VARCHAR(120);
