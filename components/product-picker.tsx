@@ -5,6 +5,7 @@
 // sin lista de materiales hasta que se cargue el costo del producto.
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { SellableProduct } from "@/lib/orders"
@@ -31,6 +32,50 @@ export function ProductPicker({
     const [open, setOpen] = useState(autoFocus)
     const [cursor, setCursor] = useState(0)
     const boxRef = useRef<HTMLDivElement>(null)
+    const menuRef = useRef<HTMLDivElement>(null)
+    // La lista se dibuja en el body (portal) y no adentro del campo: en la tabla
+    // del pedido el contenedor tiene overflow-x para poder desplazarse en el
+    // celular, y eso recorta cualquier hijo absoluto — el desplegable quedaba
+    // cortado y con scroll propio adentro de la tabla.
+    const [montado, setMontado] = useState(false)
+    useEffect(() => setMontado(true), [])
+
+    // Al ser fixed hay que ubicarlo a mano debajo del campo, y volver a hacerlo
+    // mientras la página se mueve. Se sigue por frame en vez de escuchar
+    // "scroll": el campo puede estar adentro de varios contenedores que se
+    // desplazan, y así también acompaña cambios de layout (una fila que se
+    // abre, el teclado del celular). Sólo corre con el desplegable abierto, y
+    // escribe el estilo directo en el nodo para no re-renderizar por frame.
+    useEffect(() => {
+        if (!open || !montado) return
+        let frame = 0
+        const ubicar = () => {
+            const campo = boxRef.current
+            const menu = menuRef.current
+            if (campo && menu) {
+                const c = campo.getBoundingClientRect()
+                const alto = 288 // el tope de la lista
+                const abajo = window.innerHeight - c.bottom
+                menu.style.left = `${c.left}px`
+                menu.style.minWidth = `${c.width}px`
+                // Hasta donde quede libre a la derecha, para no salirse.
+                menu.style.maxWidth = `${Math.min(544, window.innerWidth * 0.88, window.innerWidth - c.left - 8)}px`
+                if (abajo < alto && c.top > abajo) {
+                    // No entra abajo y arriba hay más lugar: se abre para arriba.
+                    menu.style.top = ""
+                    menu.style.bottom = `${window.innerHeight - c.top + 4}px`
+                    menu.style.maxHeight = `${Math.min(alto, c.top - 8)}px`
+                } else {
+                    menu.style.bottom = ""
+                    menu.style.top = `${c.bottom + 4}px`
+                    menu.style.maxHeight = `${Math.min(alto, abajo - 8)}px`
+                }
+            }
+            frame = requestAnimationFrame(ubicar)
+        }
+        ubicar()
+        return () => cancelAnimationFrame(frame)
+    }, [open, montado])
 
     const matches = useMemo(() => {
         const q = query.trim().toLowerCase()
@@ -58,7 +103,13 @@ export function ProductPicker({
 
     useEffect(() => {
         function onClickOutside(e: MouseEvent) {
-            if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+            const t = e.target as Node
+            // El menú ya no es hijo del campo: hay que preguntarle a los dos.
+            if (
+                boxRef.current &&
+                !boxRef.current.contains(t) &&
+                !menuRef.current?.contains(t)
+            ) {
                 setOpen(false)
                 onCancel?.()
             }
@@ -101,14 +152,20 @@ export function ProductPicker({
                 }}
             />
 
-            {open && (
+            {open && montado && createPortal(
             // Crece con el contenido en vez de quedar atado al ancho del campo:
             // en la tabla del pedido esa columna es angosta y los nombres del
-            // catálogo son largos. min-w-full para no achicarse, w-max para
-            // estirarse hasta donde entre el nombre, y un tope para no irse de
-            // la pantalla. max-h + scroll: se listan más opciones sin que el
-            // desplegable tape media página.
-            <div className="absolute z-30 mt-1 min-w-full w-max max-w-[min(34rem,88vw)] max-h-72 overflow-y-auto rounded-md border bg-popover shadow-md">
+            // catálogo son largos. minWidth = el ancho del campo para no
+            // achicarse, w-max para estirarse hasta donde entre el nombre, y un
+            // tope para no irse de la pantalla. max-h + scroll: se listan más
+            // opciones sin que el desplegable tape media página.
+            <div
+                ref={menuRef}
+                // Arranca fuera de la pantalla: lo ubica el efecto de arriba,
+                // así no se ve un cuadro en la esquina el primer frame.
+                style={{ top: -9999 }}
+                className="fixed z-50 w-max overflow-y-auto rounded-md border bg-popover shadow-md"
+            >
                 {matches.map((p, i) => (
                     <button
                         key={p.name}
@@ -157,7 +214,8 @@ export function ProductPicker({
                         Escribí el nombre del producto.
                     </p>
                 )}
-            </div>
+            </div>,
+            document.body,
             )}
         </div>
     )
