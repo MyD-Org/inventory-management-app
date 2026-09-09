@@ -138,3 +138,99 @@ export function recipeReturnQuantities(
 
     return sugerido
 }
+
+// ---------- Devolver por producto ----------
+
+/** Un producto del pedido con su receta por unidad. */
+export interface ProductRecipe {
+    order_item_id: number
+    product: string
+    /** Unidades pedidas del producto. */
+    quantity: number
+    lines: RecipeLine[]
+}
+
+export interface WithdrawnProduct {
+    order_item_id: number
+    product: string
+    /** Cuántas unidades del producto están hoy afuera del depósito. */
+    units: number
+}
+
+// De cuántas unidades de cada producto se retiró el material.
+//
+// El retiro se registra por MATERIAL, no por producto, así que las unidades se
+// deducen de la receta: si una unidad lleva 1 placa y 4 tornillos, y hay 2 placas
+// y 12 tornillos afuera, se retiró para 2 unidades —manda el material que menos
+// alcanza—. Se topea en lo pedido: retirar de más no crea unidades que el pedido
+// no tiene.
+//
+// Un producto sin nada retirado no entra en la lista: no hay retiro que cancelar.
+export function withdrawnProducts(
+    recipes: ProductRecipe[],
+    returnable: ReturnableMaterial[],
+): WithdrawnProduct[] {
+    const afuera = new Map(returnable.map((r) => [r.material_id, r.consumed]))
+
+    const productos: WithdrawnProduct[] = []
+    for (const recipe of recipes) {
+        // Solo las líneas que consumen algo y tienen material: una línea sin
+        // mapear no dice nada de cuántas unidades salieron.
+        const lineas = recipe.lines.filter((l) => l.qty_per_unit > 0 && l.material_id !== null)
+        if (lineas.length === 0) continue
+
+        let unidades = recipe.quantity
+        for (const linea of lineas) {
+            // El material de la línea más sus alternativas: el depósito pudo haber
+            // retirado cualquiera de las del mismo color.
+            const disponible = [linea.material_id, ...(linea.alternative_ids ?? [])]
+                .filter((id): id is number => id !== null)
+                .reduce((sum, id) => sum + (afuera.get(id) ?? 0), 0)
+            unidades = Math.min(unidades, Math.floor(disponible / linea.qty_per_unit))
+            if (unidades <= 0) break
+        }
+
+        if (unidades > 0) {
+            productos.push({ order_item_id: recipe.order_item_id, product: recipe.product, units: unidades })
+        }
+    }
+
+    return productos
+}
+
+/**
+ * Qué materiales devolver si vuelven ciertas unidades de ciertos productos.
+ *
+ * Los productos comparten el mismo pozo de material retirado: si dos llevan el
+ * mismo tornillo, lo que se lleva el primero deja de estar para el segundo. Por eso
+ * se resuelven juntos y no uno por uno, que es lo que haría que la suma se pasara
+ * del tope y el server rechazara la devolución entera.
+ */
+export function planProductReturn(
+    recipes: ProductRecipe[],
+    selections: Array<{ order_item_id: number; units: number }>,
+    returnable: ReturnableMaterial[],
+): ReturnRequestItem[] {
+    const pozo = new Map(returnable.map((r) => [r.material_id, r.consumed]))
+    const total = new Map<number, number>()
+
+    for (const seleccion of selections) {
+        if (!Number.isFinite(seleccion.units) || seleccion.units <= 0) continue
+        const recipe = recipes.find((r) => r.order_item_id === seleccion.order_item_id)
+        if (!recipe) continue
+
+        const restante: ReturnableMaterial[] = [...pozo.entries()].map(([material_id, consumed]) => ({
+            material_id,
+            label: "",
+            consumed,
+        }))
+        for (const [materialId, cantidad] of recipeReturnQuantities(recipe.lines, seleccion.units, restante)) {
+            total.set(materialId, (total.get(materialId) ?? 0) + cantidad)
+            pozo.set(materialId, (pozo.get(materialId) ?? 0) - cantidad)
+        }
+    }
+
+    return [...total.entries()]
+        .filter(([, quantity]) => quantity > 0)
+        .map(([material_id, quantity]) => ({ material_id, quantity }))
+}

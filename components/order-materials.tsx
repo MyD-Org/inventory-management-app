@@ -256,7 +256,7 @@ export function OrderMaterials({
                     </DialogHeader>
 
                     <p className="-mt-2 text-base text-muted-foreground">
-                        Material que se retiró por este pedido y vuelve al depósito. Se registra
+                        Productos de los que ya se retiró material. Al devolver vuelve al depósito
                         como una entrada de stock; el retiro original queda en el historial.
                     </p>
 

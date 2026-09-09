@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { planReturn, recipeReturnQuantities, type ReturnableMaterial } from "@/lib/returns"
+import {
+    planProductReturn,
+    planReturn,
+    recipeReturnQuantities,
+    withdrawnProducts,
+    type ProductRecipe,
+    type ReturnableMaterial,
+} from "@/lib/returns"
 
 // El caso real: el taller retiró 3 placas por el pedido y al final no van.
 const retirado: ReturnableMaterial[] = [
@@ -210,5 +217,154 @@ describe("recipeReturnQuantities", () => {
                 { material_id: 20, quantity: 1.5 },
             ],
         })
+    })
+})
+
+// El pedido: 3 luminarias (1 placa + 4 tornillos cada una) y 5 spots (2 tornillos).
+const pedido: ProductRecipe[] = [
+    {
+        order_item_id: 1,
+        product: "Luminaria lineal 60cm",
+        quantity: 3,
+        lines: [
+            { material_id: 11, qty_per_unit: 1 },
+            { material_id: 50, qty_per_unit: 4 },
+        ],
+    },
+    {
+        order_item_id: 2,
+        product: "Spot embutido 7W",
+        quantity: 5,
+        lines: [{ material_id: 50, qty_per_unit: 2 }],
+    },
+]
+
+describe("withdrawnProducts", () => {
+    it("deduce las unidades retiradas de la receta", () => {
+        // 3 placas y 12 tornillos: alcanza para las 3 luminarias.
+        const p = withdrawnProducts(pedido, [
+            { material_id: 11, label: "Placa", consumed: 3 },
+            { material_id: 50, label: "Tornillo", consumed: 12 },
+        ])
+        expect(p).toEqual([
+            { order_item_id: 1, product: "Luminaria lineal 60cm", units: 3 },
+            { order_item_id: 2, product: "Spot embutido 7W", units: 5 },
+        ])
+    })
+
+    it("manda el material que menos alcanza", () => {
+        // 3 placas pero solo 4 tornillos: se retiró para 1 luminaria.
+        const p = withdrawnProducts([pedido[0]], [
+            { material_id: 11, label: "Placa", consumed: 3 },
+            { material_id: 50, label: "Tornillo", consumed: 4 },
+        ])
+        expect(p).toEqual([{ order_item_id: 1, product: "Luminaria lineal 60cm", units: 1 }])
+    })
+
+    it("no lista el producto que no retiró nada", () => {
+        const p = withdrawnProducts(pedido, [{ material_id: 11, label: "Placa", consumed: 3 }])
+        // Sin tornillos no hay ninguna luminaria ni ningún spot completo.
+        expect(p).toEqual([])
+    })
+
+    it("no inventa unidades que el pedido no tiene", () => {
+        // Se retiraron 10 placas y 100 tornillos, pero el pedido es de 3 luminarias.
+        const p = withdrawnProducts([pedido[0]], [
+            { material_id: 11, label: "Placa", consumed: 10 },
+            { material_id: 50, label: "Tornillo", consumed: 100 },
+        ])
+        expect(p[0].units).toBe(3)
+    })
+
+    it("no cuenta las unidades a medias", () => {
+        // 6 tornillos alcanzan para 1 luminaria y media: se retiró para 1.
+        const p = withdrawnProducts([pedido[0]], [
+            { material_id: 11, label: "Placa", consumed: 3 },
+            { material_id: 50, label: "Tornillo", consumed: 6 },
+        ])
+        expect(p[0].units).toBe(1)
+    })
+
+    it("cuenta la alternativa de la familia como el material de la línea", () => {
+        const p = withdrawnProducts(
+            [{ order_item_id: 1, product: "Luminaria", quantity: 2, lines: [{ material_id: 11, qty_per_unit: 1, alternative_ids: [12] }] }],
+            [{ material_id: 12, label: "Placa Cree", consumed: 2 }],
+        )
+        expect(p[0].units).toBe(2)
+    })
+
+    it("ignora el producto sin receta mapeada", () => {
+        const p = withdrawnProducts(
+            [{ order_item_id: 9, product: "Sin ficha", quantity: 2, lines: [{ material_id: null, qty_per_unit: 1 }] }],
+            [{ material_id: 11, label: "Placa", consumed: 3 }],
+        )
+        expect(p).toEqual([])
+    })
+})
+
+describe("planProductReturn", () => {
+    it("traduce las unidades del producto a materiales", () => {
+        const items = planProductReturn(pedido, [{ order_item_id: 1, units: 2 }], [
+            { material_id: 11, label: "Placa", consumed: 3 },
+            { material_id: 50, label: "Tornillo", consumed: 12 },
+        ])
+        expect(items).toEqual([
+            { material_id: 11, quantity: 2 },
+            { material_id: 50, quantity: 8 },
+        ])
+    })
+
+    it("suma los materiales que comparten dos productos", () => {
+        const items = planProductReturn(
+            pedido,
+            [
+                { order_item_id: 1, units: 1 },
+                { order_item_id: 2, units: 2 },
+            ],
+            [
+                { material_id: 11, label: "Placa", consumed: 3 },
+                { material_id: 50, label: "Tornillo", consumed: 12 },
+            ],
+        )
+        // 4 tornillos de la luminaria + 4 de los dos spots.
+        expect(items).toEqual([
+            { material_id: 11, quantity: 1 },
+            { material_id: 50, quantity: 8 },
+        ])
+    })
+
+    it("reparte el pozo compartido sin pasarse de lo retirado", () => {
+        // Solo 6 tornillos afuera: la luminaria toma 4 y a los spots les quedan 2.
+        const items = planProductReturn(
+            pedido,
+            [
+                { order_item_id: 1, units: 1 },
+                { order_item_id: 2, units: 2 },
+            ],
+            [
+                { material_id: 11, label: "Placa", consumed: 3 },
+                { material_id: 50, label: "Tornillo", consumed: 6 },
+            ],
+        )
+        expect(items).toEqual([
+            { material_id: 11, quantity: 1 },
+            { material_id: 50, quantity: 6 },
+        ])
+    })
+
+    it("lo que arma pasa planReturn, que es quien lo valida en el server", () => {
+        const retirable: ReturnableMaterial[] = [
+            { material_id: 11, label: "Placa", consumed: 3 },
+            { material_id: 50, label: "Tornillo", consumed: 12 },
+        ]
+        const items = planProductReturn(pedido, [{ order_item_id: 1, units: 3 }], retirable)
+        expect(planReturn(retirable, items)).toEqual({ items })
+    })
+
+    it("ignora selecciones vacías, en cero o de un producto que no existe", () => {
+        const retirable: ReturnableMaterial[] = [{ material_id: 11, label: "Placa", consumed: 3 }]
+        expect(planProductReturn(pedido, [], retirable)).toEqual([])
+        expect(planProductReturn(pedido, [{ order_item_id: 1, units: 0 }], retirable)).toEqual([])
+        expect(planProductReturn(pedido, [{ order_item_id: 99, units: 2 }], retirable)).toEqual([])
     })
 })
