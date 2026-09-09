@@ -54,6 +54,22 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
     )
 }
 
+// Factura y remito para quien NO es admin: el taller y el mostrador necesitan
+// saber que el documento salió y con qué número —para cantarlo por teléfono, para
+// buscarlo en el mostrador—, pero no entran a Alegra. Por eso el número va como
+// texto y no como link: el link es una puerta a un sistema que no les corresponde
+// y que además les pediría una cuenta que no tienen.
+function DocumentoEmitido({ numero, genero }: { numero: string | null; genero: "a" | "o" }) {
+    if (numero === null) {
+        return <span className="text-muted-foreground">Sin emitir</span>
+    }
+    return (
+        <span className="font-medium">
+            {numero} <span className="font-normal text-muted-foreground">· emitid{genero}</span>
+        </span>
+    )
+}
+
 function Prop({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div className="grid grid-cols-[86px_1fr] items-center gap-2 py-1">
@@ -223,13 +239,26 @@ export default async function OrderDetailPage({
                     <Fact label="Trabajo">
                         <span className="font-mono tabular-nums font-medium">{units} u.</span>
                     </Fact>
-                    {/* Factura y remito son del admin: el taller no emite ni entra a
-                        Alegra. La emisión AUTOMÁTICA al pasar a "Facturar y remitir"
-                        sigue funcionando para todos — lo que se saca de acá es la
-                        puerta manual, no el circuito. */}
-                    {isAdmin && (
-                    <>
+                    {/* EMITIR factura y remito es del admin: el taller no emite ni
+                        entra a Alegra, y la emisión AUTOMÁTICA al pasar a "Facturar y
+                        remitir" sigue funcionando para todos —lo que no está para el
+                        resto es la puerta manual, no el circuito—.
+                        LEER que ya salieron, en cambio, es de todos: el taller y el
+                        mostrador necesitan saber si el pedido está facturado y con qué
+                        número. Por eso la celda se ve siempre y lo que cambia es el
+                        contenido: el admin tiene el link a Alegra, los avisos de
+                        desactualizado y los botones; el resto, el número y nada más. */}
                     <Fact label="Factura">
+                        {!isAdmin ? (
+                            <DocumentoEmitido
+                                numero={
+                                    order.alegra_invoice_id
+                                        ? order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`
+                                        : null
+                                }
+                                genero="a"
+                            />
+                        ) : (
                         <EmissionSlot doc="invoice">
                             {order.alegra_invoice_id ? (
                                 <div className="flex flex-col items-start gap-1.5">
@@ -274,10 +303,21 @@ export default async function OrderDetailPage({
                                 </div>
                             )}
                         </EmissionSlot>
+                        )}
                     </Fact>
                     {/* El remito es independiente de la factura y en cualquier
                         orden: a veces sale primero uno, a veces el otro. */}
                     <Fact label="Remito">
+                        {!isAdmin ? (
+                            <DocumentoEmitido
+                                numero={
+                                    order.alegra_remission_id
+                                        ? order.alegra_remission_number ?? `#${order.alegra_remission_id}`
+                                        : null
+                                }
+                                genero="o"
+                            />
+                        ) : (
                         <EmissionSlot doc="remission">
                             {order.alegra_remission_id ? (
                             <div className="flex flex-col items-start gap-1.5">
@@ -306,9 +346,8 @@ export default async function OrderDetailPage({
                             <RemissionButton orderId={order.id} />
                             )}
                         </EmissionSlot>
+                        )}
                     </Fact>
-                    </>
-                    )}
                 </dl>
                 </OrderEmissionProvider>
             </header>
