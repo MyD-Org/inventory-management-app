@@ -23,18 +23,25 @@ import { useToast } from "@/hooks/use-toast"
 import { formatArs } from "@/lib/format"
 import { getMaterialsCatalog } from "@/lib/budget-actions"
 import { saveMaterialFamily, deleteMaterialFamily } from "@/lib/material-families"
-import { familyUnitCost, type CostStrategy, type MaterialFamily } from "@/lib/material-family"
+import {
+    familyUnitCost,
+    normalizeSpecDefaults,
+    type CostStrategy,
+    type MaterialFamily,
+} from "@/lib/material-family"
 import { MaterialLineAutocomplete, type MaterialSearchResult } from "@/components/material-line-autocomplete"
 import type { SpecFieldChoice } from "@/lib/spec-choices"
 
 // Una fila del formulario. Un mismo valor de spec puede tener varias filas (varios
-// materiales para un color). El default de cada color es el primer material cargado.
+// materiales para un color); isDefault marca cuál de ellas representa al color en
+// las hojas de costo y en el BOM.
 interface DraftOption {
     key: string
     specValue: string
     materialId: number | null
     label: string
     unitCost: number
+    isDefault: boolean
 }
 
 interface Draft {
@@ -180,6 +187,7 @@ export function MaterialFamiliesManager({
                           materialId: null,
                           label: "",
                           unitCost: 0,
+                          isDefault: true,
                       })),
                   },
         )
@@ -215,6 +223,7 @@ export function MaterialFamiliesManager({
                         materialId: h.materialId,
                         label: h.label,
                         unitCost: h.unitCost,
+                        isDefault: Boolean(h.isDefault),
                     })
                 }
             } else {
@@ -224,6 +233,7 @@ export function MaterialFamiliesManager({
                     materialId: null,
                     label: "",
                     unitCost: 0,
+                    isDefault: true,
                 })
             }
         }
@@ -237,6 +247,7 @@ export function MaterialFamiliesManager({
                     materialId: o.materialId,
                     label: o.label,
                     unitCost: o.unitCost,
+                    isDefault: Boolean(o.isDefault),
                 })
             }
         }
@@ -248,6 +259,31 @@ export function MaterialFamiliesManager({
             defaultSpecValue: f.defaultSpecValue,
             costStrategy: f.costStrategy,
             costMaterialId: f.costMaterialId,
+        })
+    }
+
+    // Tras sacar o vaciar una fila la variante puede quedarse sin predeterminada.
+    // Se la vuelve a poner sobre el primer material que quede: una variante cargada
+    // siempre tiene que decir con cuál de sus materiales se costea.
+    const repairSpecDefault = (options: DraftOption[], specValue: string): DraftOption[] => {
+        const inSpec = options.filter((o) => o.specValue === specValue && o.materialId !== null)
+        if (inSpec.length === 0 || inSpec.some((o) => o.isDefault)) return options
+        return options.map((o) => (o.key === inSpec[0].key ? { ...o, isDefault: true } : o))
+    }
+
+    // Marcar una fila desmarca a las demás de SU variante: cada color elige su
+    // material por separado.
+    const setDefaultRow = (key: string) => {
+        setDraft((d) => {
+            if (d === null) return d
+            const target = d.options.find((o) => o.key === key)
+            if (!target) return d
+            return {
+                ...d,
+                options: d.options.map((o) =>
+                    o.specValue === target.specValue ? { ...o, isDefault: o.key === key } : o,
+                ),
+            }
         })
     }
 
@@ -275,6 +311,9 @@ export function MaterialFamiliesManager({
                         materialId: null,
                         label: "",
                         unitCost: 0,
+                        // La predeterminada de la variante ya está elegida; el material
+                        // que se agrega entra como alternativa hasta que la marquen.
+                        isDefault: false,
                     },
                 ],
             }
@@ -286,7 +325,7 @@ export function MaterialFamiliesManager({
             if (d === null) return d
             const target = d.options.find((o) => o.key === key)
             if (!target) return d
-            const options = d.options.filter((o) => o.key !== key)
+            const options = repairSpecDefault(d.options.filter((o) => o.key !== key), target.specValue)
             // Misma corrección que clearRow: si la fila que se va era la que sostenía
             // a su variante como predeterminada, la predeterminada queda apuntando a
             // una variante sin material y el servidor rechaza el guardado.
@@ -306,8 +345,11 @@ export function MaterialFamiliesManager({
             if (d === null) return d
             const target = d.options.find((o) => o.key === key)
             if (!target) return d
-            const options = d.options.map((o) =>
-                o.key === key ? { ...o, materialId: m.id, label: m.name, unitCost: Number(m.unit_cost) } : o,
+            const options = repairSpecDefault(
+                d.options.map((o) =>
+                    o.key === key ? { ...o, materialId: m.id, label: m.name, unitCost: Number(m.unit_cost) } : o,
+                ),
+                target.specValue,
             )
             const hadDefault =
                 d.defaultSpecValue !== null &&
@@ -321,8 +363,11 @@ export function MaterialFamiliesManager({
             if (d === null) return d
             const target = d.options.find((o) => o.key === key)
             if (!target) return d
-            const options = d.options.map((o) =>
-                o.key === key ? { ...o, materialId: null, label: "", unitCost: 0 } : o,
+            const options = repairSpecDefault(
+                d.options.map((o) =>
+                    o.key === key ? { ...o, materialId: null, label: "", unitCost: 0, isDefault: false } : o,
+                ),
+                target.specValue,
             )
             const sameSpecWithMaterial = options.filter((o) => o.specValue === target.specValue && o.materialId !== null)
             const next =
@@ -351,12 +396,16 @@ export function MaterialFamiliesManager({
             return
         }
 
-        // El primer material cargado de cada color es el default (costeo/BOM).
+        // El default de cada color sale de lo que se marcó en el formulario.
+        // normalizeSpecDefaults es la red: una variante sin marcar (o marcada de
+        // más, si el borrador quedó inconsistente) igual sale con exactamente una,
+        // que es lo que exige el índice único de la base.
         const bySpec = groupBySpecValue(filled)
-        const defaultKeys = new Set<string>()
-        for (const [, list] of bySpec) {
-            defaultKeys.add(list[0].key)
-        }
+        const defaultKeys = new Set(
+            normalizeSpecDefaults(filled)
+                .filter((o) => o.isDefault)
+                .map((o) => o.key),
+        )
 
         // La variante default para BOM es la primera con materiales; no hace falta
         // preguntarle al usuario porque al retirar stock siempre se puede elegir otra.
@@ -488,13 +537,22 @@ export function MaterialFamiliesManager({
                                                 Costo · {costStrategyLabel(f.costStrategy)} · {formatArs(familyUnitCost(f))}
                                             </p>
                                         )}
-                                        {f.options.map((o) => (
+                                        {f.options.map((o) => {
+                                            // El badge de "Predeterminada" solo tiene sentido donde hubo
+                                            // que elegir, o sea en las variantes con más de un material.
+                                            const alternatives = f.options.filter(
+                                                (x) => x.specValue === o.specValue,
+                                            ).length
+                                            return (
                                             <div key={`${o.specValue}-${o.materialId}`} className="grid grid-cols-[110px_1fr_auto] items-center gap-2 text-xs">
                                                 <span className="truncate text-muted-foreground">
                                                     {valueLabel(f.specFieldKey, o.specValue)}
                                                 </span>
                                                 <span className="truncate">{o.label}</span>
                                                 <span className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
+                                                    {alternatives > 1 && o.isDefault && (
+                                                        <Badge variant="outline">Predeterminada</Badge>
+                                                    )}
                                                     {/* El badge marca EL material con el que se costea. Solo
                                                         tiene sentido en "material elegido": promedio y más caro
                                                         no señalan uno solo. */}
@@ -505,7 +563,8 @@ export function MaterialFamiliesManager({
                                                     {formatArs(o.unitCost)}
                                                 </span>
                                             </div>
-                                        ))}
+                                            )
+                                        })}
                                     </div>
                                 )}
                             </details>
@@ -696,18 +755,45 @@ export function MaterialFamiliesManager({
                                                                     : "text-muted-foreground"
                                                             }`}
                                                         >
+                                                            {/* Con varias alternativas se muestra la
+                                                                predeterminada, que es la que va a usar la hoja
+                                                                de costo: mostrar otra al colapsar mentía. */}
                                                             {filled.length === 0
                                                                 ? "sin material"
                                                                 : filled.length === 1
                                                                   ? filled[0].label
-                                                                  : `${filled[0].label} +${filled.length - 1}`}
+                                                                  : `${(filled.find((o) => o.isDefault) ?? filled[0]).label} +${filled.length - 1}`}
                                                         </span>
                                                     </button>
+                                                    {/* El radio solo aparece cuando hay de dónde elegir: con un
+                                                        solo material la pregunta "¿cuál costea?" no existe. */}
+                                                    {isOpen && filled.length > 1 && (
+                                                        <p className="pl-1 text-[11px] text-muted-foreground">
+                                                            Marcá con cuál se costea y sale del depósito por defecto.
+                                                        </p>
+                                                    )}
                                                     {isOpen && rows.map((o) => (
                                                         <div
                                                             key={o.key}
-                                                            className="grid grid-cols-[1fr_auto] items-center gap-2"
+                                                            className={`grid items-center gap-2 ${
+                                                                filled.length > 1
+                                                                    ? "grid-cols-[auto_1fr_auto]"
+                                                                    : "grid-cols-[1fr_auto]"
+                                                            }`}
                                                         >
+                                                            {filled.length > 1 && (
+                                                                <input
+                                                                    type="radio"
+                                                                    name={`default-${draft.id ?? "new"}-${specValue}`}
+                                                                    className="h-3.5 w-3.5 accent-primary disabled:opacity-40"
+                                                                    checked={o.materialId !== null && o.isDefault}
+                                                                    // Una fila sin material no puede ser la
+                                                                    // predeterminada: no hay qué sacar del depósito.
+                                                                    disabled={o.materialId === null}
+                                                                    onChange={() => setDefaultRow(o.key)}
+                                                                    aria-label={`Usar ${o.label || "este material"} como predeterminado de ${specLabel}`}
+                                                                />
+                                                            )}
                                                             <MaterialLineAutocomplete
                                                                 value={o.label}
                                                                 catalog={catalog}
@@ -745,7 +831,9 @@ export function MaterialFamiliesManager({
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="h-7 w-full justify-start text-xs text-muted-foreground hover:text-foreground"
+                                                            className={`h-7 w-full justify-start text-xs text-muted-foreground hover:text-foreground ${
+                                                                filled.length > 1 ? "pl-[22px]" : ""
+                                                            }`}
                                                             onClick={() => addMaterialToSpec(specValue)}
                                                         >
                                                             <Plus className="mr-1.5 h-3.5 w-3.5" />
