@@ -24,6 +24,19 @@ export type OrderEventKind =
     | "invoice"
     | "note"
 
+/**
+ * Una foto adjunta a una nota. El archivo vive en el Blob store de Vercel; acá
+ * solo pasa la URL. `pathname` es la clave del archivo allá, lo único que sirve
+ * para borrarlo.
+ */
+export interface OrderEventPhoto {
+    id: number
+    url: string
+    pathname: string
+    width: number | null
+    height: number | null
+}
+
 export interface OrderEvent {
     id: number
     actor_name: string
@@ -34,6 +47,8 @@ export interface OrderEvent {
     new_value: string | null
     body: string | null
     created_at: string
+    /** Solo las notas traen fotos; en el resto de los eventos va vacío. */
+    photos: OrderEventPhoto[]
 }
 
 /** Quién está actuando. Sin sesión es la API del bot o un proceso automático. */
@@ -49,6 +64,11 @@ export async function currentActor(): Promise<{ name: string; email: string | nu
     }
 }
 
+/**
+ * Devuelve el id del evento guardado, o null si no se pudo guardar. Lo usa la
+ * nota con fotos: sin el id no hay a qué colgarlas. El resto de los llamadores
+ * lo ignora — un evento que no se pudo registrar no voltea la operación.
+ */
 export async function logOrderEvent(
     orderId: number,
     event: {
@@ -60,19 +80,22 @@ export async function logOrderEvent(
         /** Para la API y los procesos automáticos, que no tienen sesión. */
         actor?: { name: string; email?: string | null }
     },
-): Promise<void> {
+): Promise<number | null> {
     try {
         const actor = event.actor ?? (await currentActor())
-        await sql`
+        const [row] = await sql`
             INSERT INTO order_events (order_id, actor_name, actor_email, kind, field, old_value, new_value, body)
             VALUES (
                 ${orderId}, ${actor.name}, ${actor.email ?? null}, ${event.kind},
                 ${event.field ?? null}, ${event.oldValue ?? null}, ${event.newValue ?? null},
                 ${event.body ?? null}
             )
+            RETURNING id
         `
+        return (row?.id as number) ?? null
     } catch (error) {
         console.error("No se pudo registrar el evento del pedido:", error)
+        return null
     }
 }
 
@@ -128,7 +151,7 @@ export async function listDocumentDrift(
                       AND e.kind IN ('item_added', 'item_updated', 'item_removed')
                     ORDER BY e.created_at ASC, e.id ASC
                 `
-        return rows as OrderEvent[]
+        return (rows as Omit<OrderEvent, "photos">[]).map((e) => ({ ...e, photos: [] }))
     } catch (error) {
         // Igual que la historia: si esto falla, el pedido se abre lo mismo. El
         // aviso pierde el detalle, no la advertencia.
@@ -154,7 +177,29 @@ export async function listOrderEvents(orderId: number): Promise<OrderEvent[]> {
             WHERE order_id = ${orderId}
             ORDER BY created_at DESC, id DESC
         `
-        return rows as OrderEvent[]
+        const eventos = (rows as Omit<OrderEvent, "photos">[]).map((e) => ({ ...e, photos: [] as OrderEventPhoto[] }))
+
+        // Las fotos van en una segunda consulta y no en un JOIN: el JOIN repite
+        // la nota una vez por foto y habría que volver a juntarla acá igual.
+        // Filtra por order_id en vez de por la lista de ids para no armar un IN
+        // con parámetros variables, que el template de Neon no interpola.
+        const fotos = await sql`
+            SELECT p.id, p.event_id, p.url, p.pathname, p.width, p.height
+            FROM order_event_photos p
+            JOIN order_events e ON e.id = p.event_id
+            WHERE e.order_id = ${orderId}
+            ORDER BY p.id ASC
+        `
+        const porEvento = new Map<number, OrderEventPhoto[]>()
+        for (const f of fotos as (OrderEventPhoto & { event_id: number })[]) {
+            const { event_id, ...foto } = f
+            const lista = porEvento.get(event_id)
+            if (lista) lista.push(foto)
+            else porEvento.set(event_id, [foto])
+        }
+        for (const e of eventos) e.photos = porEvento.get(e.id) ?? []
+
+        return eventos
     } catch (error) {
         // La tabla puede no existir todavía (migración 20 sin correr). El detalle
         // del pedido tiene que seguir abriéndose igual: la historia es un extra,
@@ -182,4 +227,23 @@ export async function apiActor(request: Request): Promise<{ name: string; email:
     }
     const declarado = request.headers.get("x-actor")?.trim()
     return { name: declarado && declarado.length <= 60 ? declarado : "API", email: null }
+}
+
+/** Cuelga las fotos ya subidas al Blob de una nota recién guardada. */
+export async function addEventPhotos(
+    eventId: number,
+    photos: { url: string; pathname: string; width?: number | null; height?: number | null }[],
+): Promise<void> {
+    for (const f of photos) {
+        await sql`
+            INSERT INTO order_event_photos (event_id, url, pathname, width, height)
+            VALUES (${eventId}, ${f.url}, ${f.pathname}, ${f.width ?? null}, ${f.height ?? null})
+        `
+    }
+}
+
+/** Los pathname de las fotos de una nota. Es lo que hace falta para borrarlas del Blob. */
+export async function eventPhotoPaths(eventId: number): Promise<string[]> {
+    const rows = await sql`SELECT pathname FROM order_event_photos WHERE event_id = ${eventId}`
+    return (rows as { pathname: string }[]).map((r) => r.pathname)
 }
