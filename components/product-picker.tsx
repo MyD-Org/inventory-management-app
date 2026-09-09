@@ -53,6 +53,18 @@ export function ProductPicker({
             const campo = boxRef.current
             const menu = menuRef.current
             if (campo && menu) {
+                // El mismo picker existe duplicado y oculto con CSS para la
+                // otra versión responsive (tabla/tarjetas). El portal no
+                // hereda ese "hidden", así que si el campo está oculto (mide
+                // 0) hay que esconder también el desplegable: si no, el de la
+                // versión invisible queda flotando en la esquina de la
+                // pantalla, tapando todo.
+                if (campo.offsetParent === null) {
+                    menu.style.display = "none"
+                    frame = requestAnimationFrame(ubicar)
+                    return
+                }
+                menu.style.display = ""
                 const c = campo.getBoundingClientRect()
                 const alto = 288 // el tope de la lista
                 const abajo = window.innerHeight - c.bottom
