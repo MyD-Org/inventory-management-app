@@ -1,17 +1,16 @@
 'use client';
 
-import { useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { authenticate } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/password-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Mail } from 'lucide-react';
 
 export function LoginForm() {
     const [errorMessage, dispatch] = useFormState(authenticate, undefined);
-    const [showPassword, setShowPassword] = useState(false);
 
     return (
         <Card className="w-full shadow-lg border-muted">
@@ -33,27 +32,13 @@ export function LoginForm() {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="password">Contraseña</Label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                id="password"
-                                type={showPassword ? 'text' : 'password'}
-                                name="password"
-                                placeholder="••••••"
-                                required
-                                minLength={4}
-                                className="pl-9 pr-9"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword((prev) => !prev)}
-                                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                                aria-pressed={showPassword}
-                                className="absolute right-3 top-3 text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                            >
-                                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </button>
-                        </div>
+                        <PasswordInput
+                            id="password"
+                            name="password"
+                            placeholder="••••••"
+                            required
+                            minLength={4}
+                        />
                     </div>
 
                     {errorMessage && (
