@@ -5,6 +5,7 @@ import {
     familyLineOptions,
     lineFromFamily,
     mergeFamilyOptions,
+    normalizeSpecDefaults,
     syncLineWithFamily,
     type FamilyLineFields,
     type MaterialFamily,
@@ -323,5 +324,56 @@ describe("mergeFamilyOptions", () => {
             { specValue: "75º", materialId: 423 },
         ])
         expect(added.map((o) => o.isDefault)).toEqual([true, false])
+    })
+})
+
+describe("normalizeSpecDefaults", () => {
+    it("respeta la variante que se marcó a mano", () => {
+        const rows = normalizeSpecDefaults([
+            { specValue: "calido", materialId: 11, isDefault: false },
+            { specValue: "calido", materialId: 111, isDefault: true },
+        ])
+        expect(rows.map((r) => r.isDefault)).toEqual([false, true])
+    })
+
+    it("marca la primera cuando la variante no eligió ninguna", () => {
+        const rows = normalizeSpecDefaults([
+            { specValue: "calido", materialId: 11, isDefault: false },
+            { specValue: "calido", materialId: 111, isDefault: false },
+        ])
+        expect(rows.map((r) => r.isDefault)).toEqual([true, false])
+    })
+
+    it("deja una sola marca por variante si llegan varias", () => {
+        const rows = normalizeSpecDefaults([
+            { specValue: "calido", materialId: 11, isDefault: true },
+            { specValue: "calido", materialId: 111, isDefault: true },
+        ])
+        expect(rows.map((r) => r.isDefault)).toEqual([true, false])
+    })
+
+    it("elige por separado en cada variante", () => {
+        const rows = normalizeSpecDefaults([
+            { specValue: "calido", materialId: 11, isDefault: false },
+            { specValue: "calido", materialId: 111, isDefault: true },
+            { specValue: "blanco", materialId: 10, isDefault: false },
+            { specValue: "blanco", materialId: 100, isDefault: false },
+        ])
+        expect(rows.map((r) => r.isDefault)).toEqual([false, true, true, false])
+    })
+
+    it("no toca las variantes de un solo material", () => {
+        const rows = normalizeSpecDefaults([
+            { specValue: "calido", materialId: 11 },
+            { specValue: "blanco", materialId: 10 },
+        ])
+        expect(rows.every((r) => r.isDefault)).toBe(true)
+    })
+
+    it("devuelve filas nuevas sin mutar las de entrada", () => {
+        const input = [{ specValue: "calido", materialId: 11, isDefault: true }]
+        const rows = normalizeSpecDefaults(input)
+        expect(rows[0]).not.toBe(input[0])
+        expect(rows[0].materialId).toBe(11)
     })
 })

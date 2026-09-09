@@ -236,3 +236,33 @@ export function mergeFamilyOptions(
 
     return { options, added, skipped }
 }
+
+// Deja exactamente un default por valor de spec.
+//
+// La marca `isDefault` decide con qué material de la variante se arma la línea de
+// la hoja de costo y el BOM (ver defaultOption y familyLineOptions), y la base la
+// exige única: idx_material_family_options_default es un UNIQUE parcial sobre
+// (family_id, spec_value) WHERE is_default. El formulario deja elegirla a mano, así
+// que esta función es la red que garantiza el invariante antes de guardar,
+// cualquiera sea el estado en que quedaron las filas al editar:
+//
+// - Variante sin ninguna marca (recién cargada, o se borró la fila que la tenía):
+//   default la primera, que es lo que hacía la UI antes de poder elegir.
+// - Variante con varias marcas: gana la primera marcada. Solo puede pasar por un
+//   borrador inconsistente; la UI desmarca al elegir otra.
+//
+// Respeta el orden de entrada: quien la llama decide qué es "la primera".
+export function normalizeSpecDefaults<T extends { specValue: string; isDefault?: boolean }>(
+    rows: T[],
+): Array<T & { isDefault: boolean }> {
+    const claimed = new Set<string>()
+    const marked = new Set(rows.filter((r) => r.isDefault).map((r) => r.specValue))
+    return rows.map((row) => {
+        const first = !claimed.has(row.specValue)
+        // Sin marca en toda la variante manda el orden; con marca, solo la primera
+        // marcada. En los dos casos la variante queda reclamada por una sola fila.
+        const isDefault = marked.has(row.specValue) ? Boolean(row.isDefault) && first : first
+        if (isDefault) claimed.add(row.specValue)
+        return { ...row, isDefault }
+    })
+}
