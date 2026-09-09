@@ -12,7 +12,7 @@ import { Trash2, ExternalLink, TriangleAlert, CalendarClock } from "lucide-react
 import { deleteOrder } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { STATUS_LABELS } from "@/lib/order-statuses"
+import { orderCustomerLabel, STATUS_LABELS } from "@/lib/order-statuses"
 import { PriorityIcon, StatusIcon } from "@/components/order-glyphs"
 import { formatDate, isOverdue, type BoardCard } from "@/components/orders-board"
 
@@ -75,7 +75,7 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                             {/* El cliente manda; lo que mide el trabajo va debajo, en chico. */}
                             <span className="truncate min-w-0 flex-1 basis-24">
                                 <span className="block font-display text-[0.97rem] font-semibold leading-tight truncate">
-                                    {o.customer_name ?? o.customer_external_id}
+                                    {orderCustomerLabel(o)}
                                 </span>
                                 <span className="block text-xs text-muted-foreground font-mono tabular-nums truncate">
                                     {o.units} u.

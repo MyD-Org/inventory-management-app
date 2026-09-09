@@ -16,12 +16,12 @@ import { matchesOrderQuery } from "@/lib/order-search"
 import { OrdersBoard, isOverdue, type BoardCard } from "@/components/orders-board"
 import { OrdersTable } from "@/components/orders-table"
 
-type Filter = "vencidos" | "alta" | "sin_materiales" | null
+type Filter = "vencidos" | "alta" | "sin_materiales" | "en_deposito" | null
 
 // Entrega dentro de los próximos 7 días, contando hoy. Los vencidos no cuentan:
 // tienen su propio contador y su propio color.
 function isDueWithinAWeek(d: string | null, status: string): boolean {
-    if (!d || status === "retirado" || status === "cancelado") return false
+    if (!d || status === "retirado" || status === "cancelado" || status === "en_deposito") return false
     const [y, m, day] = d.split("-").map(Number)
     const eta = new Date(y, m - 1, day)
     const today = new Date()
@@ -86,6 +86,7 @@ export function OrdersView({
         if (filter === "vencidos" && !isLate(c)) return false
         if (filter === "alta" && c.priority !== "alta") return false
         if (filter === "sin_materiales" && !c.needs_review) return false
+        if (filter === "en_deposito" && c.status !== "en_deposito") return false
         return matchesOrderQuery(c, q)
     })
 
@@ -94,7 +95,9 @@ export function OrdersView({
     // final—, porque buscar algo y que no esté es peor que verlo de más.
     // Alcanza con que haya texto en el buscador: los chips de filtro no son un
     // pedido de ver cancelados.
-    const boardCards = q ? visible : visible.filter((c) => c.status !== "cancelado")
+    const boardCards = q
+        ? visible.filter((c) => c.status !== "en_deposito")
+        : visible.filter((c) => c.status !== "cancelado" && c.status !== "en_deposito")
     // El contador acompaña a lo que estás viendo, no a lo que matcheó por dentro.
     const mostrados = lista ? visible.length : boardCards.length
 
@@ -136,6 +139,15 @@ export function OrdersView({
                 <Chip active={filter === "alta"} onClick={() => setFilter((f) => (f === "alta" ? null : "alta"))}>
                     Prioridad alta
                 </Chip>
+
+                {lista && (
+                    <Chip
+                        active={filter === "en_deposito"}
+                        onClick={() => setFilter((f) => (f === "en_deposito" ? null : "en_deposito"))}
+                    >
+                        En depósito
+                    </Chip>
+                )}
 
                 {filtrando && (
                     <>

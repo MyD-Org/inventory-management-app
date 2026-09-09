@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation"
 import { CalendarClock, Loader2, PackageX, TriangleAlert } from "lucide-react"
 import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
-import { BOARD_STATUSES, orderNeedsReview, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
+import { BOARD_STATUSES, orderCustomerLabel, orderNeedsReview, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
 import { PriorityIcon, StatusIcon } from "@/components/order-glyphs"
 
 export interface BoardCard {
@@ -19,6 +19,7 @@ export interface BoardCard {
     external_id: string
     customer_name: string | null
     customer_external_id: string
+    for_stock: boolean
     /** Código externo del pedido, si lo tiene. Se ve en la lista. */
     reference: string | null
     status: OrderStatus
@@ -55,7 +56,7 @@ export function formatDate(d: string | null): string | null {
 
 // Entrega vencida: la fecha ya pasó y el pedido todavía no salió.
 export function isOverdue(d: string | null, status: string): boolean {
-    if (!d || status === "retirado" || status === "cancelado") return false
+    if (!d || status === "retirado" || status === "cancelado" || status === "en_deposito") return false
     const [y, m, day] = d.split("-").map(Number)
     const eta = new Date(y, m - 1, day)
     const today = new Date()
@@ -283,7 +284,7 @@ export function OrdersBoard({ cards, query = "" }: { cards: BoardCard[]; query?:
                                             {/* El cliente es lo que identifica el trabajo: va como
                                                 título, no como una línea más. */}
                                             <div className="font-display text-[1.05rem] font-semibold leading-tight truncate">
-                                                {card.customer_name ?? card.customer_external_id}
+                                                {orderCustomerLabel(card)}
                                             </div>
 
                                             {needsDateReview(card) && (
