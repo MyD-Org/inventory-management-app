@@ -182,6 +182,15 @@ function Cambio({ e }: { e: OrderEvent }) {
                         devolvió <Val>{nuevo} {Number(nuevo) === 1 ? "material" : "materiales"}</Val> al inventario
                     </>
                 )
+            case "handover":
+                // "desmarcada" en el cuerpo: el evento se guarda igual cuando se
+                // destilda, porque desmarcar una entrega también es algo que
+                // alguien hizo y que después hay que poder explicar.
+                return e.body === "desmarcada" ? (
+                    <>desmarcó la entrega de <Val>{nuevo}</Val></>
+                ) : (
+                    <>entregó <Val>{nuevo}</Val> al cliente</>
+                )
             case "invoice":
                 // El mismo kind cubre los dos documentos y los distingue el campo.
                 // Decir "la factura" cuando salió un remito manda a buscar a Alegra

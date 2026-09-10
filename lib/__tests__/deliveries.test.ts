@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
     DELIVERY_LABELS,
+    handoverCount,
+    isHandedOver,
     deliveredOverflow,
     deliveryState,
     describeDelivery,
@@ -62,6 +64,48 @@ describe("deliveryState", () => {
 describe("describeDelivery", () => {
     it("dice cuánto salió sobre el total", () => {
         expect(describeDelivery(pedido)).toBe("Remitidas 4 de 13")
+    })
+})
+
+describe("isHandedOver", () => {
+    it("una línea sin remito nunca está entregada", () => {
+        expect(isHandedOver({ id: 1, product: "X", quantity: 5, delivered: 0, handedOver: 5 })).toBe(false)
+    })
+
+    it("sin marcar, no está entregada", () => {
+        expect(isHandedOver({ id: 1, product: "X", quantity: 5, delivered: 5 })).toBe(false)
+    })
+
+    it("entregada cuando lo entregado alcanza a lo remitido", () => {
+        expect(isHandedOver({ id: 1, product: "X", quantity: 10, delivered: 4, handedOver: 4 })).toBe(true)
+    })
+
+    it("se destilda sola cuando sale un remito nuevo", () => {
+        // Se entregaron las 4 que había remitidas y después salieron 6 más.
+        expect(isHandedOver({ id: 1, product: "X", quantity: 10, delivered: 10, handedOver: 4 })).toBe(false)
+    })
+
+    it("no se cuelga de un redondeo de centésimas", () => {
+        expect(isHandedOver({ id: 1, product: "X", quantity: 3, delivered: 3, handedOver: 2.999 })).toBe(true)
+    })
+})
+
+describe("handoverCount", () => {
+    it("cuenta solo las líneas que tienen remito", () => {
+        expect(
+            handoverCount([
+                { id: 1, product: "A", quantity: 10, delivered: 4, handedOver: 4 },
+                { id: 2, product: "B", quantity: 6, delivered: 6 },
+                { id: 3, product: "C", quantity: 8, delivered: 0 },
+            ]),
+        ).toEqual({ entregadas: 1, remitidas: 2 })
+    })
+
+    it("un pedido sin remitos no tiene nada para entregar", () => {
+        expect(handoverCount([{ id: 1, product: "A", quantity: 5, delivered: 0 }])).toEqual({
+            entregadas: 0,
+            remitidas: 0,
+        })
     })
 })
 

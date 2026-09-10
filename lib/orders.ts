@@ -265,6 +265,12 @@ export interface OrderItem {
      * ("Listo para retirar" / "Retirado").
      */
     delivered_quantity: number
+    /**
+     * Cuánto de lo remitido ya se le entregó al cliente. Lo marca una persona con
+     * un check en la línea; el número está para que ese check se destilde solo
+     * cuando sale un remito nuevo (ver isHandedOver).
+     */
+    handed_over_quantity: number
     /** Valores que el pedido pidió y la hoja de costo no mapea, p. ej. ["clamp=media"]. */
     unmapped_specs: string[]
     materials: OrderMaterial[]
@@ -397,7 +403,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
 
     const items = await sql`
         SELECT id, line_no, budget_id, product, product_external_id, specs, quantity,
-               needs_review, unmapped_specs, delivered_quantity
+               needs_review, unmapped_specs, delivered_quantity, handed_over_quantity
         FROM order_items WHERE order_id = ${orderId} ORDER BY line_no ASC
     `
     const itemIds = (items as any[]).map((i) => i.id)
@@ -417,6 +423,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
             ...i,
             quantity: Number(i.quantity),
             delivered_quantity: Number(i.delivered_quantity ?? 0),
+            handed_over_quantity: Number(i.handed_over_quantity ?? 0),
             materials: (materials as any[])
                 .filter((m) => m.order_item_id === i.id)
                 .map(({ order_item_id, ...m }) => ({

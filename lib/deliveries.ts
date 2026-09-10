@@ -27,6 +27,12 @@ export interface DeliverableItem {
     quantity: number
     /** Lo ya remitido, sumando todos los remitos del pedido. */
     delivered: number
+    /**
+     * Cuánto de lo remitido ya se le entregó al cliente. Lo marca una persona con
+     * un check; el número existe para que el check se destilde solo cuando sale un
+     * remito nuevo (ver isHandedOver).
+     */
+    handedOver?: number
 }
 
 export interface DeliveryRequestItem {
@@ -75,6 +81,28 @@ export function deliveryState(items: DeliverableItem[]): DeliveryState {
     if (remitido <= EPSILON) return "sin_remitir"
     if (remitido >= pedido - EPSILON) return "remitido"
     return "parcial"
+}
+
+/**
+ * ¿Esta línea ya se le entregó al cliente?
+ *
+ * Es "lo entregado alcanza a lo remitido", no "alguien tildó el check": si después
+ * de tildarlo sale otro remito por lo que faltaba, la línea vuelve a tener
+ * mercadería sin entregar y el check se destilda solo. Marcar mercadería como
+ * entregada porque una vez se tildó una línea más chica sería mentir.
+ *
+ * Una línea sin remito nunca está entregada, por más que el número diga otra cosa:
+ * lo que no tiene papel no salió del depósito.
+ */
+export function isHandedOver(item: DeliverableItem): boolean {
+    if (item.delivered <= EPSILON) return false
+    return (item.handedOver ?? 0) >= item.delivered - EPSILON
+}
+
+/** Cuántas líneas del pedido ya se entregaron, sobre las que se pueden entregar. */
+export function handoverCount(items: DeliverableItem[]): { entregadas: number; remitidas: number } {
+    const remitidas = items.filter((i) => i.delivered > EPSILON)
+    return { entregadas: remitidas.filter(isHandedOver).length, remitidas: remitidas.length }
 }
 
 /** "Remitidas 4 de 10". Lo que queda escrito en el hilo de actividad del pedido. */

@@ -636,6 +636,50 @@ export async function addOrderItem(
     return result;
 }
 
+/**
+ * Marcar (o desmarcar) que una línea del pedido se le entregó al cliente.
+ *
+ * SOLO SOBRE LO REMITIDO: entregar algo sin papel es lo que el circuito no quiere,
+ * así que una línea sin remito no se puede marcar. El check escribe lo remitido y
+ * destildar escribe 0; quien marca no tipea ninguna cantidad (por qué se guarda un
+ * número y no un sí/no, ver scripts/42-entrega-al-cliente.sql).
+ *
+ * NO PASA POR itemsCongelados, y no es un olvido: un pedido en "Listo para retirar"
+ * tiene las líneas congeladas —no se le cambian productos ni cantidades— y es
+ * EXACTAMENTE el estado en el que alguien viene a buscar la mercadería. Congelar
+ * también el check dejaría la función sin el único momento en que se usa.
+ */
+export async function setItemHandedOver(itemId: number, entregado: boolean) {
+    const session = await auth();
+    if (!session?.user) return { ok: false as const, error: 'No autenticado' };
+
+    const [item] = await sql`
+        SELECT order_id, product, quantity, delivered_quantity
+        FROM order_items WHERE id = ${itemId}
+    `;
+    if (!item) return { ok: false as const, error: 'La línea no existe' };
+
+    const remitido = Number(item.delivered_quantity ?? 0);
+    if (remitido <= 0) {
+        return { ok: false as const, error: 'Esa línea todavía no tiene remito: no se puede marcar como entregada.' };
+    }
+
+    await sql`
+        UPDATE order_items SET handed_over_quantity = ${entregado ? remitido : 0}
+        WHERE id = ${itemId}
+    `;
+    await logOrderEvent(item.order_id as number, {
+        kind: 'handover',
+        field: 'entrega',
+        newValue: `${remitido} × ${item.product}`,
+        body: entregado ? null : 'desmarcada',
+    });
+
+    revalidatePath('/pedidos');
+    revalidatePath(`/pedidos/${item.order_id}`);
+    return { ok: true as const };
+}
+
 // Clientes reales para el alta, del espejo de Alegra. Evita que alguien tenga
 // que tipear a mano un customer_external_id como "alegra:1234".
 export async function searchCustomers(q: string) {

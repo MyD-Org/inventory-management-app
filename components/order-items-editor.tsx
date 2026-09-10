@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Check, Loader2, PackageX, Plus, TriangleAlert, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { addOrderItem, deleteOrderItem, updateOrderItem } from "@/lib/order-actions"
+import { addOrderItem, deleteOrderItem, setItemHandedOver, updateOrderItem } from "@/lib/order-actions"
+import { isHandedOver } from "@/lib/deliveries"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { ProductPicker } from "@/components/product-picker"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -26,6 +27,11 @@ interface Item {
      * pedido. La salida va por partes: 4 hoy y 6 la semana que viene.
      */
     delivered?: number
+    /**
+     * Cuánto de lo remitido ya se le entregó al cliente. Otro hecho que el de
+     * arriba: lo remitido lo dice el papel, esto lo marca una persona.
+     */
+    handedOver?: number
     specs: Record<string, string>
     // El producto no matcheó ninguna hoja de costo: la línea no aporta materiales.
     needs_review: boolean
@@ -64,6 +70,59 @@ function EntregaCell({ delivered, quantity }: { delivered: number; quantity: num
         >
             {delivered}
         </span>
+    )
+}
+
+// El check de "se lo llevó el cliente".
+//
+// SOLO DONDE HAY REMITO: entregar mercadería sin papel es lo que el circuito no
+// quiere, así que en una línea sin remitir el check no existe —no se muestra
+// deshabilitado, que invitaría a preguntarse por qué no anda—.
+//
+// NO LO APAGA readOnly, y eso es a propósito: un pedido en "Listo para retirar"
+// tiene las líneas congeladas y es justo el estado en el que alguien viene a
+// buscar la mercadería. Lo que está congelado son los PRODUCTOS del pedido, no el
+// registro de qué se llevaron.
+function EntregadoCheck({
+    item,
+    marcando,
+    onToggle,
+}: {
+    item: Item
+    marcando: boolean
+    onToggle: (item: Item, entregado: boolean) => void
+}) {
+    const remitido = item.delivered ?? 0
+    if (remitido <= 0) return <span className="text-muted-foreground">—</span>
+
+    const entregado = isHandedOver({
+        id: item.id,
+        product: item.product,
+        quantity: item.quantity,
+        delivered: remitido,
+        handedOver: item.handedOver ?? 0,
+    })
+
+    if (marcando) {
+        return <Loader2 className="mx-auto h-4 w-4 animate-spin text-muted-foreground" />
+    }
+
+    return (
+        <input
+            type="checkbox"
+            className="h-4 w-4 cursor-pointer accent-emerald-600"
+            checked={entregado}
+            // La fila entera abre el editor al hacer click: sin esto, marcar la
+            // entrega abriría también la edición del producto.
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => onToggle(item, e.target.checked)}
+            aria-label={`Marcar ${item.product} como entregado al cliente`}
+            title={
+                entregado
+                    ? "Entregado al cliente"
+                    : `Marcar como entregado (${remitido} remitidas)`
+            }
+        />
     )
 }
 
@@ -123,6 +182,23 @@ export function OrderItemsEditor({
     // pedido sin remitir sería una columna de guiones a lo largo de toda la tabla,
     // y la tabla ya es ancha.
     const hayEntregas = items.some((i) => (i.delivered ?? 0) > 0)
+
+    // Qué línea está guardando su check, para mostrar el spinner en ESA fila y no
+    // bloquear la tabla entera: se marcan varias seguidas cuando el cliente se
+    // lleva todo junto.
+    const [marcando, setMarcando] = useState<number | null>(null)
+
+    async function marcarEntregado(item: Item, entregado: boolean) {
+        setMarcando(item.id)
+        const result = await setItemHandedOver(item.id, entregado)
+        setMarcando(null)
+        if (!result.ok) {
+            toast.error("No se pudo marcar la entrega", { description: result.error })
+            return
+        }
+        toast.success(entregado ? `${item.product} entregado` : `${item.product}: entrega desmarcada`)
+        router.refresh()
+    }
 
     const [highlightedId, setHighlightedId] = useState<number | undefined>(highlightedItemId)
 
@@ -211,9 +287,17 @@ export function OrderItemsEditor({
                                 Cant.
                             </th>
                             {hayEntregas && (
-                                <th className="px-3 py-2 text-sm font-medium text-muted-foreground text-right w-[92px]">
-                                    Remitido
-                                </th>
+                                <>
+                                    <th className="px-3 py-2 text-sm font-medium text-muted-foreground text-right w-[92px]">
+                                        Remitido
+                                    </th>
+                                    {/* Entregado al cliente: lo marca una persona
+                                        cuando se lo lleva, y solo se puede en las
+                                        líneas que ya tienen remito. */}
+                                    <th className="no-print px-3 py-2 text-sm font-medium text-muted-foreground text-center w-[86px]">
+                                        Entregado
+                                    </th>
+                                </>
                             )}
                             <th className="px-3 py-2 text-sm font-medium text-muted-foreground w-[18%]">
                                 Producto
@@ -256,12 +340,21 @@ export function OrderItemsEditor({
                                     </span>
                                 </td>
                                 {hayEntregas && (
-                                    <td className="px-3 py-2 text-right align-middle">
-                                        <EntregaCell
-                                            delivered={item.delivered ?? 0}
-                                            quantity={item.quantity}
-                                        />
-                                    </td>
+                                    <>
+                                        <td className="px-3 py-2 text-right align-middle">
+                                            <EntregaCell
+                                                delivered={item.delivered ?? 0}
+                                                quantity={item.quantity}
+                                            />
+                                        </td>
+                                        <td className="no-print px-3 py-2 text-center align-middle">
+                                            <EntregadoCheck
+                                                item={item}
+                                                marcando={marcando === item.id}
+                                                onToggle={marcarEntregado}
+                                            />
+                                        </td>
+                                    </>
                                 )}
                                 <td className="px-3 py-2">
                                     <span className="flex items-center gap-1.5 min-w-0">
@@ -378,12 +471,21 @@ export function OrderItemsEditor({
                                 </td>
                                 {/* Lo remitido no se edita: lo dicen los remitos. */}
                                 {hayEntregas && (
-                                    <td className="px-3 py-2 text-right align-middle">
-                                        <EntregaCell
-                                            delivered={item.delivered ?? 0}
-                                            quantity={item.quantity}
-                                        />
-                                    </td>
+                                    <>
+                                        <td className="px-3 py-2 text-right align-middle">
+                                            <EntregaCell
+                                                delivered={item.delivered ?? 0}
+                                                quantity={item.quantity}
+                                            />
+                                        </td>
+                                        <td className="no-print px-3 py-2 text-center align-middle">
+                                            <EntregadoCheck
+                                                item={item}
+                                                marcando={marcando === item.id}
+                                                onToggle={marcarEntregado}
+                                            />
+                                        </td>
+                                    </>
                                 )}
                                 <td className="px-3 py-2 text-base font-medium">
                                     {cambiandoProducto ? (
@@ -484,7 +586,7 @@ export function OrderItemsEditor({
                             </tr>
 
                             <tr className="bg-muted/30">
-                                <td colSpan={(hayEntregas ? 3 : 2) + columnas.length} className="px-3 pb-3">
+                                <td colSpan={(hayEntregas ? 4 : 2) + columnas.length} className="px-3 pb-3">
                                     <div className="flex items-center gap-2">
                                         <Button
                                             variant="ghost"
@@ -549,9 +651,14 @@ export function OrderItemsEditor({
                                         celda existe para que la fila siga alineada
                                         con el encabezado. */}
                                     {hayEntregas && (
-                                        <td className="px-3 py-2 text-right align-middle text-muted-foreground">
-                                            —
-                                        </td>
+                                        <>
+                                            <td className="px-3 py-2 text-right align-middle text-muted-foreground">
+                                                —
+                                            </td>
+                                            <td className="no-print px-3 py-2 text-center align-middle text-muted-foreground">
+                                                —
+                                            </td>
+                                        </>
                                     )}
                                     <td className="px-3 py-2">
                                         {nuevo.product ? (
@@ -648,7 +755,7 @@ export function OrderItemsEditor({
                                 </tr>
 
                                 <tr className="bg-muted/30">
-                                    <td colSpan={(hayEntregas ? 3 : 2) + columnas.length} className="px-3 pb-3">
+                                    <td colSpan={(hayEntregas ? 4 : 2) + columnas.length} className="px-3 pb-3">
                                         <div className="flex items-center justify-end gap-2">
                                             <Button
                                                 variant="ghost"

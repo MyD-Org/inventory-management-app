@@ -244,6 +244,7 @@ export default async function OrderDetailPage({
         product: i.product,
         quantity: Number(i.quantity),
         delivered: Number(i.delivered_quantity),
+        handedOver: Number(i.handed_over_quantity),
     }))
     const estadoEntrega = deliveryState(entregables)
     const entregado = entregables.reduce((sum, i) => sum + i.delivered, 0)
@@ -493,6 +494,9 @@ export default async function OrderDetailPage({
                                 // entrega puede ir por partes y el taller tiene que
                                 // ver en la fila qué falta armar.
                                 delivered: Number(i.delivered_quantity),
+                                // Lo entregado al cliente es OTRO hecho que lo
+                                // remitido: lo marca una persona, no el papel.
+                                handedOver: Number(i.handed_over_quantity),
                                 specs: i.specs,
                                 needs_review: i.needs_review,
                                 unmapped_specs: i.unmapped_specs ?? [],
