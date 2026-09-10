@@ -14,7 +14,7 @@ import {
 //
 // UN PEDIDO PUEDE TENER VARIOS. La mercadería sale por partes —4 luminarias hoy,
 // las 6 que faltan la semana que viene— y cada salida es un remito propio, con su
-// papel y su número. Lo entregado de cada línea es la suma de sus líneas de remito
+// papel y su número. Lo remitido de cada línea es la suma de sus líneas de remito
 // (ver scripts/41-remitos-parciales.sql); lo pendiente es lo pedido menos eso.
 //
 // REUSA LA RESOLUCIÓN DE LA FACTURA. Qué ítem de Alegra corresponde a cada línea
@@ -40,7 +40,7 @@ export interface RemissionLine {
     description: string
 }
 
-/** Una línea del pedido con su cuenta de entrega, para el diálogo de remitir. */
+/** Una línea del pedido con su cuenta de remitos, para el diálogo de remitir. */
 export interface DeliverableLine {
     orderItemId: number
     product: string
@@ -70,7 +70,7 @@ export interface RemissionResult {
     remissionId: number | null
     remissionNumber: string | null
     remissionUrl: string | null
-    /** Cómo queda el pedido: lo pedido, lo entregado y lo que falta, por línea. */
+    /** Cómo queda el pedido: lo pedido, lo remitido y lo que falta, por línea. */
     delivery: DeliverableLine[]
     deliveryState: DeliveryState
     /** true = solo se calculó, no se emitió nada. */
@@ -81,7 +81,7 @@ function remissionUrl(alegraId: number | null | undefined): string | null {
     return alegraId ? `https://app.alegra.com/remission/view/id/${alegraId}` : null
 }
 
-/** Lo pedido y lo entregado de cada línea. Es la base de todo lo de acá abajo. */
+/** Lo pedido y lo remitido de cada línea. Es la base de todo lo de acá abajo. */
 export async function deliverableItems(orderId: number): Promise<DeliverableItem[]> {
     const rows = await sql`
         SELECT id, product, quantity, delivered_quantity
@@ -106,7 +106,7 @@ function toDeliverableLines(items: DeliverableItem[]): DeliverableLine[] {
 }
 
 /**
- * Recalcula lo entregado de cada línea a partir de los remitos.
+ * Recalcula lo remitido de cada línea a partir de los remitos.
  *
  * ENTERO Y NO INCREMENTAL a propósito: order_items.delivered_quantity es una
  * caché de la suma de order_remission_items, y sumarle el delta de la última
@@ -230,13 +230,13 @@ function toRemissionLines(
 function avisarLineasSinRenglon(
     entrega: Array<{ orderItemId: number; product: string; quantity: number }>,
     lines: RemissionLine[],
-): { entregadas: typeof entrega; warnings: string[] } {
+): { remitidas: typeof entrega; warnings: string[] } {
     const conRenglon = new Set(lines.map((l) => l.orderItemId))
-    const entregadas = entrega.filter((e) => conRenglon.has(e.orderItemId))
+    const remitidas = entrega.filter((e) => conRenglon.has(e.orderItemId))
     const warnings = entrega
         .filter((e) => !conRenglon.has(e.orderItemId))
-        .map((e) => `"${e.product}" no se incluyó en el remito: queda pendiente de entrega.`)
-    return { entregadas, warnings }
+        .map((e) => `"${e.product}" no se incluyó en el remito: queda sin remitir.`)
+    return { remitidas, warnings }
 }
 
 // El vínculo con la factura se deja escrito: Alegra no relaciona un remito con una
@@ -267,7 +267,7 @@ export async function previewRemission(
     const lines = toRemissionLines(preview, ordered, entrega)
 
     // El aviso del plan es parte de lo que la pantalla tiene que mostrar: "ya está
-    // entregado por completo" no es un error del servidor, es el estado del pedido.
+    // remitido por completo" no es un error del servidor, es el estado del pedido.
     const warnings = [...preview.warnings]
     if ("error" in plan) warnings.push(plan.error)
     else warnings.push(...avisarLineasSinRenglon(entrega, lines).warnings)
@@ -291,7 +291,7 @@ export async function previewRemission(
  * Qué diría el último remito si se pusiera al día ahora. No toca Alegra.
  *
  * NO PASA POR planDelivery, a diferencia de previewRemission: lo que este remito
- * entregó ya está entregado, así que compararlo contra lo pendiente lo rechazaría
+ * remitió ya está remitido, así que compararlo contra lo pendiente lo rechazaría
  * siempre. La cantidad no se discute acá, es la que el papel ya dice.
  */
 export async function previewRemissionUpdate(orderId: number): Promise<RemissionResult> {
@@ -329,7 +329,7 @@ export async function previewRemissionUpdate(orderId: number): Promise<Remission
  * YA NO ES IDEMPOTENTE, y ese es justamente el cambio: antes un segundo remito
  * significaba que la mercadería había salido dos veces, y ahora significa que
  * salió el resto. Lo que protege de duplicar es OTRA cosa: no se puede remitir
- * más de lo pendiente (ver planDelivery), así que un pedido ya entregado por
+ * más de lo pendiente (ver planDelivery), así que un pedido ya remitido por
  * completo no deja emitir nada.
  */
 export async function remitOrder(
@@ -357,14 +357,14 @@ export async function remitOrder(
         throw new Error("Ninguna línea del pedido se pudo resolver contra el catálogo de Alegra.")
     }
 
-    // Lo que no llegó a un renglón de Alegra NO se marca como entregado: el papel
+    // Lo que no llegó a un renglón de Alegra NO se marca como remitido: el papel
     // no lo dice, así que el pedido tampoco. Queda pendiente y avisado.
-    const { entregadas, warnings: sinRenglon } = avisarLineasSinRenglon(plan.items, lines)
+    const { remitidas, warnings: sinRenglon } = avisarLineasSinRenglon(plan.items, lines)
     const warnings = [...preview.warnings, ...sinRenglon]
 
     // Parcial = después de esta entrega el pedido todavía tiene algo pendiente.
     const quedaPendiente = items.some((i) => {
-        const sale = entregadas.find((e) => e.orderItemId === i.id)?.quantity ?? 0
+        const sale = remitidas.find((e) => e.orderItemId === i.id)?.quantity ?? 0
         return i.quantity - i.delivered - sale > 0.005
     })
 
@@ -382,7 +382,7 @@ export async function remitOrder(
         observations: observaciones(orderId, (order.alegra_invoice_number as string) ?? null, quedaPendiente),
     })
 
-    // Recién con Alegra confirmando se anota la entrega: si la emisión falla, el
+    // Recién con Alegra confirmando se anota el remito: si la emisión falla, el
     // pedido no puede quedar diciendo que la mercadería salió.
     const [remito] = await sql`
         INSERT INTO order_remissions (
@@ -394,7 +394,7 @@ export async function remitOrder(
         )
         RETURNING id
     `
-    for (const linea of entregadas) {
+    for (const linea of remitidas) {
         await sql`
             INSERT INTO order_remission_items (remission_id, order_item_id, product, quantity)
             VALUES (${remito.id}, ${linea.orderItemId}, ${linea.product}, ${linea.quantity})

@@ -78,11 +78,16 @@ function DocumentoEmitido({ numero, genero }: { numero: string | null; genero: "
     )
 }
 
-// Los remitos del pedido, con cuánto del pedido ya salió del depósito.
+// Los remitos del pedido, con cuánto del pedido ya tiene papel emitido.
 //
-// LA CUENTA VA PRIMERO Y SIEMPRE: "4 de 13 entregadas" es lo que se pregunta al
-// mirar el pedido, y es lo único que sirve cuando hay tres remitos. Los números de
-// los documentos van abajo, para cantarlos por teléfono o buscarlos en el mostrador.
+// DICE REMITIDO Y NO ENTREGADO: que la mercadería tenga su remito no significa que
+// el cliente la haya recibido. Eso lo dice el ESTADO del pedido —"Listo para
+// retirar" mientras espera, "Retirado" cuando se la llevó— y un pedido puede estar
+// remitido entero y seguir en el mostrador.
+//
+// LA CUENTA VA PRIMERO Y SIEMPRE: "10 de 24 u." es lo que se pregunta al mirar el
+// pedido, y es lo único que sirve cuando hay tres remitos. Los números de los
+// documentos van abajo, para cantarlos por teléfono o buscarlos en el mostrador.
 //
 // EL LINK A ALEGRA ES SOLO DEL ADMIN, con el mismo criterio que la factura: el
 // taller y el mostrador no entran a Alegra y el link es una puerta a un sistema
@@ -110,7 +115,7 @@ function ListaRemitos({
         <div className="flex flex-col items-start gap-1">
             <span
                 className={`text-sm font-medium ${
-                    estado === "entregado" ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
+                    estado === "remitido" ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
                 }`}
             >
                 {DELIVERY_LABELS[estado]}
@@ -231,9 +236,9 @@ export default async function OrderDetailPage({
         Object.entries(vocab).filter(([k, f]) => f.kind === "list" && !specs[k])
 
     const units = order.items.reduce((sum, i) => sum + Number(i.quantity), 0)
-    // La entrega va por partes: lo que ya salió del depósito, lo que falta y en qué
-    // estado queda el pedido. Es la cuenta que hacen la fila del producto, la
-    // celda de Remito y los botones de emitir.
+    // La salida va por partes: lo que ya tiene remito, lo que falta y en qué estado
+    // queda el pedido. Es la cuenta que hacen la fila del producto, la celda de
+    // Remito y los botones de emitir.
     const entregables = order.items.map((i) => ({
         id: i.id,
         product: i.product,
@@ -243,7 +248,7 @@ export default async function OrderDetailPage({
     const estadoEntrega = deliveryState(entregables)
     const entregado = entregables.reduce((sum, i) => sum + i.delivered, 0)
     const pendiente = entregables.reduce((sum, i) => sum + pendingQuantity(i), 0)
-    // Se entregó más de lo que el pedido pide: alguien achicó una línea después de
+    // Se remitió más de lo que el pedido pide: alguien achicó una línea después de
     // remitir. El papel ya salió, así que lo único que corresponde es avisarlo.
     const sobreEntregado = deliveredOverflow(entregables)
     // Vencido: la fecha ya pasó y el pedido todavía no salió. Mismo criterio que
@@ -516,7 +521,7 @@ export default async function OrderDetailPage({
                             <ul className="mt-1 list-disc pl-4">
                                 {sobreEntregado.map((i) => (
                                     <li key={i.id}>
-                                        {i.product}: entregadas {i.delivered}, pedidas {i.quantity}
+                                        {i.product}: remitidas {i.delivered}, pedidas {i.quantity}
                                     </li>
                                 ))}
                             </ul>

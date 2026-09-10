@@ -188,7 +188,7 @@ export async function updateOrderStatus(id: number, status: string) {
                             kind: 'invoice',
                             field: 'remito',
                             newValue: result.remissionNumber ?? String(result.remissionId),
-                            // Cuánto quedó entregado: con entregas parciales el
+                            // Cuánto quedó remitido: con remitos parciales el
                             // número del papel solo no dice si salió todo.
                             body: describeDelivery(
                                 result.delivery.map((d) => ({
@@ -586,7 +586,7 @@ export async function deleteOrderItem(itemId: number): Promise<import('@/lib/ord
     if (!session?.user) return { ok: false, error: 'No autenticado' };
 
     // Se lee el producto ANTES de borrarlo: después ya no hay qué nombrar. Y lo
-    // entregado tampoco: borrar la línea deja las líneas de remito en NULL.
+    // remitido tampoco: borrar la línea deja las líneas de remito en NULL.
     const [item] = await sql`
         SELECT order_id, product, quantity, delivered_quantity
         FROM order_items WHERE id = ${itemId}

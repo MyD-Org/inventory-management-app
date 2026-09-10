@@ -22,8 +22,8 @@ interface Item {
     product: string
     quantity: number
     /**
-     * Cuánto de esta línea ya salió del depósito, sumando todos los remitos del
-     * pedido. La entrega va por partes: 4 hoy y 6 la semana que viene.
+     * Cuánto de esta línea tiene remito emitido, sumando todos los remitos del
+     * pedido. La salida va por partes: 4 hoy y 6 la semana que viene.
      */
     delivered?: number
     specs: Record<string, string>
@@ -36,17 +36,22 @@ interface Item {
 
 const SIN = "__ninguna__"
 
-// Cuánto de la línea ya salió del depósito.
+// Cuánto de la línea tiene REMITO emitido.
+//
+// REMITIDO NO ES ENTREGADO: dice que esa mercadería tiene su papel, no que el
+// cliente la haya recibido. Eso último lo dice el estado del pedido —"Listo para
+// retirar" o "Retirado"—, y un pedido puede estar remitido entero y seguir
+// esperando en el mostrador.
 //
 // VA EN SU PROPIA COLUMNA, al lado de la cantidad pedida. Antes era una etiqueta
 // pegada al nombre del producto y tenía dos problemas: le comía el renglón al
 // nombre —que es lo que se lee primero— y sin encabezado el número quedaba
 // huérfano: "4/10" al lado de un producto no dice si son unidades, días o qué.
-// Con la columna, el "10" de Cant. y el "4" de Entregado se leen juntos y el
+// Con la columna, el "10" de Cant. y el "4" de Remitido se leen juntos y el
 // encabezado dice de qué se habla.
 //
-// LA COLUMNA SOLO APARECE SI HAY ENTREGAS: en un pedido que todavía no salió
-// sería una columna vacía a lo largo de toda la tabla, y la tabla ya es ancha.
+// LA COLUMNA SOLO APARECE SI HAY REMITOS: en un pedido que todavía no salió sería
+// una columna vacía a lo largo de toda la tabla, y la tabla ya es ancha.
 function EntregaCell({ delivered, quantity }: { delivered: number; quantity: number }) {
     if (delivered <= 0) return <span className="text-muted-foreground">—</span>
     const completa = delivered >= quantity
@@ -114,9 +119,9 @@ export function OrderItemsEditor({
         specs: Record<string, string>
     } | null>(null)
     const [addingSave, setAddingSave] = useState(false)
-    // La columna "Entregado" solo existe si alguna línea ya salió del depósito: en
-    // un pedido que todavía no se entregó sería una columna de guiones a lo largo
-    // de toda la tabla, y la tabla ya es ancha.
+    // La columna "Remitido" solo existe si alguna línea ya tiene remito: en un
+    // pedido sin remitir sería una columna de guiones a lo largo de toda la tabla,
+    // y la tabla ya es ancha.
     const hayEntregas = items.some((i) => (i.delivered ?? 0) > 0)
 
     const [highlightedId, setHighlightedId] = useState<number | undefined>(highlightedItemId)
@@ -207,7 +212,7 @@ export function OrderItemsEditor({
                             </th>
                             {hayEntregas && (
                                 <th className="px-3 py-2 text-sm font-medium text-muted-foreground text-right w-[92px]">
-                                    Entregado
+                                    Remitido
                                 </th>
                             )}
                             <th className="px-3 py-2 text-sm font-medium text-muted-foreground w-[18%]">
@@ -371,7 +376,7 @@ export function OrderItemsEditor({
                                         }
                                     />
                                 </td>
-                                {/* Lo entregado no se edita: lo dicen los remitos. */}
+                                {/* Lo remitido no se edita: lo dicen los remitos. */}
                                 {hayEntregas && (
                                     <td className="px-3 py-2 text-right align-middle">
                                         <EntregaCell
@@ -540,7 +545,7 @@ export function OrderItemsEditor({
                                             }
                                         />
                                     </td>
-                                    {/* Una línea nueva no tiene nada entregado: la
+                                    {/* Una línea nueva no tiene nada remitido: la
                                         celda existe para que la fila siga alineada
                                         con el encabezado. */}
                                     {hayEntregas && (

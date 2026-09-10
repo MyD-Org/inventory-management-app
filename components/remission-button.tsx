@@ -14,7 +14,7 @@
 // lo único que se avisa es cuando una línea NO se pudo resolver, porque eso sí
 // cambia lo que sale.
 //
-// LA ENTREGA VA POR PARTES. El pedido puede tener varios remitos —4 luminarias hoy
+// LA SALIDA VA POR PARTES. El pedido puede tener varios remitos —4 luminarias hoy
 // y 6 la semana que viene— así que el diálogo no pregunta "¿emitís?": pregunta
 // CUÁNTO SALE de cada línea. Arranca con todo lo pendiente, que es el caso normal
 // (el pedido sale completo), y de ahí se baja la cantidad o se saca la línea
@@ -160,9 +160,9 @@ export function RemissionButton({
         return null
     }
 
-    // Lo que ya salió entero no se lista: no hay nada que decidir sobre esa línea y
-    // ocuparía un renglón que se lee igual que los que sí se pueden tocar. Se
-    // nombra abajo, en una línea, para que no parezca que el pedido perdió un ítem.
+    // Lo que ya está remitido entero no se lista: no hay nada que decidir sobre esa
+    // línea y ocuparía un renglón que se lee igual que los que sí se pueden tocar.
+    // Se nombra abajo, en una línea, para que no parezca que el pedido perdió un ítem.
     const entregadas = (preview?.delivery ?? []).filter((l) => l.pending <= 0)
     const enElRemito = (preview?.delivery ?? []).filter(
         (l) => l.pending > 0 && !sacadas.includes(l.orderItemId),
@@ -220,11 +220,11 @@ export function RemissionButton({
             }
             const verbo = actualizando ? "actualizado" : "emitido"
             const nombre = `Remito ${data.remissionNumber ?? data.remissionId} ${verbo}`
-            // Después de una entrega parcial lo que hace falta saber es cuánto
-            // quedó adentro, no solo que el papel salió.
+            // Después de un remito parcial lo que hace falta saber es cuánto quedó
+            // sin remitir, no solo que el papel salió.
             const resto =
                 !actualizando && data.deliveryState === "parcial"
-                    ? "El pedido mantiene unidades pendientes de entrega."
+                    ? "El pedido mantiene unidades sin remitir."
                     : null
             if (data.warnings?.length > 0) {
                 toast.warning(nombre, { description: [resto, ...data.warnings].filter(Boolean).join(" ") })
@@ -301,8 +301,8 @@ export function RemissionButton({
                             ) : (
                                 <>
                                     <p className="text-sm text-muted-foreground">
-                                        Cantidades a remitir. Lo que quede fuera del remito continúa
-                                        pendiente de entrega.
+                                        Cantidades a remitir. Lo que quede fuera del remito queda
+                                        sin remitir.
                                     </p>
 
                                     <div className="rounded-md border divide-y">
@@ -317,7 +317,7 @@ export function RemissionButton({
                                                         <p className="font-medium break-words">{l.product}</p>
                                                         <p className="text-xs text-muted-foreground">
                                                             {l.delivered > 0
-                                                                ? `Entregadas ${l.delivered} de ${l.ordered} · Pendientes ${l.pending}`
+                                                                ? `Remitidas ${l.delivered} de ${l.ordered} · Pendientes ${l.pending}`
                                                                 : `Pendientes ${l.pending}`}
                                                         </p>
                                                     </div>
@@ -389,7 +389,7 @@ export function RemissionButton({
 
                                     {entregadas.length > 0 && (
                                         <p className="px-1 text-xs text-muted-foreground">
-                                            Entregados por completo:{" "}
+                                            Remitidos por completo:{" "}
                                             {entregadas.map((l) => l.product).join(", ")}.
                                         </p>
                                     )}

@@ -71,7 +71,7 @@ export function OrdersView({
     const isLate = (c: BoardCard) => isOverdue(c.delivery_date_estimate, c.status)
     // Un pedido cuenta UNA vez aunque le falten los dos papeles: el contador mide
     // cuántos pedidos están frenados, no cuántos documentos hay que emitir.
-    // Del lado del remito lo que frena es que quede mercadería sin entregar, no que
+    // Del lado del remito lo que frena es que quede mercadería sin remitir, no que
     // no haya papel: la entrega va por partes y el pedido puede tener varios.
     const missingDoc = (c: BoardCard) =>
         c.status === "por_facturar" && (!c.alegra_invoice_id || c.units - c.delivered > 0.005)
@@ -114,7 +114,7 @@ export function OrdersView({
                     active={filter === "vencidos"}
                     onClick={() => setFilter((f) => (f === "vencidos" ? null : "vencidos"))}
                 />
-                <Stat label="Falta facturar o entregar" value={counts.sinDocumentos} />
+                <Stat label="Falta facturar o remitir" value={counts.sinDocumentos} />
                 <Stat label="Entregan esta semana" value={counts.estaSemana} />
                 <Stat label={lista ? "Pedidos" : "Activos"} value={counts.activos} />
             </div>

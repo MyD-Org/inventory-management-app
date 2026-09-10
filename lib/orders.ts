@@ -258,8 +258,11 @@ export interface OrderItem {
     quantity: number
     needs_review: boolean
     /**
-     * Cuánto de esta línea ya salió del depósito, sumando todos los remitos del
-     * pedido. Menor que quantity = entrega parcial, todavía falta remitir el resto.
+     * Cuánto de esta línea tiene REMITO emitido, sumando todos los remitos del
+     * pedido. Menor que quantity = falta remitir el resto.
+     *
+     * No dice que el cliente la haya recibido: eso lo dice el estado del pedido
+     * ("Listo para retirar" / "Retirado").
      */
     delivered_quantity: number
     /** Valores que el pedido pidió y la hoja de costo no mapea, p. ej. ["clamp=media"]. */

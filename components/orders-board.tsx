@@ -41,7 +41,7 @@ export interface BoardCard {
     // varios porque la mercadería sale por partes, así que lo que frena la salida
     // no es "no hay remito" sino que quede algo sin entregar. Eso lo dice
     // delivered contra units, y el número de cada papel vive en el detalle.
-    /** Unidades ya entregadas, sumando todos los remitos del pedido. */
+    /** Unidades ya remitidas, sumando todos los remitos del pedido. */
     delivered: number
     modified_at: string | null
     delivery_date_verified_at: string | null
@@ -317,7 +317,7 @@ export function OrdersBoard({ cards, query = "" }: { cards: BoardCard[]; query?:
                                                 </span>
                                             )}
 
-                                            {/* Con algo ya entregado la etiqueta dice
+                                            {/* Con algo ya remitido la etiqueta dice
                                                 CUÁNTO falta, no que falte el remito:
                                                 el papel de la primera entrega ya
                                                 salió y decir "falta emitir el remito"
@@ -325,11 +325,11 @@ export function OrdersBoard({ cards, query = "" }: { cards: BoardCard[]; query?:
                                             {missingRemission(card) && (
                                                 <span
                                                     className="inline-flex w-fit items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive"
-                                                    title="El pedido está para facturar y remitir, y todavía queda mercadería sin entregar"
+                                                    title="El pedido está para facturar y remitir, y todavía queda mercadería sin remitir"
                                                 >
                                                     <TriangleAlert className="h-3 w-3" />
                                                     {card.delivered > 0
-                                                        ? `Falta entregar ${card.units - card.delivered} u.`
+                                                        ? `Falta remitir ${card.units - card.delivered} u.`
                                                         : "Falta emitir el remito"}
                                                 </span>
                                             )}

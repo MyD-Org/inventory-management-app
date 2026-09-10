@@ -6,10 +6,10 @@
 -- por eso remitOrder era idempotente: emitir dos remitos del mismo pedido
 -- significaba que la mercadería había salido dos veces.
 --
--- LO QUE PASA EN EL DEPÓSITO ES OTRA COSA: de 10 luminarias se entregan 4 hoy
--- porque es lo que hay armado, y las 6 que faltan la semana que viene. Son dos
--- salidas de mercadería reales, con dos papeles distintos, y el pedido tiene que
--- poder decir cuánto de cada línea YA SE ENTREGÓ. Con el modelo viejo la única
+-- LO QUE PASA EN EL DEPÓSITO ES OTRA COSA: de 10 luminarias salen 4 hoy porque es
+-- lo que hay armado, y las 6 que faltan la semana que viene. Son dos salidas de
+-- mercadería reales, con dos papeles distintos, y el pedido tiene que poder decir
+-- cuánto de cada línea YA TIENE REMITO. Con el modelo viejo la única
 -- salida era emitir el segundo remito a mano en Alegra —y ahí el pedido dejaba
 -- de saber que la mercadería había salido—.
 --
@@ -68,7 +68,13 @@ CREATE INDEX IF NOT EXISTS idx_order_remissions_order ON order_remissions(order_
 CREATE INDEX IF NOT EXISTS idx_order_remission_items_remission ON order_remission_items(remission_id);
 CREATE INDEX IF NOT EXISTS idx_order_remission_items_item ON order_remission_items(order_item_id);
 
--- ---------- Lo entregado de cada línea ----------
+-- ---------- Lo remitido de cada línea ----------
+-- SE LLAMA delivered_quantity PERO SIGNIFICA REMITIDO: cuánto de la línea tiene
+-- papel emitido. Que el cliente lo haya recibido es otro hecho y ya lo dice el
+-- estado del pedido ('listo_para_retirar' / 'retirado'). El nombre quedó de la
+-- primera versión y renombrarlo cuesta una migración sobre una columna que ya
+-- está en producción; lo que no puede pasar es que la PANTALLA diga "entregado",
+-- y no lo dice.
 ALTER TABLE order_items
     ADD COLUMN IF NOT EXISTS delivered_quantity DECIMAL(10,2) NOT NULL DEFAULT 0;
 

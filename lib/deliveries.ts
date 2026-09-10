@@ -11,6 +11,13 @@
 // pedido menos lo ya remitido—, y no lo pedido. Remitir de más significa que el
 // papel dice que salió mercadería que el pedido nunca pidió, y eso no se arregla
 // después: el remito es un documento de la contabilidad real, se anula, no se borra.
+//
+// REMITIDO NO ES ENTREGADO, y de eso habla todo lo que se ve en pantalla acá.
+// Remitido = esa mercadería tiene su papel emitido. Que el cliente la haya
+// recibido es otro hecho y ya lo dice el ESTADO del pedido: "Listo para retirar"
+// mientras espera, "Retirado" cuando se la llevó. Un pedido puede estar remitido
+// por completo y esperando en el mostrador hace una semana. Por eso nada de acá
+// dice "entregado": diría algo que el sistema no sabe.
 
 /** Una línea del pedido, con lo que ya se entregó de ella. */
 export interface DeliverableItem {
@@ -27,12 +34,12 @@ export interface DeliveryRequestItem {
     quantity: number
 }
 
-export type DeliveryState = "sin_entregar" | "parcial" | "entregado"
+export type DeliveryState = "sin_remitir" | "parcial" | "remitido"
 
 export const DELIVERY_LABELS: Record<DeliveryState, string> = {
-    sin_entregar: "Sin entregar",
-    parcial: "Entrega parcial",
-    entregado: "Entregado",
+    sin_remitir: "Sin remitir",
+    parcial: "Remitido en parte",
+    remitido: "Remitido",
 }
 
 // Las cantidades son DECIMAL(10,2) en la base y viajan como float. Comparar
@@ -51,35 +58,35 @@ export function pendingQuantity(item: DeliverableItem): number {
 }
 
 /**
- * Líneas donde se entregó MÁS de lo pedido. Pasa cuando el pedido se achica
- * después de haber remitido —se entregaron 5 y después alguien bajó la línea a 3—.
+ * Líneas donde se remitió MÁS de lo pedido. Pasa cuando el pedido se achica
+ * después de haber remitido —salieron 5 y después alguien bajó la línea a 3—.
  * No se corrige solo: el papel ya salió con 5. Lo que corresponde es avisarlo.
  */
 export function deliveredOverflow(items: DeliverableItem[]): DeliverableItem[] {
     return items.filter((i) => i.delivered - i.quantity > EPSILON)
 }
 
-/** En qué estado de entrega está el pedido entero. */
+/** Cuánto del pedido tiene remito emitido. */
 export function deliveryState(items: DeliverableItem[]): DeliveryState {
     const pedido = items.reduce((s, i) => s + i.quantity, 0)
-    const entregado = items.reduce((s, i) => s + i.delivered, 0)
-    // Un pedido sin líneas no entregó nada, y decir "entregado" porque 0 >= 0
+    const remitido = items.reduce((s, i) => s + i.delivered, 0)
+    // Un pedido sin líneas no remitió nada, y decir "remitido" porque 0 >= 0
     // sería marcarlo como salido sin que haya salido nada.
-    if (entregado <= EPSILON) return "sin_entregar"
-    if (entregado >= pedido - EPSILON) return "entregado"
+    if (remitido <= EPSILON) return "sin_remitir"
+    if (remitido >= pedido - EPSILON) return "remitido"
     return "parcial"
 }
 
-/** "Entregadas 4 de 10". Lo que queda escrito en el hilo de actividad del pedido. */
+/** "Remitidas 4 de 10". Lo que queda escrito en el hilo de actividad del pedido. */
 export function describeDelivery(items: DeliverableItem[]): string {
     const pedido = round2(items.reduce((s, i) => s + i.quantity, 0))
-    const entregado = round2(items.reduce((s, i) => s + i.delivered, 0))
-    return `Entregadas ${entregado} de ${pedido}`
+    const remitido = round2(items.reduce((s, i) => s + i.delivered, 0))
+    return `Remitidas ${remitido} de ${pedido}`
 }
 
 /**
  * Qué queda sin remitir, nombrado producto por producto: "Optic 9 12-24v (6),
- * Estaca corta (8)". null = está todo entregado.
+ * Estaca corta (8)". null = está todo remitido.
  *
  * Lo usa el freno para pasar el pedido a "Listo para retirar": decir "falta
  * remitir" sin decir QUÉ obliga a ir a buscarlo línea por línea.
@@ -118,7 +125,7 @@ export function planDelivery(
             .map((i) => ({ orderItemId: i.id, product: i.product, quantity: pendingQuantity(i) }))
             .filter((l) => l.quantity > 0)
         if (todo.length === 0) {
-            return { error: "El pedido ya fue entregado por completo: no hay unidades pendientes." }
+            return { error: "El pedido ya está remitido por completo: no hay unidades pendientes." }
         }
         return { items: todo }
     }
@@ -148,7 +155,7 @@ export function planDelivery(
         if (total - pendiente > EPSILON) {
             errores.push(
                 pendiente === 0
-                    ? `${item.product}: ya fue entregado por completo.`
+                    ? `${item.product}: ya está remitido por completo.`
                     : `${item.product}: ${total} supera las ${pendiente} unidades pendientes.`,
             )
         }
