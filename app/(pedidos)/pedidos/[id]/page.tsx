@@ -98,12 +98,20 @@ function ListaRemitos({
     estado,
     entregado,
     pedido,
+    fueraDelPedido,
+    aviso,
 }: {
     remissions: EmittedRemission[]
     conLink: boolean
     estado: DeliveryState
     entregado: number
     pedido: number
+    /** Unidades que los remitos nombran y el pedido ya no tiene (ver la página). */
+    fueraDelPedido: number
+    /** El triángulo de "desactualizado", si corresponde. Va pegado a la cuenta:
+     *  DocumentStaleTag está pensado como ícono al lado de un número, y solo en
+     *  su renglón parecía un aviso suelto sin dueño. */
+    aviso?: React.ReactNode
 }) {
     if (remissions.length === 0) {
         return <span className="text-muted-foreground">Sin emitir</span>
@@ -113,16 +121,19 @@ function ListaRemitos({
 
     return (
         <div className="flex flex-col items-start gap-1">
+            {/* El estado y la cuenta en DOS renglones y no en uno con "·": la celda
+                es angosta y "Remitido en parte · 4 de 25 u." se partía por la mitad
+                de la frase, dejando el "u." colgando solo. */}
             <span
-                className={`text-sm font-medium ${
+                className={`flex items-center gap-1 text-sm font-medium ${
                     estado === "remitido" ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
                 }`}
             >
                 {DELIVERY_LABELS[estado]}
-                <span className="font-normal text-muted-foreground">
-                    {" · "}
-                    {entregado} de {pedido} u.
-                </span>
+                {aviso}
+            </span>
+            <span className="text-sm tabular-nums text-muted-foreground">
+                {entregado} de {pedido} u.
             </span>
             <div className="flex flex-col items-start gap-0.5">
                 {remissions.map((r) =>
@@ -151,6 +162,14 @@ function ListaRemitos({
                     ),
                 )}
             </div>
+            {fueraDelPedido > 0.005 && (
+                <span
+                    className="text-xs text-amber-700 dark:text-amber-400"
+                    title="Se borró del pedido una línea que ya tenía remito. El documento sigue nombrándola: corregilo en Alegra si hace falta."
+                >
+                    {fueraDelPedido} u. de los remitos ya no están en el pedido
+                </span>
+            )}
         </div>
     )
 }
@@ -254,6 +273,14 @@ export default async function OrderDetailPage({
     // Se remitió más de lo que el pedido pide: alguien achicó una línea después de
     // remitir. El papel ya salió, así que lo único que corresponde es avisarlo.
     const sobreEntregado = deliveredOverflow(entregables)
+    // Unidades que los remitos nombran y el pedido ya no tiene. Pasa cuando se
+    // borra una línea que estaba remitida: la línea del remito conserva el producto
+    // congelado —el documento salió y dice lo que dice— pero deja de contar como
+    // remitido porque no hay línea del pedido a la que corresponda. Sin esto la
+    // celda se contradice sola: "4 de 25" arriba y remitos que suman 10 abajo.
+    const fueraDelPedido = round2(
+        remissions.reduce((sum, r) => sum + r.items.reduce((s2, i) => s2 + i.quantity, 0), 0) - entregado,
+    )
     // Vencido: la fecha ya pasó y el pedido todavía no salió. Mismo criterio que
     // el tablero, para que un pedido no aparezca vencido en un lado y no en el otro.
     const overdue = (() => {
@@ -431,6 +458,7 @@ export default async function OrderDetailPage({
                                 estado={estadoEntrega}
                                 entregado={entregado}
                                 pedido={units}
+                                fueraDelPedido={fueraDelPedido}
                             />
                         ) : (
                         <EmissionSlot doc="remission">
@@ -441,13 +469,16 @@ export default async function OrderDetailPage({
                                     estado={estadoEntrega}
                                     entregado={entregado}
                                     pedido={units}
+                                    fueraDelPedido={fueraDelPedido}
+                                    aviso={
+                                        order.remission_stale && remissions.length > 0 ? (
+                                            <DocumentStaleTag
+                                                label="Último remito desactualizado"
+                                                changes={remissionDrift.map(describeDrift)}
+                                            />
+                                        ) : null
+                                    }
                                 />
-                                {order.remission_stale && remissions.length > 0 && (
-                                    <DocumentStaleTag
-                                        label="Último remito desactualizado"
-                                        changes={remissionDrift.map(describeDrift)}
-                                    />
-                                )}
                                 <div className="no-print flex flex-wrap items-center gap-1">
                                     {/* Mientras quede mercadería adentro se puede
                                         emitir otro remito: el pedido sale por partes
@@ -459,11 +490,19 @@ export default async function OrderDetailPage({
                                         />
                                     )}
                                     {/* Corregir lo que dice el último papel es otra
-                                        cosa que entregar el resto, y por eso son dos
-                                        botones distintos. */}
-                                    {order.remission_stale && remissions.length > 0 && (
-                                        <RemissionButton orderId={order.id} mode="actualizar" />
-                                    )}
+                                        cosa que remitir el resto, y por eso son dos
+                                        botones distintos.
+
+                                        No se ofrece si el remito nombra productos que
+                                        ya no están en el pedido: ahí actualizar solo
+                                        puede fallar —no hay de dónde volver a
+                                        resolverlos contra el catálogo— y eso se
+                                        arregla en Alegra, no acá. */}
+                                    {order.remission_stale &&
+                                        remissions.length > 0 &&
+                                        fueraDelPedido <= 0.005 && (
+                                            <RemissionButton orderId={order.id} mode="actualizar" />
+                                        )}
                                 </div>
                             </div>
                         </EmissionSlot>
