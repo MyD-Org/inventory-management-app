@@ -60,7 +60,7 @@ describe("deliveryState", () => {
 
 describe("describeDelivery", () => {
     it("dice cuánto salió sobre el total", () => {
-        expect(describeDelivery(pedido)).toBe("4 de 13 entregadas")
+        expect(describeDelivery(pedido)).toBe("Entregadas 4 de 13")
     })
 })
 
@@ -98,7 +98,7 @@ describe("planDelivery", () => {
 
     it("no deja remitir un pedido ya entregado por completo", () => {
         const plan = planDelivery([{ id: 1, product: "X", quantity: 5, delivered: 5 }], null)
-        expect(plan).toEqual({ error: "El pedido ya está entregado por completo: no hay nada que remitir." })
+        expect(plan).toEqual({ error: "El pedido ya fue entregado por completo: no hay unidades pendientes." })
     })
 
     it("permite entregar una parte de lo pendiente", () => {
@@ -118,7 +118,7 @@ describe("planDelivery", () => {
     it("rechaza remitir más de lo que queda pendiente", () => {
         const plan = planDelivery(pedido, [{ orderItemId: 1, quantity: 7 }])
         expect(plan).toEqual({
-            error: "Optic 9 12-24v: querés remitir 7 y quedan 6 por entregar",
+            error: "Optic 9 12-24v: 7 supera las 6 unidades pendientes.",
         })
     })
 
@@ -128,7 +128,7 @@ describe("planDelivery", () => {
             { orderItemId: 1, quantity: 4 },
         ])
         expect(plan).toEqual({
-            error: "Optic 9 12-24v: querés remitir 8 y quedan 6 por entregar",
+            error: "Optic 9 12-24v: 8 supera las 6 unidades pendientes.",
         })
     })
 
@@ -137,18 +137,18 @@ describe("planDelivery", () => {
             [{ id: 1, product: "Optic 9 12-24v", quantity: 10, delivered: 10 }],
             [{ orderItemId: 1, quantity: 1 }],
         )
-        expect(plan).toEqual({ error: "Optic 9 12-24v: ya está entregado por completo" })
+        expect(plan).toEqual({ error: "Optic 9 12-24v: ya fue entregado por completo." })
     })
 
     it("rechaza una línea que no es del pedido", () => {
         expect(planDelivery(pedido, [{ orderItemId: 99, quantity: 1 }])).toEqual({
-            error: "Hay una línea que no es de este pedido",
+            error: "Hay una línea que no pertenece a este pedido.",
         })
     })
 
     it("no remite nada si el diálogo vino todo en cero", () => {
         expect(planDelivery(pedido, [{ orderItemId: 1, quantity: 0 }])).toEqual({
-            error: "No hay nada para remitir",
+            error: "No se indicó ninguna cantidad a remitir.",
         })
     })
 })

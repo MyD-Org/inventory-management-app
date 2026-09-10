@@ -89,7 +89,7 @@ export function RemissionButton({
     const [cantidades, setCantidades] = useState<Record<number, string>>({})
     // La última línea a la que se le recortó la cantidad por llegar al tope. El
     // campo cambia solo cuando pasa, y un número que cambia sin explicación se lee
-    // como un error de la pantalla.
+    // como un error de la pantalla: por eso el renglón dice cuál es el máximo.
     const [topeada, setTopeada] = useState<number | null>(null)
     // Las líneas que se sacaron del remito con la X. Se guardan en vez de borrarse
     // para poder volver a meterlas: sacar la fila equivocada no puede costar
@@ -156,7 +156,7 @@ export function RemissionButton({
         if (texto.trim() === "") return null
         const n = parsear(texto)
         if (Number.isNaN(n) || n < 0) return "Cantidad inválida"
-        if (n > l.pending) return `Solo quedan ${l.pending}`
+        if (n > l.pending) return `Máximo ${l.pending}`
         return null
     }
 
@@ -224,7 +224,7 @@ export function RemissionButton({
             // quedó adentro, no solo que el papel salió.
             const resto =
                 !actualizando && data.deliveryState === "parcial"
-                    ? "Quedó mercadería pendiente de entrega."
+                    ? "El pedido mantiene unidades pendientes de entrega."
                     : null
             if (data.warnings?.length > 0) {
                 toast.warning(nombre, { description: [resto, ...data.warnings].filter(Boolean).join(" ") })
@@ -277,8 +277,8 @@ export function RemissionButton({
                                 // elegir, así que la lista es de solo lectura.
                                 <>
                                     <p className="text-sm text-muted-foreground">
-                                        Se corrige lo que dice el remito de cada producto. Las cantidades
-                                        no cambian: si lo que cambió es cuánto sale, va en un remito nuevo.
+                                        Se actualiza el detalle del remito ya emitido. Las cantidades no se
+                                        modifican: una entrega adicional requiere un remito nuevo.
                                     </p>
                                     <div className="rounded-md border divide-y">
                                         {preview.lines.map((l, i) => (
@@ -301,8 +301,8 @@ export function RemissionButton({
                             ) : (
                                 <>
                                     <p className="text-sm text-muted-foreground">
-                                        Qué sale en este remito. Cambiá la cantidad o sacá el producto que
-                                        todavía no está listo: lo que quede afuera sigue pendiente de entrega.
+                                        Cantidades a remitir. Lo que quede fuera del remito continúa
+                                        pendiente de entrega.
                                     </p>
 
                                     <div className="rounded-md border divide-y">
@@ -317,8 +317,8 @@ export function RemissionButton({
                                                         <p className="font-medium break-words">{l.product}</p>
                                                         <p className="text-xs text-muted-foreground">
                                                             {l.delivered > 0
-                                                                ? `${l.delivered} de ${l.ordered} ya entregadas · quedan ${l.pending}`
-                                                                : `${l.ordered} pedidas`}
+                                                                ? `Entregadas ${l.delivered} de ${l.ordered} · Pendientes ${l.pending}`
+                                                                : `Pendientes ${l.pending}`}
                                                         </p>
                                                     </div>
                                                     <div className="shrink-0 text-right">
@@ -331,7 +331,7 @@ export function RemissionButton({
                                                             className="h-8 w-20 text-right tabular-nums"
                                                             value={cantidades[l.orderItemId] ?? ""}
                                                             onChange={(e) => escribir(l, e.target.value)}
-                                                            aria-label={`Cuánto sale de ${l.product}`}
+                                                            aria-label={`Cantidad a remitir de ${l.product}`}
                                                         />
                                                         {error ? (
                                                             <p className="mt-0.5 text-[0.7rem] text-destructive">
@@ -340,7 +340,7 @@ export function RemissionButton({
                                                         ) : (
                                                             topeada === l.orderItemId && (
                                                                 <p className="mt-0.5 text-[0.7rem] text-muted-foreground">
-                                                                    Es todo lo que queda
+                                                                    Máximo {l.pending}
                                                                 </p>
                                                             )
                                                         )}
@@ -352,8 +352,8 @@ export function RemissionButton({
                                                         onClick={() =>
                                                             setSacadas((s) => [...s, l.orderItemId])
                                                         }
-                                                        aria-label={`Sacar ${l.product} del remito`}
-                                                        title="Sacar del remito"
+                                                        aria-label={`Excluir ${l.product} del remito`}
+                                                        title="Excluir del remito"
                                                     >
                                                         <X className="h-4 w-4" />
                                                     </Button>
@@ -362,7 +362,7 @@ export function RemissionButton({
                                         })}
                                         {enElRemito.length === 0 && (
                                             <p className="px-3 py-4 text-sm text-muted-foreground text-center">
-                                                No quedó ningún producto en el remito.
+                                                Ningún producto seleccionado.
                                             </p>
                                         )}
                                     </div>
@@ -373,8 +373,8 @@ export function RemissionButton({
                                         <div className="flex items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
                                             <span>
                                                 {sacadas.length === 1
-                                                    ? "Sacaste 1 producto del remito."
-                                                    : `Sacaste ${sacadas.length} productos del remito.`}
+                                                    ? "1 producto excluido del remito."
+                                                    : `${sacadas.length} productos excluidos del remito.`}
                                             </span>
                                             <button
                                                 type="button"
@@ -382,14 +382,14 @@ export function RemissionButton({
                                                 className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
                                             >
                                                 <RotateCcw className="h-3 w-3" />
-                                                Volver a incluirlos
+                                                Restaurar
                                             </button>
                                         </div>
                                     )}
 
                                     {entregadas.length > 0 && (
                                         <p className="px-1 text-xs text-muted-foreground">
-                                            Ya se entregó completo:{" "}
+                                            Entregados por completo:{" "}
                                             {entregadas.map((l) => l.product).join(", ")}.
                                         </p>
                                     )}
@@ -421,7 +421,7 @@ export function RemissionButton({
                         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                             {!actualizando && preview && !hayError && (
                                 <>
-                                    Sale{" "}
+                                    Total a remitir{" "}
                                     <span className="font-medium tabular-nums text-foreground">
                                         {totalUnidades} u.
                                     </span>

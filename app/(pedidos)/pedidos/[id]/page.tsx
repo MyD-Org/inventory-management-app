@@ -505,11 +505,11 @@ export default async function OrderDetailPage({
                         resuelva en Alegra. */}
                     {sobreEntregado.length > 0 && (
                         <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-                            <p className="font-medium">Se remitió más de lo que el pedido pide</p>
+                            <p className="font-medium">Se remitieron más unidades de las pedidas</p>
                             <ul className="mt-1 list-disc pl-4">
                                 {sobreEntregado.map((i) => (
                                     <li key={i.id}>
-                                        {i.product}: {i.delivered} entregadas y {i.quantity} pedidas
+                                        {i.product}: entregadas {i.delivered}, pedidas {i.quantity}
                                     </li>
                                 ))}
                             </ul>

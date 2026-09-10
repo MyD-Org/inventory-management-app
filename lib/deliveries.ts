@@ -70,11 +70,11 @@ export function deliveryState(items: DeliverableItem[]): DeliveryState {
     return "parcial"
 }
 
-/** "4 de 10 entregadas". Lo que se lee en la fila del producto y en la tarjeta. */
+/** "Entregadas 4 de 10". Lo que queda escrito en el hilo de actividad del pedido. */
 export function describeDelivery(items: DeliverableItem[]): string {
     const pedido = round2(items.reduce((s, i) => s + i.quantity, 0))
     const entregado = round2(items.reduce((s, i) => s + i.delivered, 0))
-    return `${entregado} de ${pedido} entregadas`
+    return `Entregadas ${entregado} de ${pedido}`
 }
 
 /**
@@ -97,7 +97,7 @@ export function planDelivery(
             .map((i) => ({ orderItemId: i.id, product: i.product, quantity: pendingQuantity(i) }))
             .filter((l) => l.quantity > 0)
         if (todo.length === 0) {
-            return { error: "El pedido ya está entregado por completo: no hay nada que remitir." }
+            return { error: "El pedido ya fue entregado por completo: no hay unidades pendientes." }
         }
         return { items: todo }
     }
@@ -105,7 +105,7 @@ export function planDelivery(
     // Las filas en cero no son un error: el diálogo manda todas las líneas del
     // pedido y quien remite deja en cero lo que todavía no sale.
     const pedido = request.filter((r) => Number.isFinite(r.quantity) && r.quantity > 0)
-    if (pedido.length === 0) return { error: "No hay nada para remitir" }
+    if (pedido.length === 0) return { error: "No se indicó ninguna cantidad a remitir." }
 
     const porItem = new Map(items.map((i) => [i.id, i]))
 
@@ -120,19 +120,19 @@ export function planDelivery(
     for (const [orderItemId, total] of totales) {
         const item = porItem.get(orderItemId)
         if (!item) {
-            errores.push("Hay una línea que no es de este pedido")
+            errores.push("Hay una línea que no pertenece a este pedido.")
             continue
         }
         const pendiente = pendingQuantity(item)
         if (total - pendiente > EPSILON) {
             errores.push(
                 pendiente === 0
-                    ? `${item.product}: ya está entregado por completo`
-                    : `${item.product}: querés remitir ${total} y quedan ${pendiente} por entregar`,
+                    ? `${item.product}: ya fue entregado por completo.`
+                    : `${item.product}: ${total} supera las ${pendiente} unidades pendientes.`,
             )
         }
     }
-    if (errores.length > 0) return { error: errores.join(". ") }
+    if (errores.length > 0) return { error: errores.join(" ") }
 
     return {
         items: [...totales.entries()].map(([orderItemId, quantity]) => ({

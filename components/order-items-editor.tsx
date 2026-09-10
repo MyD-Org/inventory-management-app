@@ -49,7 +49,7 @@ function EntregaTag({ delivered, quantity }: { delivered: number; quantity: numb
     const completa = delivered >= quantity
     return (
         <span
-            title={completa ? "Entregado por completo" : `${delivered} de ${quantity} entregadas`}
+            title={completa ? "Entregado por completo" : `Entregadas ${delivered} de ${quantity}`}
             className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[0.7rem] font-medium tabular-nums ${
                 completa
                     ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"

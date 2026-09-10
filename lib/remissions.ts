@@ -235,7 +235,7 @@ function avisarLineasSinRenglon(
     const entregadas = entrega.filter((e) => conRenglon.has(e.orderItemId))
     const warnings = entrega
         .filter((e) => !conRenglon.has(e.orderItemId))
-        .map((e) => `"${e.product}" no entró en el remito: queda pendiente de entrega.`)
+        .map((e) => `"${e.product}" no se incluyó en el remito: queda pendiente de entrega.`)
     return { entregadas, warnings }
 }
 
@@ -448,7 +448,7 @@ export async function updateOrderRemission(orderId: number): Promise<RemissionRe
     `
     const ultimo = await lastRemissionEntrega(orderId)
     if (!ultimo) {
-        throw new Error("El pedido no tiene remito emitido: no hay nada que actualizar.")
+        throw new Error("El pedido no tiene remitos emitidos: no hay nada que actualizar.")
     }
     if (ultimo.entrega.length === 0) {
         throw new Error("El remito no tiene ninguna línea del pedido: no se puede recalcular.")
