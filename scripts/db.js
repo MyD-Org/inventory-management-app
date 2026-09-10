@@ -42,10 +42,14 @@ function connect() {
     const proxy = process.env.NEON_LOCAL_PROXY
     if (proxy) neonConfig.fetchEndpoint = proxy
 
+    // CON PROXY, EL HOST DE DATABASE_URL NO SE USA: la conexión va a donde apunte
+    // el proxy, y el resto de la URL solo aporta el nombre de la base. Nombrar el
+    // host de DATABASE_URL acá sería justo la confusión que este aviso existe para
+    // evitar —decir "ep-xxx.neon.tech" y estar escribiendo en la Postgres local—.
     console.log(
         proxy
-            ? `▶ Base: ${describeTarget(process.env.DATABASE_URL)} (LOCAL, vía ${proxy})`
-            : `▶ Base: ${describeTarget(process.env.DATABASE_URL)} (Neon REMOTO)`,
+            ? `▶ Base: LOCAL, la que sirva ${proxy} (el host de DATABASE_URL no se usa)`
+            : `▶ Base: ${describeTarget(process.env.DATABASE_URL)} — Neon REMOTO`,
     )
 
     return neon(process.env.DATABASE_URL)

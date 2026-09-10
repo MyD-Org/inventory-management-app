@@ -36,8 +36,8 @@ docker run -d --name neon-proxy -p 4444:4444 \
 > base antes de tocar nada**:
 >
 > ```
-> ▶ Base: localhost/avantec (LOCAL, vía http://localhost:4444/sql)
-> ▶ Base: ep-xxx.neon.tech/avantec (Neon REMOTO)
+> ▶ Base: LOCAL, la que sirva http://localhost:4444/sql (el host de DATABASE_URL no se usa)
+> ▶ Base: ep-xxx.neon.tech/avantec — Neon REMOTO
 > ```
 >
 > Leé esa línea antes de aplicar una migración. Sin `NEON_LOCAL_PROXY` en el
