@@ -341,11 +341,36 @@ export function normalizeOrigin(v: unknown): OrderOrigin {
 // factura al día y el remito viejo, o al revés, porque se emiten y se actualizan
 // independientemente. No hace nada si el pedido no tiene ninguno de los dos, así
 // que se puede llamar sin preguntar antes.
-export async function markDocumentsStale(orderId: number): Promise<void> {
+//
+// LA FACTURA Y EL REMITO NO SE ENSUCIAN POR LO MISMO, y la diferencia la trajo la
+// entrega por partes:
+//
+//   La factura cubre el pedido ENTERO. Cualquier cambio de ítem la desalinea:
+//   agregar un producto significa que hay algo más para cobrar y la factura
+//   emitida ya no lo dice.
+//
+//   El remito dice qué mercadería SALIÓ. Agregar un producto no lo desmiente:
+//   esa mercadería nunca salió, así que ningún papel emitido mintió. Lo que
+//   corresponde ahí es emitir OTRO remito cuando salga, no corregir el anterior
+//   —y para eso está "Remitir el resto"—. El remito solo queda viejo cuando el
+//   cambio toca una línea de la que YA se entregó algo: ahí sí el papel nombra
+//   mercadería que salió y la describe mal.
+//
+// Por eso el llamador pasa cuánto se había entregado de la línea que tocó, leído
+// ANTES de tocarla —borrarla se lleva el dato—. Sin ese dato (una línea nueva) el
+// remito no se ensucia, pero una bandera ya levantada no se baja: eso lo hace
+// ponerlo al día, no otro cambio encima.
+export async function markDocumentsStale(
+    orderId: number,
+    deliveredOnTouchedLine = 0,
+): Promise<void> {
     await sql`
         UPDATE orders SET
             invoice_stale = (alegra_invoice_id IS NOT NULL),
-            remission_stale = (alegra_remission_id IS NOT NULL)
+            remission_stale = CASE
+                WHEN ${deliveredOnTouchedLine} > 0 THEN alegra_remission_id IS NOT NULL
+                ELSE remission_stale
+            END
         WHERE id = ${orderId}
           AND (alegra_invoice_id IS NOT NULL OR alegra_remission_id IS NOT NULL)
     `

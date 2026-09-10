@@ -500,12 +500,17 @@ export async function updateOrderItem(
     const session = await auth();
     if (!session?.user) return { ok: false, error: 'No autenticado' };
 
-    const [item] = await sql`SELECT order_id, product, quantity, specs FROM order_items WHERE id = ${itemId}`;
+    // delivered_quantity se lee ACÁ, antes del cambio: es lo que decide si el
+    // remito ya emitido queda diciendo algo falso (ver markDocumentsStale).
+    const [item] = await sql`
+        SELECT order_id, product, quantity, specs, delivered_quantity
+        FROM order_items WHERE id = ${itemId}
+    `;
     if (!item) return { ok: false, error: 'La línea no existe' };
 
     const result = await updateOrderItemInternal(itemId, patch);
     if (result.ok) {
-        await markDocumentsStale(item.order_id);
+        await markDocumentsStale(item.order_id, Number(item.delivered_quantity ?? 0));
 
         // El cambio de producto se registra aparte: rehace la receta entera, así
         // que en el hilo tiene que leerse como tal y no como "cambió un dato".
@@ -553,13 +558,17 @@ export async function deleteOrderItem(itemId: number): Promise<import('@/lib/ord
     const session = await auth();
     if (!session?.user) return { ok: false, error: 'No autenticado' };
 
-    // Se lee el producto ANTES de borrarlo: después ya no hay qué nombrar.
-    const [item] = await sql`SELECT order_id, product, quantity FROM order_items WHERE id = ${itemId}`;
+    // Se lee el producto ANTES de borrarlo: después ya no hay qué nombrar. Y lo
+    // entregado tampoco: borrar la línea deja las líneas de remito en NULL.
+    const [item] = await sql`
+        SELECT order_id, product, quantity, delivered_quantity
+        FROM order_items WHERE id = ${itemId}
+    `;
     if (!item) return { ok: false, error: 'La línea no existe' };
 
     const result = await deleteOrderItemInternal(itemId);
     if (result.ok) {
-        await markDocumentsStale(item.order_id);
+        await markDocumentsStale(item.order_id, Number(item.delivered_quantity ?? 0));
         await logOrderEvent(item.order_id, {
             kind: 'item_removed',
             oldValue: `${item.quantity} × ${item.product}`,
@@ -581,6 +590,8 @@ export async function addOrderItem(
 
     const result = await addOrderItemInternal(orderId, payload);
     if (result.ok) {
+        // Sin segundo argumento: una línea nueva no ensucia el remito, porque esa
+        // mercadería todavía no salió. La factura sí, y eso lo resuelve adentro.
         await markDocumentsStale(orderId);
         await logOrderEvent(orderId, {
             kind: 'item_added',

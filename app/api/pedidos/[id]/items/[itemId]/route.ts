@@ -14,15 +14,17 @@ async function checkOrder(id: number) {
     return { order }
 }
 
-async function markModified(orderId: number) {
+async function markModified(orderId: number, deliveredOnTouchedLine = 0) {
     await sql`
         UPDATE orders
         SET modified_at = NOW(), delivery_date_verified_at = NULL
         WHERE id = ${orderId}
     `
     // Si el pedido ya tenía factura o remito, quedaron viejos. El CRM edita por
-    // acá, así que sin esto un cambio del CRM los desalinea sin avisar.
-    await markDocumentsStale(orderId)
+    // acá, así que sin esto un cambio del CRM los desalinea sin avisar. Cuánto se
+    // había entregado de la línea decide si el remito también quedó viejo o si
+    // alcanza con emitir otro por lo que falta (ver markDocumentsStale).
+    await markDocumentsStale(orderId, deliveredOnTouchedLine)
 }
 
 export async function PATCH(
@@ -52,7 +54,9 @@ export async function PATCH(
 
     try {
         // El producto se lee ANTES de tocarlo, para poder nombrarlo en la historia.
-        const [previo] = await sql`SELECT product, quantity, specs FROM order_items WHERE id = ${itemId}`
+        const [previo] = await sql`
+            SELECT product, quantity, specs, delivered_quantity FROM order_items WHERE id = ${itemId}
+        `
         const result = await updateOrderItemInternal(itemId, {
             quantity: body.quantity !== undefined ? Number(body.quantity) : undefined,
             specs: body.specs,
@@ -60,7 +64,7 @@ export async function PATCH(
         if (!result.ok) {
             return NextResponse.json({ error: result.error }, { status: 400 })
         }
-        await markModified(orderId)
+        await markModified(orderId, Number(previo?.delivered_quantity ?? 0))
         const cambioCantidad =
             body.quantity !== undefined && Number(body.quantity) !== Number(previo?.quantity)
         // El hilo dice qué opción se tocó y de qué a qué, igual que cuando el
@@ -107,12 +111,14 @@ export async function DELETE(
     }
 
     try {
-        const [previo] = await sql`SELECT product, quantity FROM order_items WHERE id = ${itemId}`
+        const [previo] = await sql`
+            SELECT product, quantity, delivered_quantity FROM order_items WHERE id = ${itemId}
+        `
         const result = await deleteOrderItemInternal(itemId)
         if (!result.ok) {
             return NextResponse.json({ error: result.error }, { status: 400 })
         }
-        await markModified(orderId)
+        await markModified(orderId, Number(previo?.delivered_quantity ?? 0))
         await logOrderEvent(orderId, {
             kind: "item_removed",
             oldValue: previo ? `${previo.quantity} × ${previo.product}` : null,
