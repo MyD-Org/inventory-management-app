@@ -3,6 +3,7 @@ import { sql } from "@/lib/database"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/auth"
 import { canConsumeStock } from "@/lib/roles"
+import { requireOperator } from "@/lib/operators"
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     const user_name = session.user.name || session.user.email || "Desconocido"
 
     const body = await request.json()
-    const { material_id, movement_type, quantity, reference_number, notes, unit_cost } = body
+    const { material_id, movement_type, quantity, reference_number, notes, unit_cost, operator_id } = body
 
     // Validaciones
     if (!material_id || !movement_type || !quantity) {
@@ -31,6 +32,17 @@ export async function POST(request: NextRequest) {
     if (!["entrada", "salida", "ajuste"].includes(movement_type)) {
       return NextResponse.json({ error: "Tipo de movimiento inválido" }, { status: 400 })
     }
+
+    // El OPERARIO: la persona que movió el material, distinta de la cuenta con
+    // la que se entró. En el depósito hay una tablet con un login abierto todo
+    // el día, así que user_name dice siempre lo mismo y no alcanza para saber
+    // quién retiró qué. La regla de cuándo es obligatorio vive en
+    // lib/operators.ts, compartida con el descuento por pedido.
+    const pedido = await requireOperator(operator_id)
+    if ("error" in pedido) {
+      return NextResponse.json({ error: pedido.error }, { status: 400 })
+    }
+    const operario = pedido.operario
 
     // Precio opcional: solo tiene sentido para entradas. Aceptamos number o null;
     // si viene, tiene que ser >= 0. Si es 0 o null lo guardamos como null (evita
@@ -96,7 +108,9 @@ export async function POST(request: NextRequest) {
           reference_number,
           notes,
           user_name,
-          unit_cost
+          unit_cost,
+          operator_id,
+          operator_name
         )
         VALUES (
           ${material_id},
@@ -107,7 +121,9 @@ export async function POST(request: NextRequest) {
           ${reference_number},
           ${notes},
           ${user_name},
-          ${unitCost}
+          ${unitCost},
+          ${operario?.id ?? null},
+          ${operario?.name ?? null}
         )
         RETURNING id, created_at
       `

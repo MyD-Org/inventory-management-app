@@ -393,6 +393,7 @@ export async function downloadMovementsReport(params?: { search?: string; type?:
                 sm.reference_number,
                 sm.notes,
                 sm.user_name,
+                sm.operator_name,
                 sm.created_at,
                 m.name as material_name,
                 m.barcode,

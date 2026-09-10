@@ -15,6 +15,7 @@ export async function listarMovimientosDeLaSemana(userName: string): Promise<Mov
                 sm.quantity,
                 sm.created_at,
                 sm.user_name,
+                sm.operator_name,
                 m.name AS material_name,
                 (sm.user_name = ${userName}) AS mine,
                 (

@@ -14,6 +14,7 @@ async function getRecentMovements() {
         sm.quantity,
         sm.reference_number,
         sm.user_name,
+        sm.operator_name,
         sm.created_at,
         m.id as material_id,
         m.name as material_name,
@@ -110,7 +111,7 @@ export async function RecentMovements({
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-foreground truncate">{movement.material_name}</div>
                     <div className="text-sm text-muted-foreground">
-                      {movement.barcode} • {movement.user_name || "Sistema"}
+                      {movement.barcode} • {movement.operator_name || movement.user_name || "Sistema"}
                     </div>
                   </div>
                   <div className="text-right">

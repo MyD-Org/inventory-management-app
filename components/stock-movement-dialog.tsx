@@ -13,6 +13,7 @@ import { Camera, Loader2, Save, Plus, Minus, Scan, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useDebouncedCallback } from "use-debounce"
 import { formatStock } from "@/lib/format"
+import { OperatorPicker, type OperarioElegido } from "@/components/operator-picker"
 
 // zxing pesa: se carga recién cuando alguien abre la cámara, no en cada modal.
 const CameraBarcodeScanner = dynamic(
@@ -63,6 +64,14 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
     // Precio unitario del ingreso. Solo se muestra/manda en ENTRADAS. Prefill con
     // el unit_cost actual del material (evita pisar el costo con "" si se deja vacío).
     const [unitCost, setUnitCost] = useState("")
+
+    // Quién mueve el material, que no es lo mismo que con qué cuenta se entró:
+    // el depósito trabaja con un solo login abierto todo el día. El picker se
+    // acuerda del último elegido por una hora, así que en la mayoría de los
+    // movimientos esto ya viene contestado y es un renglón de confirmación.
+    const [operario, setOperario] = useState<OperarioElegido | null>(null)
+    const [hayOperarios, setHayOperarios] = useState(false)
+    const [operarioError, setOperarioError] = useState(false)
 
     const [materialError, setMaterialError] = useState(false)
     const [quantityError, setQuantityError] = useState(false)
@@ -130,6 +139,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
             setQuantityError(false)
             setNotFoundCode(null)
             setSubmitError(null)
+            setOperarioError(false)
             setSuggestOpen(false)
             setActiveIndex(-1)
             setCamaraAbierta(false)
@@ -223,6 +233,17 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
             return
         }
 
+        // Solo se exige si hay alguien cargado: en una instalación sin operarios
+        // el modal sigue funcionando como antes. El servidor aplica la misma
+        // regla, que es donde de verdad se sostiene.
+        if (hayOperarios && !operario) {
+            setOperarioError(true)
+            toast.error("Falta el operario", {
+                description: "Tocá quién está haciendo el movimiento.",
+            })
+            return
+        }
+
         setLoading(true)
         setSubmitError(null)
 
@@ -238,6 +259,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                     notes: formData.notes || null,
                     // Precio solo aplica en entradas. Vacío → null (no pisa el unit_cost del material).
                     unit_cost: type === "entrada" && canSetUnitCost && unitCost ? Number(unitCost) : null,
+                    operator_id: operario?.id ?? null,
                     // El usuario se toma de la sesión en el servidor (ver /api/stock/movement)
                 }),
             })
@@ -288,6 +310,17 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
+                    <OperatorPicker
+                        value={operario}
+                        onChange={(op) => {
+                            setOperario(op)
+                            if (op) setOperarioError(false)
+                        }}
+                        onListLoaded={(cantidad) => setHayOperarios(cantidad > 0)}
+                        error={operarioError}
+                        disabled={loading}
+                    />
+
                     {/* Barcode Input Section - Primary Focus */}
                     <div className="bg-muted/50 p-4 rounded-lg border-2 border-dashed border-muted-foreground/25">
                         <Label htmlFor="barcode-input" className="mb-2 block font-semibold">

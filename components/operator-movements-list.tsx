@@ -86,15 +86,25 @@ export function OperatorMovementsList({ movimientos }: { movimientos: Movimiento
                                     <div className="truncate font-medium text-foreground">{mov.material_name}</div>
                                     <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
                                         <span className="font-mono tabular-nums">{formatearFecha(mov.created_at)}</span>
-                                        {/* El responsable solo cuando no es propio: en la vista
-                                            de propios la columna repetiría el mismo nombre en
-                                            todas las filas. */}
-                                        {!mov.mine && (
+                                        {/* El OPERARIO va siempre que exista, incluso en los
+                                            propios: en la tablet del depósito todos los
+                                            movimientos son "propios" (misma cuenta) y hechos por
+                                            personas distintas, así que esconderlo ahí borra
+                                            justamente el dato que se quiere ver.
+                                            Sin operario (movimientos viejos o de un pedido) queda
+                                            la regla anterior: la cuenta, y solo si no es propia,
+                                            para no repetir el mismo nombre en todas las filas. */}
+                                        {mov.operator_name ? (
+                                            <>
+                                                <span aria-hidden>·</span>
+                                                <span className="truncate">{mov.operator_name}</span>
+                                            </>
+                                        ) : !mov.mine ? (
                                             <>
                                                 <span aria-hidden>·</span>
                                                 <span className="truncate">{mov.user_name || "Sistema"}</span>
                                             </>
-                                        )}
+                                        ) : null}
                                         {mov.undoable && (
                                             <>
                                                 <span aria-hidden>·</span>

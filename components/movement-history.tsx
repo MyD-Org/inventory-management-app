@@ -62,6 +62,7 @@ async function getMovementHistory(params: { search?: string; type?: string; from
         sm.order_id,
         sm.notes,
         sm.user_name,
+        sm.operator_name,
         sm.created_at,
         m.id as material_id,
         m.name as material_name,
@@ -91,6 +92,7 @@ async function getMovementHistory(params: { search?: string; type?: string; from
       order_id: movement.order_id,
       notes: movement.notes,
       user_name: movement.user_name,
+      operator_name: movement.operator_name,
       created_at: movement.created_at,
       material_name: movement.material_name,
       barcode: movement.barcode,
@@ -238,7 +240,18 @@ export async function MovementHistory({
                         </div>
 
                       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground md:w-[28%] md:justify-start">
-                        <span className="font-medium text-foreground/80">{movement.user_name}</span>
+                        {/* El operario es quien movió el material; user_name es
+                            la cuenta desde la que se registró. Cuando hay
+                            operario manda él y la cuenta queda como aclaración:
+                            en el depósito la cuenta es siempre la misma tablet.
+                            Los movimientos viejos no tienen operario y siguen
+                            mostrando la cuenta sola. */}
+                        <span className="font-medium text-foreground/80">
+                          {movement.operator_name || movement.user_name}
+                        </span>
+                        {movement.operator_name && movement.user_name && (
+                          <span className="hidden md:inline">({movement.user_name})</span>
+                        )}
                         <span className="hidden md:inline">•</span>
                         <span>
                           {new Date(movement.created_at).toLocaleDateString("es-AR", {

@@ -23,6 +23,10 @@ export interface MovimientoDeLaSemana {
     created_at: string
     material_name: string
     user_name: string | null
+    // La persona que movió el material, elegida en el modal. Null en los
+    // movimientos anteriores a que existieran los operarios y en los que vienen
+    // de un pedido. Ver lib/operators.ts.
+    operator_name: string | null
     // Lo hizo el usuario que está mirando. Se calcula en SQL para no mandar al
     // cliente la comparación de nombres.
     mine: boolean

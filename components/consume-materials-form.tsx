@@ -17,6 +17,7 @@ import { Camera, Loader2, X } from "lucide-react"
 import { consumeOrderMaterials, searchInventoryMaterials } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import type { MaterialNeed } from "@/lib/orders"
+import { OperatorPicker, type OperarioElegido } from "@/components/operator-picker"
 
 // zxing pesa: se carga recién cuando alguien abre la cámara, no en cada pedido.
 const CameraBarcodeScanner = dynamic(
@@ -261,6 +262,12 @@ export function ConsumeMaterialsForm({
     const [rows, setRows] = useState<Row[]>([])
     const [saving, setSaving] = useState(false)
 
+    // Quién retira el material. El taller entra con una sesión compartida, así
+    // que la cuenta no alcanza para saber quién se llevó qué. Ver
+    // components/operator-picker.tsx.
+    const [operario, setOperario] = useState<OperarioElegido | null>(null)
+    const [hayOperarios, setHayOperarios] = useState(false)
+    const [operarioError, setOperarioError] = useState(false)
     useEffect(() => {
         setRows(
             needs
@@ -312,10 +319,16 @@ export function ConsumeMaterialsForm({
     })
 
     async function descontar() {
+        if (hayOperarios && !operario) {
+            setOperarioError(true)
+            toast.error("Falta el operario", { description: "Tocá quién está retirando el material." })
+            return
+        }
         setSaving(true)
         const result = await consumeOrderMaterials(
             orderId,
             aDescontar.map((r) => ({ material_id: r.material_id, quantity: parsear(r.qty) })),
+            operario?.id ?? null,
         )
         setSaving(false)
         if (result.error) {
@@ -328,6 +341,19 @@ export function ConsumeMaterialsForm({
 
     return (
         <>
+            <div className="mb-4">
+                <OperatorPicker
+                    value={operario}
+                    onChange={(op) => {
+                        setOperario(op)
+                        if (op) setOperarioError(false)
+                    }}
+                    onListLoaded={(cantidad) => setHayOperarios(cantidad > 0)}
+                    error={operarioError}
+                    disabled={saving}
+                />
+            </div>
+
             <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
                 {rows.map((r, idx) => {
                     const error = errorDe(r)
