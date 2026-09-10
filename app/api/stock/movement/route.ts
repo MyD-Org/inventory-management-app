@@ -36,9 +36,9 @@ export async function POST(request: NextRequest) {
     // El OPERARIO: la persona que movió el material, distinta de la cuenta con
     // la que se entró. En el depósito hay una tablet con un login abierto todo
     // el día, así que user_name dice siempre lo mismo y no alcanza para saber
-    // quién retiró qué. La regla de cuándo es obligatorio vive en
-    // lib/operators.ts, compartida con el descuento por pedido.
-    const pedido = await requireOperator(operator_id)
+    // quién retiró qué. Al admin no se le pide (su cuenta ya lleva su nombre);
+    // la regla completa vive en lib/operators.ts, compartida con los pedidos.
+    const pedido = await requireOperator(operator_id, session.user.role)
     if ("error" in pedido) {
       return NextResponse.json({ error: pedido.error }, { status: 400 })
     }

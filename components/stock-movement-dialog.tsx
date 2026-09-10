@@ -70,7 +70,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
     // acuerda del último elegido por una hora, así que en la mayoría de los
     // movimientos esto ya viene contestado y es un renglón de confirmación.
     const [operario, setOperario] = useState<OperarioElegido | null>(null)
-    const [hayOperarios, setHayOperarios] = useState(false)
+    const [operarioRequerido, setOperarioRequerido] = useState(false)
     const [operarioError, setOperarioError] = useState(false)
 
     const [materialError, setMaterialError] = useState(false)
@@ -236,7 +236,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
         // Solo se exige si hay alguien cargado: en una instalación sin operarios
         // el modal sigue funcionando como antes. El servidor aplica la misma
         // regla, que es donde de verdad se sostiene.
-        if (hayOperarios && !operario) {
+        if (operarioRequerido && !operario) {
             setOperarioError(true)
             toast.error("Falta el operario", {
                 description: "Tocá quién está haciendo el movimiento.",
@@ -316,7 +316,7 @@ export function StockMovementDialog({ type, materials, trigger, open: controlled
                             setOperario(op)
                             if (op) setOperarioError(false)
                         }}
-                        onListLoaded={(cantidad) => setHayOperarios(cantidad > 0)}
+                        onRequirement={setOperarioRequerido}
                         error={operarioError}
                         disabled={loading}
                     />
