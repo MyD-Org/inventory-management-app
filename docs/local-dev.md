@@ -13,6 +13,18 @@ App (:3005) ──HTTP──> neon-proxy (:4444) ──pg──> Postgres docker
 > Neon), no el protocolo Postgres. `lib/neon-local.ts` redirige el driver al proxy
 > cuando `NEON_LOCAL_PROXY` está seteada (en Vercel no existe → no hace nada).
 
+## 0. El camino corto
+
+```bash
+bash scripts/setup-local.sh
+```
+
+Hace los pasos 1, 3 y 4 de acá abajo en el orden correcto, es idempotente y se
+planta antes de tocar nada si `.env.local` no tiene `NEON_LOCAL_PROXY` —sin esa
+variable la app y los scripts van a Neon de producción, y el accidente no falla:
+te deja trabajando contra datos reales sin decir una palabra—. Lo de abajo queda
+como referencia y para cuando algo del medio hay que hacerlo a mano.
+
 ## 1. Postgres + proxy (docker)
 
 ```bash
