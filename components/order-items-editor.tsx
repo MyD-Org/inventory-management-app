@@ -54,32 +54,37 @@ const SIN = "__ninguna__"
 // registro de qué se llevaron.
 function EntregadoCheck({
     item,
-    marcando,
+    pendiente,
     onToggle,
 }: {
     item: Item
-    marcando: boolean
+    /**
+     * Lo que se acaba de marcar y todavía no volvió del servidor. Sin esto el
+     * check se destildaba solo entre el click y el refresh —está atado al dato del
+     * servidor, que hasta ese momento sigue diciendo lo viejo— y quien lo veía
+     * volver atrás lo clickeaba de nuevo, dejando dos renglones en el historial.
+     */
+    pendiente: boolean | undefined
     onToggle: (item: Item, entregado: boolean) => void
 }) {
     const remitido = item.delivered ?? 0
     if (remitido <= 0) return <span className="text-muted-foreground">—</span>
 
-    const entregado = isHandedOver({
-        id: item.id,
-        product: item.product,
-        quantity: item.quantity,
-        delivered: remitido,
-        handedOver: item.handedOver ?? 0,
-    })
-
-    if (marcando) {
-        return <Loader2 className="mx-auto h-4 w-4 animate-spin text-muted-foreground" />
-    }
+    const entregado =
+        pendiente ??
+        isHandedOver({
+            id: item.id,
+            product: item.product,
+            quantity: item.quantity,
+            delivered: remitido,
+            handedOver: item.handedOver ?? 0,
+        })
 
     return (
         <input
             type="checkbox"
-            className="h-4 w-4 cursor-pointer accent-emerald-600"
+            className="h-4 w-4 cursor-pointer accent-emerald-600 disabled:cursor-wait"
+            disabled={pendiente !== undefined}
             checked={entregado}
             // La fila entera abre el editor al hacer click: sin esto, marcar la
             // entrega abriría también la edición del producto.
@@ -152,22 +157,49 @@ export function OrderItemsEditor({
     // y la tabla ya es ancha.
     const hayEntregas = items.some((i) => (i.delivered ?? 0) > 0)
 
-    // Qué línea está guardando su check, para mostrar el spinner en ESA fila y no
-    // bloquear la tabla entera: se marcan varias seguidas cuando el cliente se
-    // lleva todo junto.
-    const [marcando, setMarcando] = useState<number | null>(null)
+    // Lo que se marcó y todavía no volvió del servidor, por línea. Se guarda por
+    // id y no una sola bandera porque se marcan varias seguidas cuando el cliente
+    // se lleva todo junto, y una fila esperando no puede bloquear a las otras.
+    const [marcadas, setMarcadas] = useState<Record<number, boolean>>({})
 
     async function marcarEntregado(item: Item, entregado: boolean) {
-        setMarcando(item.id)
+        setMarcadas((m) => ({ ...m, [item.id]: entregado }))
         const result = await setItemHandedOver(item.id, entregado)
-        setMarcando(null)
         if (!result.ok) {
+            // Vuelve a lo que diga el servidor: la marca no llegó a existir.
+            setMarcadas((m) => {
+                const next = { ...m }
+                delete next[item.id]
+                return next
+            })
             toast.error("No se pudo marcar la entrega", { description: result.error })
             return
         }
         toast.success(entregado ? `${item.product} entregado` : `${item.product}: entrega desmarcada`)
         router.refresh()
     }
+
+    // Cuando el pedido vuelve a leerse, el dato del servidor ya dice lo mismo que
+    // la marca local: se sueltan las que coinciden para no quedar pisando al
+    // servidor si alguien más cambia la misma línea.
+    useEffect(() => {
+        setMarcadas((m) => {
+            const next: Record<number, boolean> = {}
+            for (const [id, valor] of Object.entries(m)) {
+                const item = items.find((i) => i.id === Number(id))
+                if (!item) continue
+                const real = isHandedOver({
+                    id: item.id,
+                    product: item.product,
+                    quantity: item.quantity,
+                    delivered: item.delivered ?? 0,
+                    handedOver: item.handedOver ?? 0,
+                })
+                if (real !== valor) next[Number(id)] = valor
+            }
+            return next
+        })
+    }, [items])
 
     const [highlightedId, setHighlightedId] = useState<number | undefined>(highlightedItemId)
 
@@ -396,7 +428,7 @@ export function OrderItemsEditor({
                                     <td className="no-print px-3 py-2 text-center align-middle">
                                         <EntregadoCheck
                                             item={item}
-                                            marcando={marcando === item.id}
+                                            pendiente={marcadas[item.id]}
                                             onToggle={marcarEntregado}
                                         />
                                     </td>
@@ -529,7 +561,7 @@ export function OrderItemsEditor({
                                     <td className="no-print px-3 py-2 text-center align-middle">
                                         <EntregadoCheck
                                             item={item}
-                                            marcando={marcando === item.id}
+                                            pendiente={marcadas[item.id]}
                                             onToggle={marcarEntregado}
                                         />
                                     </td>

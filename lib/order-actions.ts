@@ -654,7 +654,7 @@ export async function setItemHandedOver(itemId: number, entregado: boolean) {
     if (!session?.user) return { ok: false as const, error: 'No autenticado' };
 
     const [item] = await sql`
-        SELECT order_id, product, quantity, delivered_quantity
+        SELECT order_id, product, quantity, delivered_quantity, handed_over_quantity
         FROM order_items WHERE id = ${itemId}
     `;
     if (!item) return { ok: false as const, error: 'La línea no existe' };
@@ -664,8 +664,16 @@ export async function setItemHandedOver(itemId: number, entregado: boolean) {
         return { ok: false as const, error: 'Esa línea todavía no tiene remito: no se puede marcar como entregada.' };
     }
 
+    // Marcar lo que ya estaba marcado no es un cambio y no deja evento: dos clicks
+    // seguidos —o un reintento del navegador— llenaban el historial de renglones
+    // repetidos que decían todos lo mismo.
+    const objetivo = entregado ? remitido : 0;
+    if (Math.abs(Number(item.handed_over_quantity ?? 0) - objetivo) < 0.005) {
+        return { ok: true as const };
+    }
+
     await sql`
-        UPDATE order_items SET handed_over_quantity = ${entregado ? remitido : 0}
+        UPDATE order_items SET handed_over_quantity = ${objetivo}
         WHERE id = ${itemId}
     `;
     await logOrderEvent(item.order_id as number, {
