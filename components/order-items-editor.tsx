@@ -36,21 +36,27 @@ interface Item {
 
 const SIN = "__ninguna__"
 
-// "Entregado" cuando salió todo, "4 de 10 entregadas" cuando salió una parte, y
-// nada cuando no salió nada: una fila sin marca es una fila que todavía está
-// adentro, y eso ya lo dice el resto de la orden de trabajo.
+// "Entregado" cuando salió todo, "4/10" cuando salió una parte, y nada cuando no
+// salió nada: una fila sin marca es una fila que todavía está adentro, y eso ya lo
+// dice el resto de la orden de trabajo.
+//
+// LA MARCA PARCIAL VA CORTA porque comparte celda con el nombre del producto, que
+// es lo que se lee primero: "4 de 10 entregadas" escrito entero le comía el
+// renglón y dejaba "Opti…". La frase completa queda en el title, para el que
+// necesita confirmar qué significa la barra.
 function EntregaTag({ delivered, quantity }: { delivered: number; quantity: number }) {
     if (delivered <= 0) return null
     const completa = delivered >= quantity
     return (
         <span
-            className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[0.7rem] font-medium ${
+            title={completa ? "Entregado por completo" : `${delivered} de ${quantity} entregadas`}
+            className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[0.7rem] font-medium tabular-nums ${
                 completa
                     ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
                     : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
             }`}
         >
-            {completa ? "Entregado" : `${delivered} de ${quantity} entregadas`}
+            {completa ? "Entregado" : `${delivered}/${quantity}`}
         </span>
     )
 }
