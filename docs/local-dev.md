@@ -27,6 +27,12 @@ como referencia y para cuando algo del medio hay que hacerlo a mano.
 
 ## 1. Postgres + proxy (docker)
 
+> Ojo con el 5432: si hay un Postgres instalado en la Mac ocupando ese puerto,
+> el proxy —que se conecta a `host.docker.internal`— termina en ESE y no en el
+> contenedor. Se aplica la migración de un lado y la app lee del otro. Por eso el
+> script del punto 0 pone los dos contenedores en una red propia, donde el proxy
+> llega al Postgres por nombre y ningún puerto de la Mac se mete en el medio.
+
 ```bash
 # Postgres (si no existe ya un contenedor postgres en :5432)
 docker run -d --name ai-api-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16-alpine
