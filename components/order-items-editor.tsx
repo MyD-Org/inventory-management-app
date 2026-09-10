@@ -49,12 +49,13 @@ const SIN = "__ninguna__"
 // retirar" o "Retirado"—, y un pedido puede estar remitido entero y seguir
 // esperando en el mostrador.
 //
-// VA EN SU PROPIA COLUMNA, al lado de la cantidad pedida. Antes era una etiqueta
-// pegada al nombre del producto y tenía dos problemas: le comía el renglón al
-// nombre —que es lo que se lee primero— y sin encabezado el número quedaba
-// huérfano: "4/10" al lado de un producto no dice si son unidades, días o qué.
-// Con la columna, el "10" de Cant. y el "4" de Remitido se leen juntos y el
-// encabezado dice de qué se habla.
+// VA EN UNA COLUMNA AL FINAL DE LA FILA, y en gris. Es un dato administrativo y
+// esta tabla es la orden de trabajo: lo primero que se lee tiene que ser qué armar.
+// Antes fue una etiqueta pegada al nombre del producto (le comía el renglón) y
+// después una columna junto a "Cant." (empujaba el producto al tercer lugar y se
+// leía como si importara más que el trabajo). Cuánto falta remitir en total lo
+// canta la celda "Remito" del encabezado, que es donde se decide; acá solo se
+// consulta línea por línea.
 //
 // LA COLUMNA SOLO APARECE SI HAY REMITOS: en un pedido que todavía no salió sería
 // una columna vacía a lo largo de toda la tabla, y la tabla ya es ancha.
@@ -63,10 +64,8 @@ function EntregaCell({ delivered, quantity }: { delivered: number; quantity: num
     const completa = delivered >= quantity
     return (
         <span
-            title={completa ? "Entregado por completo" : `Entregadas ${delivered} de ${quantity} pedidas`}
-            className={`font-mono text-base font-medium tabular-nums ${
-                completa ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
-            }`}
+            title={completa ? "Remitido por completo" : `Remitidas ${delivered} de ${quantity} pedidas`}
+            className="font-mono text-sm tabular-nums text-muted-foreground"
         >
             {delivered}
         </span>
@@ -286,19 +285,6 @@ export function OrderItemsEditor({
                             <th className="px-3 py-2 text-sm font-medium text-muted-foreground text-right w-[72px]">
                                 Cant.
                             </th>
-                            {hayEntregas && (
-                                <>
-                                    <th className="px-3 py-2 text-sm font-medium text-muted-foreground text-right w-[92px]">
-                                        Remitido
-                                    </th>
-                                    {/* Entregado al cliente: lo marca una persona
-                                        cuando se lo lleva, y solo se puede en las
-                                        líneas que ya tienen remito. */}
-                                    <th className="no-print px-3 py-2 text-sm font-medium text-muted-foreground text-center w-[86px]">
-                                        Entregado
-                                    </th>
-                                </>
-                            )}
                             <th className="px-3 py-2 text-sm font-medium text-muted-foreground w-[18%]">
                                 Producto
                             </th>
@@ -314,6 +300,22 @@ export function OrderItemsEditor({
                                     </span>
                                 </th>
                             ))}
+                            {/* Remitido y entregado van AL FINAL, después de las
+                                variantes: son datos administrativos —qué papel salió
+                                y qué se llevó el cliente— y esta tabla es la orden de
+                                trabajo. Lo primero que se lee tiene que ser qué armar,
+                                no qué ya salió. Antes iban pegados a "Cant." y
+                                empujaban el producto a la tercera columna. */}
+                            {hayEntregas && (
+                                <>
+                                    <th className="px-3 py-2 text-xs font-normal text-muted-foreground text-right w-[80px]">
+                                        Remitido
+                                    </th>
+                                    <th className="no-print px-3 py-2 text-xs font-normal text-muted-foreground text-center w-[80px]">
+                                        Entregado
+                                    </th>
+                                </>
+                            )}
                         </tr>
                     </thead>
                     <tbody>
@@ -339,23 +341,6 @@ export function OrderItemsEditor({
                                         {item.quantity}
                                     </span>
                                 </td>
-                                {hayEntregas && (
-                                    <>
-                                        <td className="px-3 py-2 text-right align-middle">
-                                            <EntregaCell
-                                                delivered={item.delivered ?? 0}
-                                                quantity={item.quantity}
-                                            />
-                                        </td>
-                                        <td className="no-print px-3 py-2 text-center align-middle">
-                                            <EntregadoCheck
-                                                item={item}
-                                                marcando={marcando === item.id}
-                                                onToggle={marcarEntregado}
-                                            />
-                                        </td>
-                                    </>
-                                )}
                                 <td className="px-3 py-2">
                                     <span className="flex items-center gap-1.5 min-w-0">
                                         <span
@@ -442,6 +427,23 @@ export function OrderItemsEditor({
                                         </td>
                                     )
                                 })}
+                                {hayEntregas && (
+                                    <>
+                                        <td className="px-3 py-2 text-right align-middle">
+                                            <EntregaCell
+                                                delivered={item.delivered ?? 0}
+                                                quantity={item.quantity}
+                                            />
+                                        </td>
+                                        <td className="no-print px-3 py-2 text-center align-middle">
+                                            <EntregadoCheck
+                                                item={item}
+                                                marcando={marcando === item.id}
+                                                onToggle={marcarEntregado}
+                                            />
+                                        </td>
+                                    </>
+                                )}
                             </tr>
                         )
                     }
@@ -470,23 +472,6 @@ export function OrderItemsEditor({
                                     />
                                 </td>
                                 {/* Lo remitido no se edita: lo dicen los remitos. */}
-                                {hayEntregas && (
-                                    <>
-                                        <td className="px-3 py-2 text-right align-middle">
-                                            <EntregaCell
-                                                delivered={item.delivered ?? 0}
-                                                quantity={item.quantity}
-                                            />
-                                        </td>
-                                        <td className="no-print px-3 py-2 text-center align-middle">
-                                            <EntregadoCheck
-                                                item={item}
-                                                marcando={marcando === item.id}
-                                                onToggle={marcarEntregado}
-                                            />
-                                        </td>
-                                    </>
-                                )}
                                 <td className="px-3 py-2 text-base font-medium">
                                     {cambiandoProducto ? (
                                         <ProductPicker
@@ -583,6 +568,23 @@ export function OrderItemsEditor({
                                         )}
                                     </td>
                                 ))}
+                                {hayEntregas && (
+                                    <>
+                                        <td className="px-3 py-2 text-right align-middle">
+                                            <EntregaCell
+                                                delivered={item.delivered ?? 0}
+                                                quantity={item.quantity}
+                                            />
+                                        </td>
+                                        <td className="no-print px-3 py-2 text-center align-middle">
+                                            <EntregadoCheck
+                                                item={item}
+                                                marcando={marcando === item.id}
+                                                onToggle={marcarEntregado}
+                                            />
+                                        </td>
+                                    </>
+                                )}
                             </tr>
 
                             <tr className="bg-muted/30">
@@ -650,16 +652,6 @@ export function OrderItemsEditor({
                                     {/* Una línea nueva no tiene nada remitido: la
                                         celda existe para que la fila siga alineada
                                         con el encabezado. */}
-                                    {hayEntregas && (
-                                        <>
-                                            <td className="px-3 py-2 text-right align-middle text-muted-foreground">
-                                                —
-                                            </td>
-                                            <td className="no-print px-3 py-2 text-center align-middle text-muted-foreground">
-                                                —
-                                            </td>
-                                        </>
-                                    )}
                                     <td className="px-3 py-2">
                                         {nuevo.product ? (
                                             <button
@@ -752,6 +744,16 @@ export function OrderItemsEditor({
                                             )}
                                         </td>
                                     ))}
+                                    {hayEntregas && (
+                                        <>
+                                            <td className="px-3 py-2 text-right align-middle text-muted-foreground">
+                                                —
+                                            </td>
+                                            <td className="no-print px-3 py-2 text-center align-middle text-muted-foreground">
+                                                —
+                                            </td>
+                                        </>
+                                    )}
                                 </tr>
 
                                 <tr className="bg-muted/30">
