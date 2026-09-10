@@ -87,6 +87,10 @@ export function RemissionButton({
     // Cuánto sale de cada línea AHORA. Texto y no número: mientras se tipea, el
     // campo pasa por estados que no son un número todavía (vacío, "1.").
     const [cantidades, setCantidades] = useState<Record<number, string>>({})
+    // La última línea a la que se le recortó la cantidad por llegar al tope. El
+    // campo cambia solo cuando pasa, y un número que cambia sin explicación se lee
+    // como un error de la pantalla.
+    const [topeada, setTopeada] = useState<number | null>(null)
     // Las líneas que se sacaron del remito con la X. Se guardan en vez de borrarse
     // para poder volver a meterlas: sacar la fila equivocada no puede costar
     // cerrar el diálogo y empezar de nuevo.
@@ -108,6 +112,7 @@ export function RemissionButton({
                 ),
             )
             setSacadas([])
+            setTopeada(null)
             setOpen(true)
         } catch {
             toast.error("No se pudo calcular el remito")
@@ -121,6 +126,31 @@ export function RemissionButton({
         return Number.isFinite(n) ? n : NaN
     }
 
+    /**
+     * Escribir la cantidad de una línea, sin dejar pasar más de lo pendiente.
+     *
+     * EL TOPE SE APLICA AL TIPEAR y no se avisa después: remitir 9 de 6 no es una
+     * cantidad que haya que discutir, es mercadería que el pedido no pidió, y el
+     * papel que la nombre queda mal emitido. Dejar escribir 9 para rechazarlo
+     * recién al confirmar es hacerle perder el viaje a quien carga.
+     *
+     * Vacío se deja pasar: es "de esta línea no sale nada", que es una respuesta
+     * válida mientras se completa el resto (sacar la línea con la X es lo mismo,
+     * dicho más claro).
+     */
+    const escribir = (l: LineaEntrega, texto: string) => {
+        const n = parsear(texto)
+        const recortada = !Number.isNaN(n) && n > l.pending
+        setTopeada(recortada ? l.orderItemId : (t) => (t === l.orderItemId ? null : t))
+        setCantidades((c) => ({
+            ...c,
+            [l.orderItemId]: recortada ? String(l.pending) : Number.isFinite(n) && n < 0 ? "0" : texto,
+        }))
+    }
+
+    // Con el tope aplicado al tipear, lo único que puede quedar mal escrito es algo
+    // que no es un número. El chequeo contra lo pendiente se deja igual: es la red
+    // por si alguna vez entra un valor sin pasar por escribir().
     const errorDe = (l: LineaEntrega): string | null => {
         const texto = cantidades[l.orderItemId] ?? ""
         if (texto.trim() === "") return null
@@ -300,18 +330,19 @@ export function RemissionButton({
                                                             step="any"
                                                             className="h-8 w-20 text-right tabular-nums"
                                                             value={cantidades[l.orderItemId] ?? ""}
-                                                            onChange={(e) =>
-                                                                setCantidades((c) => ({
-                                                                    ...c,
-                                                                    [l.orderItemId]: e.target.value,
-                                                                }))
-                                                            }
+                                                            onChange={(e) => escribir(l, e.target.value)}
                                                             aria-label={`Cuánto sale de ${l.product}`}
                                                         />
-                                                        {error && (
+                                                        {error ? (
                                                             <p className="mt-0.5 text-[0.7rem] text-destructive">
                                                                 {error}
                                                             </p>
+                                                        ) : (
+                                                            topeada === l.orderItemId && (
+                                                                <p className="mt-0.5 text-[0.7rem] text-muted-foreground">
+                                                                    Es todo lo que queda
+                                                                </p>
+                                                            )
                                                         )}
                                                     </div>
                                                     <Button
