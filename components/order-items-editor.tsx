@@ -36,27 +36,28 @@ interface Item {
 
 const SIN = "__ninguna__"
 
-// "Entregado" cuando salió todo, "4/10" cuando salió una parte, y nada cuando no
-// salió nada: una fila sin marca es una fila que todavía está adentro, y eso ya lo
-// dice el resto de la orden de trabajo.
+// Cuánto de la línea ya salió del depósito.
 //
-// LA MARCA PARCIAL VA CORTA porque comparte celda con el nombre del producto, que
-// es lo que se lee primero: "4 de 10 entregadas" escrito entero le comía el
-// renglón y dejaba "Opti…". La frase completa queda en el title, para el que
-// necesita confirmar qué significa la barra.
-function EntregaTag({ delivered, quantity }: { delivered: number; quantity: number }) {
-    if (delivered <= 0) return null
+// VA EN SU PROPIA COLUMNA, al lado de la cantidad pedida. Antes era una etiqueta
+// pegada al nombre del producto y tenía dos problemas: le comía el renglón al
+// nombre —que es lo que se lee primero— y sin encabezado el número quedaba
+// huérfano: "4/10" al lado de un producto no dice si son unidades, días o qué.
+// Con la columna, el "10" de Cant. y el "4" de Entregado se leen juntos y el
+// encabezado dice de qué se habla.
+//
+// LA COLUMNA SOLO APARECE SI HAY ENTREGAS: en un pedido que todavía no salió
+// sería una columna vacía a lo largo de toda la tabla, y la tabla ya es ancha.
+function EntregaCell({ delivered, quantity }: { delivered: number; quantity: number }) {
+    if (delivered <= 0) return <span className="text-muted-foreground">—</span>
     const completa = delivered >= quantity
     return (
         <span
-            title={completa ? "Entregado por completo" : `Entregadas ${delivered} de ${quantity}`}
-            className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[0.7rem] font-medium tabular-nums ${
-                completa
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                    : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+            title={completa ? "Entregado por completo" : `Entregadas ${delivered} de ${quantity} pedidas`}
+            className={`font-mono text-base font-medium tabular-nums ${
+                completa ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
             }`}
         >
-            {completa ? "Entregado" : `${delivered}/${quantity}`}
+            {delivered}
         </span>
     )
 }
@@ -113,6 +114,11 @@ export function OrderItemsEditor({
         specs: Record<string, string>
     } | null>(null)
     const [addingSave, setAddingSave] = useState(false)
+    // La columna "Entregado" solo existe si alguna línea ya salió del depósito: en
+    // un pedido que todavía no se entregó sería una columna de guiones a lo largo
+    // de toda la tabla, y la tabla ya es ancha.
+    const hayEntregas = items.some((i) => (i.delivered ?? 0) > 0)
+
     const [highlightedId, setHighlightedId] = useState<number | undefined>(highlightedItemId)
 
     useEffect(() => {
@@ -199,6 +205,11 @@ export function OrderItemsEditor({
                             <th className="px-3 py-2 text-sm font-medium text-muted-foreground text-right w-[72px]">
                                 Cant.
                             </th>
+                            {hayEntregas && (
+                                <th className="px-3 py-2 text-sm font-medium text-muted-foreground text-right w-[92px]">
+                                    Entregado
+                                </th>
+                            )}
                             <th className="px-3 py-2 text-sm font-medium text-muted-foreground w-[18%]">
                                 Producto
                             </th>
@@ -239,6 +250,14 @@ export function OrderItemsEditor({
                                         {item.quantity}
                                     </span>
                                 </td>
+                                {hayEntregas && (
+                                    <td className="px-3 py-2 text-right align-middle">
+                                        <EntregaCell
+                                            delivered={item.delivered ?? 0}
+                                            quantity={item.quantity}
+                                        />
+                                    </td>
+                                )}
                                 <td className="px-3 py-2">
                                     <span className="flex items-center gap-1.5 min-w-0">
                                         <span
@@ -247,16 +266,6 @@ export function OrderItemsEditor({
                                         >
                                             {item.product}
                                         </span>
-                                        {/* Qué de esta línea ya se entregó. Va en la
-                                            fila y no en un resumen aparte porque la
-                                            pregunta del taller es por producto:
-                                            "¿esta cuál es, la que ya salió?". Sale
-                                            también en el papel, que es lo que se
-                                            lleva quien arma el resto. */}
-                                        <EntregaTag
-                                            delivered={item.delivered ?? 0}
-                                            quantity={item.quantity}
-                                        />
                                         {/* Este producto no aporta materiales a la lista de
                                             abajo: hay que descontarlos a mano. Se marca acá,
                                             en la fila, que es donde se ve de cuál se trata. */}
@@ -362,6 +371,15 @@ export function OrderItemsEditor({
                                         }
                                     />
                                 </td>
+                                {/* Lo entregado no se edita: lo dicen los remitos. */}
+                                {hayEntregas && (
+                                    <td className="px-3 py-2 text-right align-middle">
+                                        <EntregaCell
+                                            delivered={item.delivered ?? 0}
+                                            quantity={item.quantity}
+                                        />
+                                    </td>
+                                )}
                                 <td className="px-3 py-2 text-base font-medium">
                                     {cambiandoProducto ? (
                                         <ProductPicker
@@ -461,7 +479,7 @@ export function OrderItemsEditor({
                             </tr>
 
                             <tr className="bg-muted/30">
-                                <td colSpan={2 + columnas.length} className="px-3 pb-3">
+                                <td colSpan={(hayEntregas ? 3 : 2) + columnas.length} className="px-3 pb-3">
                                     <div className="flex items-center gap-2">
                                         <Button
                                             variant="ghost"
@@ -522,6 +540,14 @@ export function OrderItemsEditor({
                                             }
                                         />
                                     </td>
+                                    {/* Una línea nueva no tiene nada entregado: la
+                                        celda existe para que la fila siga alineada
+                                        con el encabezado. */}
+                                    {hayEntregas && (
+                                        <td className="px-3 py-2 text-right align-middle text-muted-foreground">
+                                            —
+                                        </td>
+                                    )}
                                     <td className="px-3 py-2">
                                         {nuevo.product ? (
                                             <button
@@ -617,7 +643,7 @@ export function OrderItemsEditor({
                                 </tr>
 
                                 <tr className="bg-muted/30">
-                                    <td colSpan={2 + columnas.length} className="px-3 pb-3">
+                                    <td colSpan={(hayEntregas ? 3 : 2) + columnas.length} className="px-3 pb-3">
                                         <div className="flex items-center justify-end gap-2">
                                             <Button
                                                 variant="ghost"
