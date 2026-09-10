@@ -31,6 +31,19 @@ docker run -d --name neon-proxy -p 4444:4444 \
   ghcr.io/timowilhelm/local-neon-http-proxy:main
 ```
 
+> **Contra qué base escriben los scripts.** Todos los de `scripts/` conectan por
+> `scripts/db.js`, que respeta `NEON_LOCAL_PROXY` igual que la app y **imprime la
+> base antes de tocar nada**:
+>
+> ```
+> ▶ Base: localhost/avantec (LOCAL, vía http://localhost:4444/sql)
+> ▶ Base: ep-xxx.neon.tech/avantec (Neon REMOTO)
+> ```
+>
+> Leé esa línea antes de aplicar una migración. Sin `NEON_LOCAL_PROXY` en el
+> entorno, `node scripts/run-sql.js` va al Neon de `DATABASE_URL` — que en un
+> `.env.local` apuntado a producción es producción.
+
 ## 2. ai-api local con el tenant Avantec
 
 En el repo `ai-api` (Postgres local db `ai_api`, migraciones aplicadas):

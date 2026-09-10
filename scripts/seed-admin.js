@@ -1,15 +1,10 @@
-const { neon } = require("@neondatabase/serverless");
+const { connect } = require("./db");
 const bcrypt = require("bcryptjs");
-require('dotenv').config();
 
 async function seedAdmin() {
-    if (!process.env.DATABASE_URL) {
-        console.error("❌ DATABASE_URL is not set");
-        return;
-    }
 
     try {
-        const sql = neon(process.env.DATABASE_URL);
+        const sql = connect();
 
         const email = "admin@example.com";
         const password = "admin"; // Simple password for initial access
