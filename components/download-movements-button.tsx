@@ -42,6 +42,11 @@ export function DownloadMovementsButton() {
                 "Material",
                 "Código",
                 "Categoría",
+                // Operario = la persona que movió el material; Usuario = la
+                // cuenta desde la que se registró. En la terminal compartida del
+                // depósito la segunda es siempre la misma, así que la que sirve
+                // para pedir explicaciones es la primera.
+                "Operario",
                 "Usuario",
                 "Referencia",
                 "Notas",
@@ -59,6 +64,7 @@ export function DownloadMovementsButton() {
                         formatCsvValue(row.material_name),
                         formatCsvValue(row.barcode),
                         formatCsvValue(row.category_name),
+                        formatCsvValue(row.operator_name),
                         formatCsvValue(row.user_name),
                         formatCsvValue(row.reference_number),
                         formatCsvValue(row.notes),

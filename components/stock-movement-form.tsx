@@ -13,6 +13,7 @@ import { Plus, Minus, RotateCcw, Scan, AlertTriangle, CheckCircle } from "lucide
 import { BarcodeScanner } from "./barcode-scanner"
 import { useToast } from "@/hooks/use-toast"
 import { formatStock } from "@/lib/format"
+import { OperatorPicker, type OperarioElegido } from "@/components/operator-picker"
 
 interface Material {
   id: number
@@ -44,6 +45,12 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
   const [unitCost, setUnitCost] = useState("")
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  // Quién hace el movimiento, aparte de con qué cuenta se entró. Acá también:
+  // un ajuste lo cuenta una persona, y conviene saber cuál. Ver
+  // components/operator-picker.tsx.
+  const [operario, setOperario] = useState<OperarioElegido | null>(null)
+  const [hayOperarios, setHayOperarios] = useState(false)
+  const [operarioError, setOperarioError] = useState(false)
   const { toast } = useToast()
   const router = useRouter()
 
@@ -135,6 +142,14 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
 
     if (!validateMovement()) return
 
+    // Igual que en el modal: obligatorio solo si hay operarios cargados, y el
+    // servidor aplica la misma regla.
+    if (hayOperarios && !operario) {
+      setOperarioError(true)
+      toast.error("Falta el operario", { description: "Elegí quién está haciendo el movimiento." })
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -152,12 +167,14 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
           // Precio solo tiene sentido en entradas. En salida/ajuste no lo mandamos
           // (el server igual lo ignora). Vacío = null → no pisa el unit_cost del material.
           unit_cost: movementType === "entrada" && unitCost ? Number(unitCost) : null,
+          operator_id: operario?.id ?? null,
           // El usuario se toma de la sesión en el servidor (ver /api/stock/movement)
         }),
       })
 
       if (!response.ok) {
-        throw new Error("Error al registrar el movimiento")
+        const detalle = await response.json().catch(() => null)
+        throw new Error(detalle?.error || "Error al registrar el movimiento")
       }
 
       const result = await response.json()
@@ -181,7 +198,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
       }, 2000)
     } catch (error) {
       toast.error("Error", {
-        description: "No se pudo registrar el movimiento",
+        description: error instanceof Error ? error.message : "No se pudo registrar el movimiento",
       })
     } finally {
       setLoading(false)
@@ -278,6 +295,17 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <OperatorPicker
+                value={operario}
+                onChange={(op) => {
+                  setOperario(op)
+                  if (op) setOperarioError(false)
+                }}
+                onListLoaded={(cantidad) => setHayOperarios(cantidad > 0)}
+                error={operarioError}
+                disabled={loading}
+              />
+
               <div>
                 <Label htmlFor="quantity">Cantidad ({material.unit_of_measure}) *</Label>
                 <Input

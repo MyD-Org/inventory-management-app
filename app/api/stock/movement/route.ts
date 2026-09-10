@@ -3,6 +3,7 @@ import { sql } from "@/lib/database"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/auth"
 import { canConsumeStock } from "@/lib/roles"
+import { listActiveOperators, resolveOperator } from "@/lib/operators"
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     const user_name = session.user.name || session.user.email || "Desconocido"
 
     const body = await request.json()
-    const { material_id, movement_type, quantity, reference_number, notes, unit_cost } = body
+    const { material_id, movement_type, quantity, reference_number, notes, unit_cost, operator_id } = body
 
     // Validaciones
     if (!material_id || !movement_type || !quantity) {
@@ -30,6 +31,26 @@ export async function POST(request: NextRequest) {
 
     if (!["entrada", "salida", "ajuste"].includes(movement_type)) {
       return NextResponse.json({ error: "Tipo de movimiento inválido" }, { status: 400 })
+    }
+
+    // El OPERARIO: la persona que movió el material, distinta de la cuenta con
+    // la que se entró. En el depósito hay una tablet con un login abierto todo
+    // el día, así que user_name dice siempre lo mismo y no alcanza para saber
+    // quién retiró qué. Ver lib/operators.ts.
+    //
+    // Es obligatorio en cuanto haya alguien cargado, y la regla vive ACÁ y no
+    // solo en el formulario: si se puede saltear, se saltea. La excepción es la
+    // lista vacía —una instalación donde todavía nadie cargó operarios sigue
+    // funcionando igual que antes, en vez de quedarse sin poder mover stock.
+    let operario: { id: number; name: string } | null = null
+    if (operator_id !== undefined && operator_id !== null && operator_id !== "") {
+      const resuelto = await resolveOperator(operator_id)
+      if ("error" in resuelto) {
+        return NextResponse.json({ error: resuelto.error }, { status: 400 })
+      }
+      operario = resuelto
+    } else if ((await listActiveOperators()).length > 0) {
+      return NextResponse.json({ error: "Falta indicar quién hace el movimiento" }, { status: 400 })
     }
 
     // Precio opcional: solo tiene sentido para entradas. Aceptamos number o null;
@@ -96,7 +117,9 @@ export async function POST(request: NextRequest) {
           reference_number,
           notes,
           user_name,
-          unit_cost
+          unit_cost,
+          operator_id,
+          operator_name
         )
         VALUES (
           ${material_id},
@@ -107,7 +130,9 @@ export async function POST(request: NextRequest) {
           ${reference_number},
           ${notes},
           ${user_name},
-          ${unitCost}
+          ${unitCost},
+          ${operario?.id ?? null},
+          ${operario?.name ?? null}
         )
         RETURNING id, created_at
       `
