@@ -21,6 +21,11 @@ interface Item {
     id: number
     product: string
     quantity: number
+    /**
+     * Cuánto de esta línea ya salió del depósito, sumando todos los remitos del
+     * pedido. La entrega va por partes: 4 hoy y 6 la semana que viene.
+     */
+    delivered?: number
     specs: Record<string, string>
     // El producto no matcheó ninguna hoja de costo: la línea no aporta materiales.
     needs_review: boolean
@@ -30,6 +35,25 @@ interface Item {
 }
 
 const SIN = "__ninguna__"
+
+// "Entregado" cuando salió todo, "4 de 10 entregadas" cuando salió una parte, y
+// nada cuando no salió nada: una fila sin marca es una fila que todavía está
+// adentro, y eso ya lo dice el resto de la orden de trabajo.
+function EntregaTag({ delivered, quantity }: { delivered: number; quantity: number }) {
+    if (delivered <= 0) return null
+    const completa = delivered >= quantity
+    return (
+        <span
+            className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[0.7rem] font-medium ${
+                completa
+                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                    : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+            }`}
+        >
+            {completa ? "Entregado" : `${delivered} de ${quantity} entregadas`}
+        </span>
+    )
+}
 
 export function OrderItemsEditor({
     orderId,
@@ -217,6 +241,16 @@ export function OrderItemsEditor({
                                         >
                                             {item.product}
                                         </span>
+                                        {/* Qué de esta línea ya se entregó. Va en la
+                                            fila y no en un resumen aparte porque la
+                                            pregunta del taller es por producto:
+                                            "¿esta cuál es, la que ya salió?". Sale
+                                            también en el papel, que es lo que se
+                                            lleva quien arma el resto. */}
+                                        <EntregaTag
+                                            delivered={item.delivered ?? 0}
+                                            quantity={item.quantity}
+                                        />
                                         {/* Este producto no aporta materiales a la lista de
                                             abajo: hay que descontarlos a mano. Se marca acá,
                                             en la fila, que es donde se ve de cuál se trata. */}

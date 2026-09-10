@@ -32,6 +32,15 @@ import { normalizeVariant } from "@/lib/alegra-sync"
 // vez de fallar entera o de meter un genérico que después nadie revisa.
 
 export interface InvoiceLinePreview {
+    /**
+     * De qué línea del pedido salió. Una línea del pedido puede dar varios
+     * renglones —el producto y sus agregados—, así que esto se repite.
+     *
+     * La factura no lo usa: está para el remito, que entrega POR LÍNEA DEL PEDIDO
+     * (ver lib/remissions.ts) y necesita saber qué renglones mover cuando se
+     * entregan 4 de 10.
+     */
+    orderItemId: number
     /** Ítem de Alegra que se va a facturar. */
     alegraItemId: number
     name: string
@@ -182,6 +191,7 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
             if (!addon) continue
             specsConLineaPropia.push(fieldKey)
             agregados.push({
+                orderItemId: Number(item.id),
                 alegraItemId: Number(addon.alegra_item_id),
                 name: addon.name as string,
                 quantity: Number(addon.qty_per_unit) * quantity,
@@ -192,6 +202,7 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
         }
 
         lines.push({
+            orderItemId: Number(item.id),
             alegraItemId: Number(elegido.alegra_id),
             name: (elegido.name ?? elegido.base_name) as string,
             quantity,

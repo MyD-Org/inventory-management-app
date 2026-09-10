@@ -48,7 +48,9 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                     // Si no hay avisos ni fecha, la segunda línea del celular no
                     // existe: sin esto la fila quedaba con un renglón vacío abajo.
                     const faltaFactura = o.status === "por_facturar" && !o.alegra_invoice_id
-                    const faltaRemito = o.status === "por_facturar" && !o.alegra_remission_id
+                    // No es "¿hay remito?": la mercadería sale por partes y un pedido
+                    // con un remito emitido puede tener la mitad todavía adentro.
+                    const faltaRemito = o.status === "por_facturar" && o.units - o.delivered > 0.005
                     const segundaLinea =
                         o.has_unmapped ||
                         faltaFactura ||
@@ -111,10 +113,10 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                                 </span>
                             )}
 
-                            {o.status === "por_facturar" && !o.alegra_remission_id && (
+                            {faltaRemito && (
                                 <span className="inline-flex items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive shrink-0 whitespace-nowrap">
                                     <TriangleAlert className="h-3 w-3" />
-                                    Falta remito
+                                    {o.delivered > 0 ? `Falta entregar ${o.units - o.delivered} u.` : "Falta remito"}
                                 </span>
                             )}
 

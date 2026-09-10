@@ -11,7 +11,8 @@ import { auth } from '@/auth';
 import { addEventPhotos, eventPhotoPaths, logOrderEvent, logOrderEvents } from '@/lib/order-events';
 import { sql } from '@/lib/database';
 import { invoiceOrder } from '@/lib/invoicing';
-import { remitOrder } from '@/lib/remissions';
+import { deliverableItems, remitOrder } from '@/lib/remissions';
+import { describeDelivery, pendingQuantity } from '@/lib/deliveries';
 import {
     addOrderItemInternal,
     consumedMaterials,
@@ -114,7 +115,7 @@ export async function updateOrderStatus(id: number, status: string) {
         let warning: string | null = null;
         if (status === 'por_facturar') {
             const [order] = await sql`
-                SELECT alegra_invoice_id, alegra_remission_id, invoice_terms, invoice_notes
+                SELECT alegra_invoice_id, invoice_terms, invoice_notes
                 FROM orders WHERE id = ${id}
             `;
             if (!order?.alegra_invoice_id) {
@@ -149,14 +150,30 @@ export async function updateOrderStatus(id: number, status: string) {
             // El remito, con el mismo criterio. Va DESPUÉS de la factura a propósito:
             // así, cuando los dos salen juntos, el remito ya puede nombrarla en sus
             // observaciones —al revés la factura no tendría a quién nombrar—.
-            if (!order?.alegra_remission_id) {
+            //
+            // LA CONDICIÓN ES LO PENDIENTE, no "si ya hay remito": un pedido puede
+            // tener remito y todavía tener mercadería adentro, porque la entrega va
+            // por partes. Lo que se emite acá es un remito por TODO lo que falte
+            // entregar; si no falta nada, no hay documento que emitir.
+            const pendiente = (await deliverableItems(id)).some((i) => pendingQuantity(i) > 0);
+            if (pendiente) {
                 try {
-                    const result = await remitOrder(id);
+                    const result = await remitOrder(id, null, { name: 'Sistema' });
                     if (result.remissionId != null) {
                         await logOrderEvent(id, {
                             kind: 'invoice',
                             field: 'remito',
                             newValue: result.remissionNumber ?? String(result.remissionId),
+                            // Cuánto quedó entregado: con entregas parciales el
+                            // número del papel solo no dice si salió todo.
+                            body: describeDelivery(
+                                result.delivery.map((d) => ({
+                                    id: d.orderItemId,
+                                    product: d.product,
+                                    quantity: d.ordered,
+                                    delivered: d.delivered,
+                                })),
+                            ),
                             actor: { name: 'Sistema' },
                         });
                     }

@@ -257,6 +257,11 @@ export interface OrderItem {
     specs: Record<string, string>
     quantity: number
     needs_review: boolean
+    /**
+     * Cuánto de esta línea ya salió del depósito, sumando todos los remitos del
+     * pedido. Menor que quantity = entrega parcial, todavía falta remitir el resto.
+     */
+    delivered_quantity: number
     /** Valores que el pedido pidió y la hoja de costo no mapea, p. ej. ["clamp=media"]. */
     unmapped_specs: string[]
     materials: OrderMaterial[]
@@ -364,7 +369,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
 
     const items = await sql`
         SELECT id, line_no, budget_id, product, product_external_id, specs, quantity,
-               needs_review, unmapped_specs
+               needs_review, unmapped_specs, delivered_quantity
         FROM order_items WHERE order_id = ${orderId} ORDER BY line_no ASC
     `
     const itemIds = (items as any[]).map((i) => i.id)
@@ -383,6 +388,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
         items: (items as any[]).map((i) => ({
             ...i,
             quantity: Number(i.quantity),
+            delivered_quantity: Number(i.delivered_quantity ?? 0),
             materials: (materials as any[])
                 .filter((m) => m.order_item_id === i.id)
                 .map(({ order_item_id, ...m }) => ({

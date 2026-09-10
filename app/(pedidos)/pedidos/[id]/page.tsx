@@ -22,6 +22,8 @@ import { OrderCustomerField } from "@/components/order-customer-field"
 import { OrderActivity } from "@/components/order-activity"
 import { describeDrift, listDocumentDrift, listOrderEvents, type OrderEvent } from "@/lib/order-events"
 import { noteHasContent } from "@/lib/order-notes"
+import { listOrderRemissions, type EmittedRemission } from "@/lib/remissions"
+import { DELIVERY_LABELS, deliveredOverflow, deliveryState, pendingQuantity, type DeliveryState } from "@/lib/deliveries"
 
 export const dynamic = 'force-dynamic';
 
@@ -76,6 +78,78 @@ function DocumentoEmitido({ numero, genero }: { numero: string | null; genero: "
     )
 }
 
+// Los remitos del pedido, con cuánto del pedido ya salió del depósito.
+//
+// LA CUENTA VA PRIMERO Y SIEMPRE: "4 de 13 entregadas" es lo que se pregunta al
+// mirar el pedido, y es lo único que sirve cuando hay tres remitos. Los números de
+// los documentos van abajo, para cantarlos por teléfono o buscarlos en el mostrador.
+//
+// EL LINK A ALEGRA ES SOLO DEL ADMIN, con el mismo criterio que la factura: el
+// taller y el mostrador no entran a Alegra y el link es una puerta a un sistema
+// que les pediría una cuenta que no tienen.
+function ListaRemitos({
+    remissions,
+    conLink,
+    estado,
+    entregado,
+    pedido,
+}: {
+    remissions: EmittedRemission[]
+    conLink: boolean
+    estado: DeliveryState
+    entregado: number
+    pedido: number
+}) {
+    if (remissions.length === 0) {
+        return <span className="text-muted-foreground">Sin emitir</span>
+    }
+
+    const unidades = (r: EmittedRemission) => r.items.reduce((sum, i) => sum + i.quantity, 0)
+
+    return (
+        <div className="flex flex-col items-start gap-1">
+            <span
+                className={`text-sm font-medium ${
+                    estado === "entregado" ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
+                }`}
+            >
+                {DELIVERY_LABELS[estado]}
+                <span className="font-normal text-muted-foreground">
+                    {" · "}
+                    {entregado} de {pedido} u.
+                </span>
+            </span>
+            <div className="flex flex-col items-start gap-0.5">
+                {remissions.map((r) =>
+                    conLink && r.url ? (
+                        <a
+                            key={r.id}
+                            href={r.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                        >
+                            {r.number ?? `#${r.alegraId}`}
+                            <span className="font-normal text-muted-foreground tabular-nums">
+                                · {unidades(r)} u.
+                            </span>
+                            <ExternalLink className="h-3 w-3" />
+                        </a>
+                    ) : (
+                        <span key={r.id} className="text-sm font-medium">
+                            {r.number ?? `#${r.alegraId}`}
+                            <span className="font-normal text-muted-foreground tabular-nums">
+                                {" · "}
+                                {unidades(r)} u.
+                            </span>
+                        </span>
+                    ),
+                )}
+            </div>
+        </div>
+    )
+}
+
 function Prop({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div className="grid grid-cols-[86px_1fr] items-center gap-2 py-1">
@@ -127,7 +201,7 @@ export default async function OrderDetailPage({
 
     // Los productos del selector salen del CATÁLOGO de Alegra, no de las hojas
     // de costo: un producto existe porque se vende, y la hoja es opcional.
-    const [needs, extras, consumed, recipes, vocab, products, events, invoiceDrift, remissionDrift] = await Promise.all([
+    const [needs, extras, consumed, recipes, vocab, products, events, remissions, invoiceDrift, remissionDrift] = await Promise.all([
         materialNeeds(id),
         extraConsumedMaterials(id),
         // Lo que hoy está afuera del depósito por el pedido: es lo devolvible.
@@ -137,6 +211,8 @@ export default async function OrderDetailPage({
         getSpecs(),
         listSellableProducts(),
         listOrderEvents(id),
+        // Los remitos emitidos: son varios cuando la mercadería sale por partes.
+        listOrderRemissions(id),
         // Qué se tocó desde que cada documento quedó al día. Vacío si está en hora.
         order.invoice_stale ? listDocumentDrift(id, "invoice") : Promise.resolve([]),
         order.remission_stale ? listDocumentDrift(id, "remission") : Promise.resolve([]),
@@ -155,6 +231,21 @@ export default async function OrderDetailPage({
         Object.entries(vocab).filter(([k, f]) => f.kind === "list" && !specs[k])
 
     const units = order.items.reduce((sum, i) => sum + Number(i.quantity), 0)
+    // La entrega va por partes: lo que ya salió del depósito, lo que falta y en qué
+    // estado queda el pedido. Es la cuenta que hacen la fila del producto, la
+    // celda de Remito y los botones de emitir.
+    const entregables = order.items.map((i) => ({
+        id: i.id,
+        product: i.product,
+        quantity: Number(i.quantity),
+        delivered: Number(i.delivered_quantity),
+    }))
+    const estadoEntrega = deliveryState(entregables)
+    const entregado = entregables.reduce((sum, i) => sum + i.delivered, 0)
+    const pendiente = entregables.reduce((sum, i) => sum + pendingQuantity(i), 0)
+    // Se entregó más de lo que el pedido pide: alguien achicó una línea después de
+    // remitir. El papel ya salió, así que lo único que corresponde es avisarlo.
+    const sobreEntregado = deliveredOverflow(entregables)
     // Vencido: la fecha ya pasó y el pedido todavía no salió. Mismo criterio que
     // el tablero, para que un pedido no aparezca vencido en un lado y no en el otro.
     const overdue = (() => {
@@ -226,7 +317,7 @@ export default async function OrderDetailPage({
                             id={order.id}
                             status={order.status}
                             hasInvoice={Boolean(order.alegra_invoice_id)}
-                            hasRemission={Boolean(order.alegra_remission_id)}
+                            deliveryComplete={pendiente <= 0}
                         />
                     </Fact>
                     {/* Editable acá y en un solo lugar: antes estaba dos veces,
@@ -316,45 +407,57 @@ export default async function OrderDetailPage({
                         )}
                     </Fact>
                     {/* El remito es independiente de la factura y en cualquier
-                        orden: a veces sale primero uno, a veces el otro. */}
-                    <Fact label="Remito">
+                        orden: a veces sale primero uno, a veces el otro.
+
+                        Y son VARIOS cuando la mercadería sale por partes, así que
+                        la celda no muestra "el" remito: muestra los que salieron y
+                        cuánto del pedido ya se entregó. Eso último lo ve todo el
+                        mundo, admin o no —el taller y el mostrador necesitan saber
+                        qué falta cargar en la camioneta—; lo que es del admin son
+                        los links a Alegra y los botones de emitir. */}
+                    <Fact label={remissions.length > 1 ? "Remitos" : "Remito"}>
                         {!isAdmin ? (
-                            <DocumentoEmitido
-                                numero={
-                                    order.alegra_remission_id
-                                        ? order.alegra_remission_number ?? `#${order.alegra_remission_id}`
-                                        : null
-                                }
-                                genero="o"
+                            <ListaRemitos
+                                remissions={remissions}
+                                conLink={false}
+                                estado={estadoEntrega}
+                                entregado={entregado}
+                                pedido={units}
                             />
                         ) : (
                         <EmissionSlot doc="remission">
-                            {order.alegra_remission_id ? (
                             <div className="flex flex-col items-start gap-1.5">
-                                <div className="flex items-center gap-1.5">
-                                    <a
-                                        href={`https://app.alegra.com/remission/view/id/${order.alegra_remission_id}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-                                    >
-                                        {order.alegra_remission_number ?? `#${order.alegra_remission_id}`}
-                                        <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                    {order.remission_stale && (
-                                        <DocumentStaleTag
-                                            label="Remito desactualizado"
-                                            changes={remissionDrift.map(describeDrift)}
+                                <ListaRemitos
+                                    remissions={remissions}
+                                    conLink
+                                    estado={estadoEntrega}
+                                    entregado={entregado}
+                                    pedido={units}
+                                />
+                                {order.remission_stale && remissions.length > 0 && (
+                                    <DocumentStaleTag
+                                        label="Último remito desactualizado"
+                                        changes={remissionDrift.map(describeDrift)}
+                                    />
+                                )}
+                                <div className="no-print flex flex-wrap items-center gap-1">
+                                    {/* Mientras quede mercadería adentro se puede
+                                        emitir otro remito: el pedido sale por partes
+                                        y cada parte es su propio papel. */}
+                                    {pendiente > 0 && (
+                                        <RemissionButton
+                                            orderId={order.id}
+                                            label={remissions.length > 0 ? "Remitir el resto" : undefined}
                                         />
                                     )}
+                                    {/* Corregir lo que dice el último papel es otra
+                                        cosa que entregar el resto, y por eso son dos
+                                        botones distintos. */}
+                                    {order.remission_stale && remissions.length > 0 && (
+                                        <RemissionButton orderId={order.id} mode="actualizar" />
+                                    )}
                                 </div>
-                                {order.remission_stale && (
-                                    <RemissionButton orderId={order.id} mode="actualizar" />
-                                )}
                             </div>
-                        ) : (
-                            <RemissionButton orderId={order.id} />
-                            )}
                         </EmissionSlot>
                         )}
                     </Fact>
@@ -381,6 +484,10 @@ export default async function OrderDetailPage({
                                 id: i.id,
                                 product: i.product,
                                 quantity: i.quantity,
+                                // Cuánto de esta línea ya salió del depósito: la
+                                // entrega puede ir por partes y el taller tiene que
+                                // ver en la fila qué falta armar.
+                                delivered: Number(i.delivered_quantity),
                                 specs: i.specs,
                                 needs_review: i.needs_review,
                                 unmapped_specs: i.unmapped_specs ?? [],
@@ -390,6 +497,24 @@ export default async function OrderDetailPage({
                             highlightedItemId={Number.isFinite(highlightedItemId) ? highlightedItemId : undefined}
                         />
                     </section>
+
+                    {/* La línea se achicó después de haber remitido: el papel ya
+                        salió diciendo que esa mercadería se entregaba. No se
+                        arregla solo —un remito se anula, no se borra— así que lo
+                        único honesto es decir cuál es y esperar que alguien lo
+                        resuelva en Alegra. */}
+                    {sobreEntregado.length > 0 && (
+                        <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                            <p className="font-medium">Se remitió más de lo que el pedido pide</p>
+                            <ul className="mt-1 list-disc pl-4">
+                                {sobreEntregado.map((i) => (
+                                    <li key={i.id}>
+                                        {i.product}: {i.delivered} entregadas y {i.quantity} pedidas
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
 
                     {/* 2. Materiales a utilizar, con su estado de stock */}
                     <OrderMaterials

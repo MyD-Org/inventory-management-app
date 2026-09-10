@@ -183,6 +183,22 @@ function Cambio({ e }: { e: OrderEvent }) {
                     </>
                 )
             case "invoice":
+                // El mismo kind cubre los dos documentos y los distingue el campo.
+                // Decir "la factura" cuando salió un remito manda a buscar a Alegra
+                // un documento que no existe.
+                if (e.field === "remito" || e.field === "remito actualizado") {
+                    const actualizado = e.field === "remito actualizado"
+                    return (
+                        <>
+                            {actualizado ? "actualizó el remito " : "emitió el remito "}
+                            <Val>{nuevo}</Val>
+                            {/* Cuánto del pedido quedó entregado después de ese
+                                remito: con entregas parciales el número del papel
+                                solo no dice si salió todo o falta la mitad. */}
+                            {!actualizado && e.body && <> · {e.body}</>}
+                        </>
+                    )
+                }
                 return <>emitió la factura <Val>{nuevo}</Val></>
             default:
                 // Un campo que se vacía no tiene "nuevo": se dice que lo borró.
