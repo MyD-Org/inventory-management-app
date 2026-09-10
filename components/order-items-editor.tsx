@@ -42,36 +42,6 @@ interface Item {
 
 const SIN = "__ninguna__"
 
-// Cuánto de la línea tiene REMITO emitido.
-//
-// REMITIDO NO ES ENTREGADO: dice que esa mercadería tiene su papel, no que el
-// cliente la haya recibido. Eso último lo dice el estado del pedido —"Listo para
-// retirar" o "Retirado"—, y un pedido puede estar remitido entero y seguir
-// esperando en el mostrador.
-//
-// VA EN UNA COLUMNA AL FINAL DE LA FILA, y en gris. Es un dato administrativo y
-// esta tabla es la orden de trabajo: lo primero que se lee tiene que ser qué armar.
-// Antes fue una etiqueta pegada al nombre del producto (le comía el renglón) y
-// después una columna junto a "Cant." (empujaba el producto al tercer lugar y se
-// leía como si importara más que el trabajo). Cuánto falta remitir en total lo
-// canta la celda "Remito" del encabezado, que es donde se decide; acá solo se
-// consulta línea por línea.
-//
-// LA COLUMNA SOLO APARECE SI HAY REMITOS: en un pedido que todavía no salió sería
-// una columna vacía a lo largo de toda la tabla, y la tabla ya es ancha.
-function EntregaCell({ delivered, quantity }: { delivered: number; quantity: number }) {
-    if (delivered <= 0) return <span className="text-muted-foreground">—</span>
-    const completa = delivered >= quantity
-    return (
-        <span
-            title={completa ? "Remitido por completo" : `Remitidas ${delivered} de ${quantity} pedidas`}
-            className="font-mono text-sm tabular-nums text-muted-foreground"
-        >
-            {delivered}
-        </span>
-    )
-}
-
 // El check de "se lo llevó el cliente".
 //
 // SOLO DONDE HAY REMITO: entregar mercadería sin papel es lo que el circuito no
@@ -177,7 +147,7 @@ export function OrderItemsEditor({
         specs: Record<string, string>
     } | null>(null)
     const [addingSave, setAddingSave] = useState(false)
-    // La columna "Remitido" solo existe si alguna línea ya tiene remito: en un
+    // La columna del check solo existe si alguna línea ya tiene remito: en un
     // pedido sin remitir sería una columna de guiones a lo largo de toda la tabla,
     // y la tabla ya es ancha.
     const hayEntregas = items.some((i) => (i.delivered ?? 0) > 0)
@@ -300,21 +270,16 @@ export function OrderItemsEditor({
                                     </span>
                                 </th>
                             ))}
-                            {/* Remitido y entregado van AL FINAL, después de las
-                                variantes: son datos administrativos —qué papel salió
-                                y qué se llevó el cliente— y esta tabla es la orden de
-                                trabajo. Lo primero que se lee tiene que ser qué armar,
-                                no qué ya salió. Antes iban pegados a "Cant." y
-                                empujaban el producto a la tercera columna. */}
+                            {/* Al FINAL y sin la cantidad remitida al lado: esta tabla
+                                es la orden de trabajo y lo primero que se lee tiene que
+                                ser qué armar. Cuánto se remitió de cada línea se
+                                consulta en el diálogo de remitir, que es donde se
+                                decide; acá solo queda la marca de que el cliente se lo
+                                llevó, que es una acción y no un dato. */}
                             {hayEntregas && (
-                                <>
-                                    <th className="px-3 py-2 text-xs font-normal text-muted-foreground text-right w-[80px]">
-                                        Remitido
-                                    </th>
-                                    <th className="no-print px-3 py-2 text-xs font-normal text-muted-foreground text-center w-[80px]">
-                                        Entregado
-                                    </th>
-                                </>
+                                <th className="no-print px-3 py-2 text-xs font-normal text-muted-foreground text-center w-[80px]">
+                                    Entregado
+                                </th>
                             )}
                         </tr>
                     </thead>
@@ -428,21 +393,13 @@ export function OrderItemsEditor({
                                     )
                                 })}
                                 {hayEntregas && (
-                                    <>
-                                        <td className="px-3 py-2 text-right align-middle">
-                                            <EntregaCell
-                                                delivered={item.delivered ?? 0}
-                                                quantity={item.quantity}
-                                            />
-                                        </td>
-                                        <td className="no-print px-3 py-2 text-center align-middle">
-                                            <EntregadoCheck
-                                                item={item}
-                                                marcando={marcando === item.id}
-                                                onToggle={marcarEntregado}
-                                            />
-                                        </td>
-                                    </>
+                                    <td className="no-print px-3 py-2 text-center align-middle">
+                                        <EntregadoCheck
+                                            item={item}
+                                            marcando={marcando === item.id}
+                                            onToggle={marcarEntregado}
+                                        />
+                                    </td>
                                 )}
                             </tr>
                         )
@@ -569,26 +526,18 @@ export function OrderItemsEditor({
                                     </td>
                                 ))}
                                 {hayEntregas && (
-                                    <>
-                                        <td className="px-3 py-2 text-right align-middle">
-                                            <EntregaCell
-                                                delivered={item.delivered ?? 0}
-                                                quantity={item.quantity}
-                                            />
-                                        </td>
-                                        <td className="no-print px-3 py-2 text-center align-middle">
-                                            <EntregadoCheck
-                                                item={item}
-                                                marcando={marcando === item.id}
-                                                onToggle={marcarEntregado}
-                                            />
-                                        </td>
-                                    </>
+                                    <td className="no-print px-3 py-2 text-center align-middle">
+                                        <EntregadoCheck
+                                            item={item}
+                                            marcando={marcando === item.id}
+                                            onToggle={marcarEntregado}
+                                        />
+                                    </td>
                                 )}
                             </tr>
 
                             <tr className="bg-muted/30">
-                                <td colSpan={(hayEntregas ? 4 : 2) + columnas.length} className="px-3 pb-3">
+                                <td colSpan={(hayEntregas ? 3 : 2) + columnas.length} className="px-3 pb-3">
                                     <div className="flex items-center gap-2">
                                         <Button
                                             variant="ghost"
@@ -745,19 +694,14 @@ export function OrderItemsEditor({
                                         </td>
                                     ))}
                                     {hayEntregas && (
-                                        <>
-                                            <td className="px-3 py-2 text-right align-middle text-muted-foreground">
-                                                —
-                                            </td>
-                                            <td className="no-print px-3 py-2 text-center align-middle text-muted-foreground">
-                                                —
-                                            </td>
-                                        </>
+                                        <td className="no-print px-3 py-2 text-center align-middle text-muted-foreground">
+                                            —
+                                        </td>
                                     )}
                                 </tr>
 
                                 <tr className="bg-muted/30">
-                                    <td colSpan={(hayEntregas ? 4 : 2) + columnas.length} className="px-3 pb-3">
+                                    <td colSpan={(hayEntregas ? 3 : 2) + columnas.length} className="px-3 pb-3">
                                         <div className="flex items-center justify-end gap-2">
                                             <Button
                                                 variant="ghost"
