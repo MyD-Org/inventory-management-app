@@ -49,7 +49,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
   // un ajuste lo cuenta una persona, y conviene saber cuál. Ver
   // components/operator-picker.tsx.
   const [operario, setOperario] = useState<OperarioElegido | null>(null)
-  const [hayOperarios, setHayOperarios] = useState(false)
+  const [operarioRequerido, setOperarioRequerido] = useState(false)
   const [operarioError, setOperarioError] = useState(false)
   const { toast } = useToast()
   const router = useRouter()
@@ -144,7 +144,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
 
     // Igual que en el modal: obligatorio solo si hay operarios cargados, y el
     // servidor aplica la misma regla.
-    if (hayOperarios && !operario) {
+    if (operarioRequerido && !operario) {
       setOperarioError(true)
       toast.error("Falta el operario", { description: "Elegí quién está haciendo el movimiento." })
       return
@@ -301,7 +301,7 @@ export function StockMovementForm({ movementType }: StockMovementFormProps) {
                   setOperario(op)
                   if (op) setOperarioError(false)
                 }}
-                onListLoaded={(cantidad) => setHayOperarios(cantidad > 0)}
+                onRequirement={setOperarioRequerido}
                 error={operarioError}
                 disabled={loading}
               />

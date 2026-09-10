@@ -266,7 +266,7 @@ export function ConsumeMaterialsForm({
     // que la cuenta no alcanza para saber quién se llevó qué. Ver
     // components/operator-picker.tsx.
     const [operario, setOperario] = useState<OperarioElegido | null>(null)
-    const [hayOperarios, setHayOperarios] = useState(false)
+    const [operarioRequerido, setOperarioRequerido] = useState(false)
     const [operarioError, setOperarioError] = useState(false)
     useEffect(() => {
         setRows(
@@ -319,7 +319,7 @@ export function ConsumeMaterialsForm({
     })
 
     async function descontar() {
-        if (hayOperarios && !operario) {
+        if (operarioRequerido && !operario) {
             setOperarioError(true)
             toast.error("Falta el operario", { description: "Tocá quién está retirando el material." })
             return
@@ -348,7 +348,7 @@ export function ConsumeMaterialsForm({
                         setOperario(op)
                         if (op) setOperarioError(false)
                     }}
-                    onListLoaded={(cantidad) => setHayOperarios(cantidad > 0)}
+                    onRequirement={setOperarioRequerido}
                     error={operarioError}
                     disabled={saving}
                 />

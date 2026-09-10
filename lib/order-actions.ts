@@ -688,7 +688,7 @@ export async function consumeOrderMaterials(
     const aDescontar = items.filter((i) => Number.isFinite(i.quantity) && i.quantity > 0);
     if (aDescontar.length === 0) return { error: 'No hay nada para descontar' };
 
-    const conOperario = await requireOperator(operatorId);
+    const conOperario = await requireOperator(operatorId, session.user.role);
     if ('error' in conOperario) return { error: conOperario.error };
     const operario = conOperario.operario;
 
@@ -868,7 +868,7 @@ export async function returnOrderMaterials(
         return { error: 'Tu usuario no puede mover materiales del inventario' };
     }
 
-    const conOperario = await requireOperator(operatorId);
+    const conOperario = await requireOperator(operatorId, session.user.role);
     if ('error' in conOperario) return { error: conOperario.error };
     const operario = conOperario.operario;
 

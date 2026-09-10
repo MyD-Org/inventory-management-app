@@ -40,7 +40,7 @@ export function ReturnMaterialsForm({
 
     // Quién devuelve, con el mismo criterio que al retirar.
     const [operario, setOperario] = useState<OperarioElegido | null>(null)
-    const [hayOperarios, setHayOperarios] = useState(false)
+    const [operarioRequerido, setOperarioRequerido] = useState(false)
     const [operarioError, setOperarioError] = useState(false)
     const retirable = consumed.map((c) => ({
         material_id: c.material_id,
@@ -74,7 +74,7 @@ export function ReturnMaterialsForm({
         .filter((s) => !Number.isNaN(s.units) && s.units > 0)
 
     async function devolver() {
-        if (hayOperarios && !operario) {
+        if (operarioRequerido && !operario) {
             setOperarioError(true)
             toast.error("Falta el operario", { description: "Tocá quién está devolviendo el material." })
             return
@@ -119,7 +119,7 @@ export function ReturnMaterialsForm({
                         setOperario(op)
                         if (op) setOperarioError(false)
                     }}
-                    onListLoaded={(cantidad) => setHayOperarios(cantidad > 0)}
+                    onRequirement={setOperarioRequerido}
                     error={operarioError}
                     disabled={saving}
                 />
