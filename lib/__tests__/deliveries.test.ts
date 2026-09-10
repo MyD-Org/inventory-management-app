@@ -4,6 +4,7 @@ import {
     deliveredOverflow,
     deliveryState,
     describeDelivery,
+    describePendingDelivery,
     pendingQuantity,
     planDelivery,
     type DeliverableItem,
@@ -61,6 +62,39 @@ describe("deliveryState", () => {
 describe("describeDelivery", () => {
     it("dice cuánto salió sobre el total", () => {
         expect(describeDelivery(pedido)).toBe("Entregadas 4 de 13")
+    })
+})
+
+describe("describePendingDelivery", () => {
+    it("nombra lo que falta remitir, con la cantidad", () => {
+        expect(describePendingDelivery(pedido)).toBe("Optic 9 12-24v (6), Estaca corta (3)")
+    })
+
+    it("no dice nada cuando está todo entregado", () => {
+        expect(
+            describePendingDelivery([{ id: 1, product: "X", quantity: 5, delivered: 5 }]),
+        ).toBeNull()
+    })
+
+    it("deja afuera las líneas ya entregadas por completo", () => {
+        expect(
+            describePendingDelivery([
+                { id: 1, product: "Optic 9 12-24v", quantity: 10, delivered: 10 },
+                { id: 2, product: "Estaca corta", quantity: 3, delivered: 1 },
+            ]),
+        ).toBe("Estaca corta (2)")
+    })
+
+    it("corta en tres y cuenta el resto", () => {
+        const muchas = [1, 2, 3, 4, 5].map((n) => ({
+            id: n,
+            product: `Producto ${n}`,
+            quantity: 2,
+            delivered: 0,
+        }))
+        expect(describePendingDelivery(muchas)).toBe(
+            "Producto 1 (2), Producto 2 (2), Producto 3 (2) y 2 más",
+        )
     })
 })
 

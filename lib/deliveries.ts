@@ -78,6 +78,27 @@ export function describeDelivery(items: DeliverableItem[]): string {
 }
 
 /**
+ * Qué queda sin remitir, nombrado producto por producto: "Optic 9 12-24v (6),
+ * Estaca corta (8)". null = está todo entregado.
+ *
+ * Lo usa el freno para pasar el pedido a "Listo para retirar": decir "falta
+ * remitir" sin decir QUÉ obliga a ir a buscarlo línea por línea.
+ *
+ * SE CORTA EN TRES: un pedido de quince líneas sin remitir no se lee en un toast,
+ * y el que necesita la lista entera la tiene en la pantalla del pedido.
+ */
+export function describePendingDelivery(items: DeliverableItem[]): string | null {
+    const pendientes = items
+        .map((i) => ({ product: i.product, pending: pendingQuantity(i) }))
+        .filter((i) => i.pending > 0)
+    if (pendientes.length === 0) return null
+
+    const nombrados = pendientes.slice(0, 3).map((i) => `${i.product} (${i.pending})`)
+    const resto = pendientes.length - nombrados.length
+    return resto > 0 ? `${nombrados.join(", ")} y ${resto} más` : nombrados.join(", ")
+}
+
+/**
  * Qué se va a remitir de verdad, o por qué no se puede.
  *
  * `request` en null significa "todo lo pendiente": es el caso normal —el pedido

@@ -5,7 +5,7 @@ import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { consumedMaterials, extraConsumedMaterials, getSpecs, listSellableProducts, materialNeeds, orderItemRecipes, readOrder, reconcileOrderBoms } from "@/lib/orders"
 import { orderNeedsReview } from "@/lib/order-statuses"
-import { STATUS_LABELS } from "@/lib/order-statuses"
+import { acceptsItemChanges, STATUS_LABELS } from "@/lib/order-statuses"
 import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
 import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
@@ -495,6 +495,13 @@ export default async function OrderDetailPage({
                             vocab={vocab}
                             products={products}
                             highlightedItemId={Number.isFinite(highlightedItemId) ? highlightedItemId : undefined}
+                            /* Un pedido que ya salió del taller no admite cambios
+                               en sus líneas: están facturadas, remitidas y
+                               embaladas. El servidor lo rechaza igual (ver
+                               itemsCongelados); esto es para no ofrecer un botón
+                               que va a fallar. */
+                            readOnly={!acceptsItemChanges(order.status)}
+                            readOnlyMessage={`El pedido está en "${STATUS_LABELS[order.status]}": sus productos ya no se modifican.`}
                         />
                     </section>
 

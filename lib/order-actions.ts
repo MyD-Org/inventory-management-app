@@ -12,7 +12,7 @@ import { addEventPhotos, eventPhotoPaths, logOrderEvent, logOrderEvents } from '
 import { sql } from '@/lib/database';
 import { invoiceOrder } from '@/lib/invoicing';
 import { deliverableItems, remitOrder } from '@/lib/remissions';
-import { describeDelivery, pendingQuantity } from '@/lib/deliveries';
+import { describeDelivery, describePendingDelivery, pendingQuantity } from '@/lib/deliveries';
 import {
     addOrderItemInternal,
     consumedMaterials,
@@ -29,7 +29,7 @@ import {
     validateOrderPayload,
     type OrderPayload,
 } from '@/lib/orders';
-import { isFixedSpecField } from '@/lib/order-statuses';
+import { acceptsItemChanges, isFixedSpecField, STATUS_LABELS } from '@/lib/order-statuses';
 import { canConsumeStock } from '@/lib/roles';
 import { requireOperator } from '@/lib/operators';
 import { planReturn } from '@/lib/returns';
@@ -80,18 +80,42 @@ export async function createOrderManual(payload: OrderPayload) {
     }
 }
 
+/**
+ * El pedido está cerrado a cambios de líneas: ya salió del taller.
+ *
+ * Se chequea en el servidor y no solo escondiendo el botón: la pantalla se pudo
+ * haber abierto antes de que el pedido pasara a listo para retirar, y el que la
+ * tiene abierta no se entera.
+ */
+async function itemsCongelados(orderId: number): Promise<string | null> {
+    const [order] = await sql`SELECT status FROM orders WHERE id = ${orderId}`;
+    if (!order || acceptsItemChanges(order.status as string)) return null;
+    const etiqueta = STATUS_LABELS[order.status as keyof typeof STATUS_LABELS] ?? order.status;
+    return `El pedido está en "${etiqueta}": ya no admite cambios en sus productos.`;
+}
+
 export async function updateOrderStatus(id: number, status: string) {
     const session = await auth();
     if (!session?.user) return { error: 'No autenticado' };
     if (!ORDER_STATUSES.includes(status as any)) return { error: 'Estado inválido' };
 
     try {
-        // No se puede pasar a listo para retirar sin haber facturado: la factura
-        // es el paso previo obligatorio en el flujo.
+        // No se puede pasar a listo para retirar sin los dos papeles hechos: son
+        // el paso previo obligatorio del flujo. Ahí el pedido deja de ser trabajo
+        // del taller y pasa a ser mercadería esperando a que la retiren.
         if (status === 'listo_para_retirar') {
             const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${id}`;
             if (!order?.alegra_invoice_id) {
-                return { error: 'Falta emitir la factura antes de pasar a listo para retirar' };
+                return { error: 'Falta emitir la factura antes de pasar a listo para retirar.' };
+            }
+
+            // Y TODO remitido. Puede estar repartido en varios remitos —la entrega
+            // va por partes y cada salida es su papel— pero no puede quedar nada
+            // adentro: lo que ningún remito nombra sale del depósito sin respaldo,
+            // y el que carga la camioneta no tiene contra qué contar los bultos.
+            const pendiente = describePendingDelivery(await deliverableItems(id));
+            if (pendiente) {
+                return { error: `Falta remitir antes de pasar a listo para retirar: ${pendiente}.` };
             }
         }
 
@@ -508,6 +532,9 @@ export async function updateOrderItem(
     `;
     if (!item) return { ok: false, error: 'La línea no existe' };
 
+    const congelado = await itemsCongelados(item.order_id as number);
+    if (congelado) return { ok: false, error: congelado };
+
     const result = await updateOrderItemInternal(itemId, patch);
     if (result.ok) {
         await markDocumentsStale(item.order_id, Number(item.delivered_quantity ?? 0));
@@ -566,6 +593,9 @@ export async function deleteOrderItem(itemId: number): Promise<import('@/lib/ord
     `;
     if (!item) return { ok: false, error: 'La línea no existe' };
 
+    const congelado = await itemsCongelados(item.order_id as number);
+    if (congelado) return { ok: false, error: congelado };
+
     const result = await deleteOrderItemInternal(itemId);
     if (result.ok) {
         await markDocumentsStale(item.order_id, Number(item.delivered_quantity ?? 0));
@@ -587,6 +617,9 @@ export async function addOrderItem(
 ): Promise<import('@/lib/orders').AddOrderItemResult> {
     const session = await auth();
     if (!session?.user) return { ok: false, error: 'No autenticado' };
+
+    const congelado = await itemsCongelados(orderId);
+    if (congelado) return { ok: false, error: congelado };
 
     const result = await addOrderItemInternal(orderId, payload);
     if (result.ok) {
