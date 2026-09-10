@@ -24,12 +24,12 @@ command -v docker >/dev/null || { echo "❌ Falta docker."; exit 1; }
 # ---------- 1. Lo primero: que .env.local no apunte a producción ----------
 # Va ANTES que todo lo demás. Levantar la base local y después correr los
 # scripts contra Neon es exactamente el accidente que este archivo evita.
-if [ -f .env.local ] && grep -qE '^\s*NEON_LOCAL_PROXY=' .env.local; then
-    echo "✅ .env.local tiene NEON_LOCAL_PROXY"
-else
+entorno_mal() {
     cat <<MSG
-❌ Falta NEON_LOCAL_PROXY en .env.local — sin eso la app y los scripts van a
-   Neon de PRODUCCIÓN. Poné estas dos líneas y volvé a correr:
+❌ $1
+
+   .env.local tiene que tener EXACTAMENTE estas dos líneas, y ninguna otra
+   DATABASE_URL:
 
      DATABASE_URL=$LOCAL_URL
      NEON_LOCAL_PROXY=$PROXY_URL
@@ -37,7 +37,24 @@ else
    (no se edita solo a propósito: ese archivo tiene tus credenciales)
 MSG
     exit 1
+}
+
+[ -f .env.local ] || entorno_mal "No existe .env.local."
+grep -qE '^\s*NEON_LOCAL_PROXY=' .env.local \
+    || entorno_mal "Falta NEON_LOCAL_PROXY: la app y los scripts van a Neon de PRODUCCIÓN."
+
+# El proxy no alcanza. Las credenciales viajan con la conexión, así que un
+# DATABASE_URL de Neon apuntado al Postgres local falla con "password
+# authentication failed for user neondb_owner": el usuario de Neon no existe acá.
+repetidas=$(grep -cE '^\s*DATABASE_URL=' .env.local || true)
+[ "$repetidas" -le 1 ] \
+    || entorno_mal "Hay $repetidas líneas DATABASE_URL en .env.local: dejá una sola."
+# if/then y no "grep && …": con set -e, un grep que no matchea corta el script.
+if grep -qE '^\s*DATABASE_URL=.*(neon\.tech|neondb_owner)' .env.local; then
+    entorno_mal "DATABASE_URL apunta a Neon. Para local va la de abajo."
 fi
+
+echo "✅ .env.local apunta a la base local"
 
 # ---------- 2. Postgres ----------
 if docker ps -a --format '{{.Names}}' | grep -qx "$PG_CONTAINER"; then
