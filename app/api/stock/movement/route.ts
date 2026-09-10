@@ -3,7 +3,7 @@ import { sql } from "@/lib/database"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/auth"
 import { canConsumeStock } from "@/lib/roles"
-import { listActiveOperators, resolveOperator } from "@/lib/operators"
+import { requireOperator } from "@/lib/operators"
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,22 +36,13 @@ export async function POST(request: NextRequest) {
     // El OPERARIO: la persona que movió el material, distinta de la cuenta con
     // la que se entró. En el depósito hay una tablet con un login abierto todo
     // el día, así que user_name dice siempre lo mismo y no alcanza para saber
-    // quién retiró qué. Ver lib/operators.ts.
-    //
-    // Es obligatorio en cuanto haya alguien cargado, y la regla vive ACÁ y no
-    // solo en el formulario: si se puede saltear, se saltea. La excepción es la
-    // lista vacía —una instalación donde todavía nadie cargó operarios sigue
-    // funcionando igual que antes, en vez de quedarse sin poder mover stock.
-    let operario: { id: number; name: string } | null = null
-    if (operator_id !== undefined && operator_id !== null && operator_id !== "") {
-      const resuelto = await resolveOperator(operator_id)
-      if ("error" in resuelto) {
-        return NextResponse.json({ error: resuelto.error }, { status: 400 })
-      }
-      operario = resuelto
-    } else if ((await listActiveOperators()).length > 0) {
-      return NextResponse.json({ error: "Falta indicar quién hace el movimiento" }, { status: 400 })
+    // quién retiró qué. La regla de cuándo es obligatorio vive en
+    // lib/operators.ts, compartida con el descuento por pedido.
+    const pedido = await requireOperator(operator_id)
+    if ("error" in pedido) {
+      return NextResponse.json({ error: pedido.error }, { status: 400 })
     }
+    const operario = pedido.operario
 
     // Precio opcional: solo tiene sentido para entradas. Aceptamos number o null;
     // si viene, tiene que ser >= 0. Si es 0 o null lo guardamos como null (evita

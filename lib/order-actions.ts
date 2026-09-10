@@ -30,6 +30,7 @@ import {
 } from '@/lib/orders';
 import { isFixedSpecField } from '@/lib/order-statuses';
 import { canConsumeStock } from '@/lib/roles';
+import { requireOperator } from '@/lib/operators';
 import { planReturn } from '@/lib/returns';
 
 export async function createOrderManual(payload: OrderPayload) {
@@ -672,6 +673,9 @@ export async function deleteSpecField(key: string) {
 export async function consumeOrderMaterials(
     orderId: number,
     items: { material_id: number; quantity: number }[],
+    // Quién retira, que no es lo mismo que con qué cuenta se entró: el taller
+    // trabaja con una sesión compartida. Ver lib/operators.ts.
+    operatorId?: number | null,
 ) {
     const session = await auth();
     if (!session?.user) return { error: 'No autenticado' };
@@ -683,6 +687,10 @@ export async function consumeOrderMaterials(
 
     const aDescontar = items.filter((i) => Number.isFinite(i.quantity) && i.quantity > 0);
     if (aDescontar.length === 0) return { error: 'No hay nada para descontar' };
+
+    const conOperario = await requireOperator(operatorId);
+    if ('error' in conOperario) return { error: conOperario.error };
+    const operario = conOperario.operario;
 
     const userName = session.user.name || session.user.email || 'Desconocido';
 
@@ -734,13 +742,15 @@ export async function consumeOrderMaterials(
             await sql`
                 INSERT INTO stock_movements (
                     material_id, movement_type, quantity, previous_stock, new_stock,
-                    reference_number, notes, user_name, order_id
+                    reference_number, notes, user_name, order_id,
+                    operator_id, operator_name
                 )
                 VALUES (
                     ${item.material_id}, 'salida', ${item.quantity}, ${previo}, ${nuevo},
                     ${`Pedido #${order.order_number}`},
                     ${nota},
-                    ${userName}, ${orderId}
+                    ${userName}, ${orderId},
+                    ${operario?.id ?? null}, ${operario?.name ?? null}
                 )
             `;
             await sql`
@@ -847,6 +857,8 @@ export async function getOrderConsumed(orderId: number) {
 export async function returnOrderMaterials(
     orderId: number,
     items: { material_id: number; quantity: number }[],
+    /** Quién devuelve. Mismo criterio que al retirar. */
+    operatorId?: number | null,
 ) {
     const session = await auth();
     if (!session?.user) return { error: 'No autenticado' };
@@ -855,6 +867,10 @@ export async function returnOrderMaterials(
     if (!canConsumeStock(session.user.role)) {
         return { error: 'Tu usuario no puede mover materiales del inventario' };
     }
+
+    const conOperario = await requireOperator(operatorId);
+    if ('error' in conOperario) return { error: conOperario.error };
+    const operario = conOperario.operario;
 
     const userName = session.user.name || session.user.email || 'Desconocido';
 
@@ -882,13 +898,15 @@ export async function returnOrderMaterials(
             await sql`
                 INSERT INTO stock_movements (
                     material_id, movement_type, quantity, previous_stock, new_stock,
-                    reference_number, notes, user_name, order_id
+                    reference_number, notes, user_name, order_id,
+                    operator_id, operator_name
                 )
                 VALUES (
                     ${item.material_id}, 'entrada', ${item.quantity}, ${previo}, ${nuevo},
                     ${`Pedido #${order.order_number}`},
                     ${`Devolución al depósito de material retirado por el pedido #${order.order_number}`},
-                    ${userName}, ${orderId}
+                    ${userName}, ${orderId},
+                    ${operario?.id ?? null}, ${operario?.name ?? null}
                 )
             `;
             await sql`

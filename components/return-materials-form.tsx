@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Loader2 } from "lucide-react"
 import { returnOrderMaterials } from "@/lib/order-actions"
+import { OperatorPicker, type OperarioElegido } from "@/components/operator-picker"
 import { useToast } from "@/hooks/use-toast"
 import { formatStock } from "@/lib/format"
 import { planProductReturn, withdrawnProducts } from "@/lib/returns"
@@ -37,6 +38,10 @@ export function ReturnMaterialsForm({
     const { toast } = useToast()
     const [saving, setSaving] = useState(false)
 
+    // Quién devuelve, con el mismo criterio que al retirar.
+    const [operario, setOperario] = useState<OperarioElegido | null>(null)
+    const [hayOperarios, setHayOperarios] = useState(false)
+    const [operarioError, setOperarioError] = useState(false)
     const retirable = consumed.map((c) => ({
         material_id: c.material_id,
         label: c.label,
@@ -69,6 +74,11 @@ export function ReturnMaterialsForm({
         .filter((s) => !Number.isNaN(s.units) && s.units > 0)
 
     async function devolver() {
+        if (hayOperarios && !operario) {
+            setOperarioError(true)
+            toast.error("Falta el operario", { description: "Tocá quién está devolviendo el material." })
+            return
+        }
         const items = planProductReturn(recipes, seleccion, retirable)
         if (items.length === 0) {
             toast.error("No hay nada para devolver", {
@@ -78,7 +88,7 @@ export function ReturnMaterialsForm({
         }
 
         setSaving(true)
-        const result = await returnOrderMaterials(orderId, items)
+        const result = await returnOrderMaterials(orderId, items, operario?.id ?? null)
         setSaving(false)
         if (result.error) {
             toast.error("No se pudo devolver", { description: result.error })
@@ -102,6 +112,19 @@ export function ReturnMaterialsForm({
 
     return (
         <>
+            <div className="mb-4">
+                <OperatorPicker
+                    value={operario}
+                    onChange={(op) => {
+                        setOperario(op)
+                        if (op) setOperarioError(false)
+                    }}
+                    onListLoaded={(cantidad) => setHayOperarios(cantidad > 0)}
+                    error={operarioError}
+                    disabled={saving}
+                />
+            </div>
+
             <div className="max-h-[60vh] space-y-2.5 overflow-y-auto pr-1">
                 {productos.map((p) => {
                     const error = errorDe(p.order_item_id, p.units)

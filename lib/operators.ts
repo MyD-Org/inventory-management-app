@@ -47,3 +47,25 @@ export async function resolveOperator(
     if (!row) return { error: "El operario no existe o está desactivado" }
     return { id: row.id, name: row.name }
 }
+
+/**
+ * La regla completa de "¿quién hizo esto?", en un solo lugar porque la aplican
+ * tres caminos distintos (el modal de entrada/salida, el ajuste y el descuento
+ * por pedido) y tienen que coincidir.
+ *
+ * Es OBLIGATORIO en cuanto haya alguien cargado, y esta regla vive en el
+ * servidor y no solo en los formularios: si se puede saltear, se saltea. La
+ * excepción es la lista vacía — una instalación donde todavía nadie cargó
+ * operarios sigue moviendo stock como antes en vez de quedarse trabada.
+ */
+export async function requireOperator(
+    operatorId: unknown,
+): Promise<{ operario: { id: number; name: string } | null } | { error: string }> {
+    if (operatorId === undefined || operatorId === null || operatorId === "") {
+        const hay = (await listActiveOperators()).length > 0
+        return hay ? { error: "Falta indicar quién hace el movimiento" } : { operario: null }
+    }
+    const resuelto = await resolveOperator(operatorId)
+    if ("error" in resuelto) return { error: resuelto.error }
+    return { operario: resuelto }
+}
