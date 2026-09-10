@@ -66,6 +66,11 @@ export function useAutoRefresh() {
         function onDragStart() {
             dragging.current = true
         }
+        // Se limpia con varios eventos a propósito. Lo natural sería solo
+        // dragend, pero al soltar la tarjeta el tablero la re-renderiza
+        // (actualización optimista) y si el nodo que originó el arrastre
+        // desaparece antes, dragend no llega nunca. El flag quedaría trabado en
+        // true y el refresco automático se apagaría sin que nadie se entere.
         function onDragEnd() {
             dragging.current = false
         }
@@ -74,6 +79,8 @@ export function useAutoRefresh() {
         window.addEventListener("focus", maybeRefresh)
         window.addEventListener("dragstart", onDragStart)
         window.addEventListener("dragend", onDragEnd)
+        window.addEventListener("drop", onDragEnd)
+        window.addEventListener("mouseup", onDragEnd)
 
         return () => {
             clearInterval(timer)
@@ -81,6 +88,8 @@ export function useAutoRefresh() {
             window.removeEventListener("focus", maybeRefresh)
             window.removeEventListener("dragstart", onDragStart)
             window.removeEventListener("dragend", onDragEnd)
+            window.removeEventListener("drop", onDragEnd)
+            window.removeEventListener("mouseup", onDragEnd)
         }
     }, [router])
 }
