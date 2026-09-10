@@ -47,7 +47,15 @@ fi
 
 echo
 echo "── 3. El proxy contesta ───────────────────────"
+# EL PROXY NECESITA EL HEADER neon-connection-string: es de ahí de donde saca a
+# qué base conectarse y con qué usuario —no de su propia configuración—. Por eso
+# una DATABASE_URL con las credenciales de Neon apuntada al Postgres local falla
+# con "password authentication failed for user neondb_owner": el proxy pasa esas
+# credenciales tal cual. Sin el header contesta "invalid header", que parece un
+# proxy roto y no lo es.
+conn=$(grep -E '^\s*DATABASE_URL=' .env.local 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'"'"')
 respuesta=$(curl -s -m 5 -X POST "$PROXY_URL" -H 'content-type: application/json' \
+    -H "neon-connection-string: $conn" \
     -d '{"query":"select current_user, current_database()","params":[]}' 2>&1)
 if echo "$respuesta" | grep -q '"rows"'; then
     ok "$PROXY_URL responde"
