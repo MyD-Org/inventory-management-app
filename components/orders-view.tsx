@@ -15,6 +15,7 @@ import { orderNeedsReview } from "@/lib/order-statuses"
 import { matchesOrderQuery } from "@/lib/order-search"
 import { OrdersBoard, isOverdue, type BoardCard } from "@/components/orders-board"
 import { OrdersTable } from "@/components/orders-table"
+import { useAutoRefresh } from "@/hooks/use-auto-refresh"
 
 type Filter = "vencidos" | "alta" | "sin_materiales" | null
 
@@ -43,6 +44,11 @@ export function OrdersView({
     const [query, setQuery] = useState("")
     const [filter, setFilter] = useState<Filter>(null)
     const searchRef = useRef<HTMLInputElement>(null)
+
+    // Un pedido que carga otro usuario no llega solo: los datos vienen como
+    // props del server y sin esto se quedan congelados hasta recargar a mano.
+    // Pesa sobre todo para el tablero colgado en el taller, que nadie toca.
+    useAutoRefresh()
 
     // Atajo al estilo Linear: "/" enfoca el buscador.
     useEffect(() => {
