@@ -67,13 +67,42 @@ fi
 
 echo
 echo "── 4. El schema ───────────────────────────────"
+# SE PREGUNTA POR LOS DOS CAMINOS, y no es redundante: el contenedor y el proxy
+# pueden terminar en Postgres DISTINTOS. El proxy se conecta a
+# host.docker.internal, o sea al 5432 de la Mac, que puede ser un Postgres
+# instalado a mano y no el del contenedor —y ahí la migración no está—. Si estas
+# dos líneas no coinciden, ese es el problema: la app usa la del proxy.
+consulta='{"query":"select count(*)::int as n from information_schema.columns where table_name = $1 and column_name = $2","params":["order_items","delivered_quantity"]}'
+
+por_proxy=$(curl -s -m 5 -X POST "$PROXY_URL" -H 'content-type: application/json' \
+    -H "neon-connection-string: ${conn:-}" -d "$consulta" 2>&1)
+if echo "$por_proxy" | grep -qE '"n":"?1"?'; then
+    ok "POR EL PROXY (lo que usa la app): delivered_quantity existe"
+elif echo "$por_proxy" | grep -qE '"n":"?0"?'; then
+    bad "POR EL PROXY (lo que usa la app): NO existe delivered_quantity"
+    info "la app le pega a una base sin la migración 41"
+else
+    bad "POR EL PROXY: no se pudo consultar"
+    info "$(echo "$por_proxy" | head -c 200)"
+fi
+
 tabla=$(docker exec ai-api-pg psql -U postgres -tAd avantec -c \
     "SELECT count(*) FROM information_schema.columns WHERE table_name='order_items' AND column_name='delivered_quantity'" 2>&1)
 if [ "$tabla" = "1" ]; then
-    ok "order_items.delivered_quantity existe (migración 41 aplicada)"
+    ok "en el contenedor ai-api-pg: delivered_quantity existe"
 elif [ "$tabla" = "0" ]; then
-    bad "falta la migración 41: correr bash scripts/setup-local.sh"
+    bad "en el contenedor ai-api-pg: NO existe (correr bash scripts/setup-local.sh)"
 else
-    bad "no se pudo consultar la base"
+    bad "en el contenedor ai-api-pg: no se pudo consultar"
     info "$(echo "$tabla" | head -c 200)"
+fi
+
+echo
+echo "── 5. Quién escucha en el 5432 de la Mac ──────"
+# Si acá aparece un Postgres que NO es el contenedor, el proxy le está pegando a
+# ese: host.docker.internal es la Mac, no el contenedor.
+if command -v lsof >/dev/null; then
+    lsof -nP -iTCP:5432 -sTCP:LISTEN 2>/dev/null | tail -n +1 | head -5 || info "nadie"
+else
+    info "(lsof no disponible)"
 fi
