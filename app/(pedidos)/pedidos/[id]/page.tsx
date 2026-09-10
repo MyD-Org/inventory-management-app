@@ -23,7 +23,7 @@ import { OrderActivity } from "@/components/order-activity"
 import { describeDrift, listDocumentDrift, listOrderEvents, type OrderEvent } from "@/lib/order-events"
 import { noteHasContent } from "@/lib/order-notes"
 import { listOrderRemissions, type EmittedRemission } from "@/lib/remissions"
-import { DELIVERY_LABELS, deliveredOverflow, deliveryState, pendingQuantity, round2, type DeliveryState } from "@/lib/deliveries"
+import { deliveredOverflow, pendingQuantity, round2 } from "@/lib/deliveries"
 
 export const dynamic = 'force-dynamic';
 
@@ -95,23 +95,17 @@ function DocumentoEmitido({ numero, genero }: { numero: string | null; genero: "
 function ListaRemitos({
     remissions,
     conLink,
-    estado,
-    entregado,
+    pendiente,
     pedido,
     fueraDelPedido,
-    aviso,
 }: {
     remissions: EmittedRemission[]
     conLink: boolean
-    estado: DeliveryState
-    entregado: number
+    /** Lo que falta remitir. 0 = está todo. */
+    pendiente: number
     pedido: number
     /** Unidades que los remitos nombran y el pedido ya no tiene (ver la página). */
     fueraDelPedido: number
-    /** El triángulo de "desactualizado", si corresponde. Va pegado a la cuenta:
-     *  DocumentStaleTag está pensado como ícono al lado de un número, y solo en
-     *  su renglón parecía un aviso suelto sin dueño. */
-    aviso?: React.ReactNode
 }) {
     if (remissions.length === 0) {
         return <span className="text-muted-foreground">Sin emitir</span>
@@ -121,20 +115,19 @@ function ListaRemitos({
 
     return (
         <div className="flex flex-col items-start gap-1">
-            {/* El estado y la cuenta en DOS renglones y no en uno con "·": la celda
-                es angosta y "Remitido en parte · 4 de 25 u." se partía por la mitad
-                de la frase, dejando el "u." colgando solo. */}
-            <span
-                className={`flex items-center gap-1 text-sm font-medium ${
-                    estado === "remitido" ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
-                }`}
-            >
-                {DELIVERY_LABELS[estado]}
-                {aviso}
-            </span>
-            <span className="text-sm tabular-nums text-muted-foreground">
-                {entregado} de {pedido} u.
-            </span>
+            {/* QUÉ FALTA, no cómo se llama el estado. "Remitido en parte · 10 de 24
+                u." eran dos frases para decir lo mismo y ninguna decía qué hacer;
+                "Faltan 14 u." se lee de un vistazo y es la pregunta que alguien
+                trae cuando mira esta celda. */}
+            {pendiente > 0 ? (
+                <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                    Faltan {pendiente} u. de {pedido}
+                </span>
+            ) : (
+                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                    Todo remitido · {pedido} u.
+                </span>
+            )}
             <div className="flex flex-col items-start gap-0.5">
                 {remissions.map((r) =>
                     conLink && r.url ? (
@@ -265,7 +258,6 @@ export default async function OrderDetailPage({
         delivered: Number(i.delivered_quantity),
         handedOver: Number(i.handed_over_quantity),
     }))
-    const estadoEntrega = deliveryState(entregables)
     // round2 en las dos: son sumas de DECIMAL(10,2) que llegan como float y la
     // celda salía diciendo "10.000000000000002 de 24 u.".
     const entregado = round2(entregables.reduce((sum, i) => sum + i.delivered, 0))
@@ -455,8 +447,7 @@ export default async function OrderDetailPage({
                             <ListaRemitos
                                 remissions={remissions}
                                 conLink={false}
-                                estado={estadoEntrega}
-                                entregado={entregado}
+                                pendiente={pendiente}
                                 pedido={units}
                                 fueraDelPedido={fueraDelPedido}
                             />
@@ -466,44 +457,45 @@ export default async function OrderDetailPage({
                                 <ListaRemitos
                                     remissions={remissions}
                                     conLink
-                                    estado={estadoEntrega}
-                                    entregado={entregado}
+                                    pendiente={pendiente}
                                     pedido={units}
                                     fueraDelPedido={fueraDelPedido}
-                                    aviso={
-                                        order.remission_stale && remissions.length > 0 ? (
-                                            <DocumentStaleTag
-                                                label="Último remito desactualizado"
-                                                changes={remissionDrift.map(describeDrift)}
-                                            />
-                                        ) : null
-                                    }
                                 />
-                                <div className="no-print flex flex-wrap items-center gap-1">
-                                    {/* Mientras quede mercadería adentro se puede
-                                        emitir otro remito: el pedido sale por partes
-                                        y cada parte es su propio papel. */}
-                                    {pendiente > 0 && (
+                                {/* UNA SOLA ACCIÓN PRINCIPAL. Remitir lo que falta es
+                                    lo que alguien viene a hacer acá; corregir lo que
+                                    dice un papel ya emitido pasa poco y sale de un
+                                    aviso, no de una decisión. Dos botones del mismo
+                                    tamaño hacían pensar que había que elegir entre
+                                    dos caminos parecidos. */}
+                                {pendiente > 0 && (
+                                    <div className="no-print">
                                         <RemissionButton
                                             orderId={order.id}
                                             label={remissions.length > 0 ? "Remitir el resto" : undefined}
                                         />
-                                    )}
-                                    {/* Corregir lo que dice el último papel es otra
-                                        cosa que remitir el resto, y por eso son dos
-                                        botones distintos.
-
-                                        No se ofrece si el remito nombra productos que
-                                        ya no están en el pedido: ahí actualizar solo
-                                        puede fallar —no hay de dónde volver a
-                                        resolverlos contra el catálogo— y eso se
-                                        arregla en Alegra, no acá. */}
-                                    {order.remission_stale &&
-                                        remissions.length > 0 &&
-                                        fueraDelPedido <= 0.005 && (
-                                            <RemissionButton orderId={order.id} mode="actualizar" />
+                                    </div>
+                                )}
+                                {/* El triángulo explica QUÉ cambió y el link al lado
+                                    es qué hacer al respecto. No se ofrece si el remito
+                                    nombra productos que ya no están en el pedido: ahí
+                                    actualizar solo puede fallar —no hay de dónde
+                                    volver a resolverlos contra el catálogo— y se
+                                    arregla en Alegra, no acá. */}
+                                {order.remission_stale && remissions.length > 0 && (
+                                    <div className="no-print flex items-center gap-1">
+                                        <DocumentStaleTag
+                                            label="Último remito desactualizado"
+                                            changes={remissionDrift.map(describeDrift)}
+                                        />
+                                        {fueraDelPedido <= 0.005 && (
+                                            <RemissionButton
+                                                orderId={order.id}
+                                                mode="actualizar"
+                                                variant="link"
+                                            />
                                         )}
-                                </div>
+                                    </div>
+                                )}
                             </div>
                         </EmissionSlot>
                         )}

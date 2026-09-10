@@ -69,12 +69,19 @@ export function RemissionButton({
     orderId,
     mode = "emitir",
     label,
+    variant = "boton",
 }: {
     orderId: number
     /** "actualizar" = corregir el último remito, sin entregar nada nuevo. */
     mode?: "emitir" | "actualizar"
     /** Para distinguir el primer remito de los que siguen: "Remitir el resto". */
     label?: string
+    /**
+     * "link" = texto chico en vez de botón. Para corregir un papel ya emitido, que
+     * sale de un aviso y no de una decisión: al lado del botón de remitir, del
+     * mismo tamaño, parecían dos caminos entre los que hay que elegir.
+     */
+    variant?: "boton" | "link"
 }) {
     const actualizando = mode === "actualizar"
     const router = useRouter()
@@ -263,16 +270,28 @@ export function RemissionButton({
 
     return (
         <>
-            <Button variant="outline" size="sm" onClick={abrir} disabled={cargando} className="no-print">
-                {cargando ? (
-                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                ) : actualizando ? (
-                    <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                ) : (
-                    <Truck className="mr-2 h-3.5 w-3.5" />
-                )}
-                {label ?? (actualizando ? "Actualizar remito" : "Emitir remito")}
-            </Button>
+            {variant === "link" ? (
+                <button
+                    type="button"
+                    onClick={abrir}
+                    disabled={cargando}
+                    className="no-print inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-60"
+                >
+                    {cargando && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {label ?? (actualizando ? "Actualizar remito" : "Emitir remito")}
+                </button>
+            ) : (
+                <Button variant="outline" size="sm" onClick={abrir} disabled={cargando} className="no-print">
+                    {cargando ? (
+                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    ) : actualizando ? (
+                        <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                    ) : (
+                        <Truck className="mr-2 h-3.5 w-3.5" />
+                    )}
+                    {label ?? (actualizando ? "Actualizar remito" : "Emitir remito")}
+                </Button>
+            )}
 
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="max-w-xl w-[calc(100%-2rem)] overflow-hidden">
