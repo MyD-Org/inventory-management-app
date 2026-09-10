@@ -52,9 +52,12 @@ grep -qE '^\s*NEON_LOCAL_PROXY=' .env.local \
 # El proxy no alcanza. Las credenciales viajan con la conexión, así que un
 # DATABASE_URL de Neon apuntado al Postgres local falla con "password
 # authentication failed for user neondb_owner": el usuario de Neon no existe acá.
-repetidas=$(grep -cE '^\s*DATABASE_URL=' .env.local || true)
-[ "$repetidas" -le 1 ] \
-    || entorno_mal "Hay $repetidas líneas DATABASE_URL en .env.local: dejá una sola."
+# -eq 1 y no -le 1: con cero líneas el script seguía, creaba los contenedores y
+# recién moría en el paso 4 con un error de Node en vez del mensaje de acá.
+activas=$(grep -cE '^\s*DATABASE_URL=' .env.local || true)
+if [ "$activas" -ne 1 ]; then
+    entorno_mal "Hay $activas líneas DATABASE_URL activas en .env.local: tiene que haber exactamente una."
+fi
 # if/then y no "grep && …": con set -e, un grep que no matchea corta el script.
 if grep -qE '^\s*DATABASE_URL=.*(neon\.tech|neondb_owner)' .env.local; then
     entorno_mal "DATABASE_URL apunta a Neon. Para local va la de abajo."

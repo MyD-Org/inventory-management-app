@@ -50,7 +50,7 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                     const faltaFactura = o.status === "por_facturar" && !o.alegra_invoice_id
                     // No es "¿hay remito?": la mercadería sale por partes y un pedido
                     // con un remito emitido puede tener la mitad todavía adentro.
-                    const faltaRemito = o.status === "por_facturar" && o.units - o.delivered > 0.005
+                    const faltaRemito = o.status === "por_facturar" && o.pending > 0.005
                     const segundaLinea =
                         o.has_unmapped ||
                         faltaFactura ||
@@ -116,7 +116,7 @@ export function OrdersTable({ orders, isAdmin }: { orders: BoardCard[]; isAdmin:
                             {faltaRemito && (
                                 <span className="inline-flex items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive shrink-0 whitespace-nowrap">
                                     <TriangleAlert className="h-3 w-3" />
-                                    {o.delivered > 0 ? `Falta remitir ${o.units - o.delivered} u.` : "Falta remito"}
+                                    {o.pending < o.units ? `Falta remitir ${o.pending} u.` : "Falta remito"}
                                 </span>
                             )}
 

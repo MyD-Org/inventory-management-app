@@ -74,7 +74,7 @@ export function OrdersView({
     // Del lado del remito lo que frena es que quede mercadería sin remitir, no que
     // no haya papel: la entrega va por partes y el pedido puede tener varios.
     const missingDoc = (c: BoardCard) =>
-        c.status === "por_facturar" && (!c.alegra_invoice_id || c.units - c.delivered > 0.005)
+        c.status === "por_facturar" && (!c.alegra_invoice_id || c.pending > 0.005)
     const counts = {
         vencidos: cards.filter(isLate).length,
         sinMateriales: cards.filter((c) => c.needs_review).length,

@@ -30,7 +30,11 @@ export default async function OrdersPage({
                -- Cuánto del pedido ya salió del depósito. La entrega va por partes,
                -- así que "¿falta remito?" no es "¿hay remito?": es si queda algo
                -- adentro (ver scripts/41-remitos-parciales.sql).
-               COALESCE(SUM(i.delivered_quantity), 0) AS delivered,
+               -- POR LÍNEA y no total contra total: una línea remitida de más
+               -- tapaba a otra sin remitir, y la tarjeta decía que el pedido podía
+               -- salir mientras el servidor lo frenaba. GREATEST recorta el exceso
+               -- de cada línea, igual que pendingQuantity.
+               COALESCE(SUM(GREATEST(i.quantity - i.delivered_quantity, 0)), 0) AS pending,
                BOOL_OR(i.needs_review) AS needs_review,
                -- Alguna línea pidió una opción que su hoja de costo no mapea: hay
                -- materiales, pero uno puede ser el equivocado. Distinto de needs_review.
@@ -66,7 +70,9 @@ export default async function OrdersPage({
         modified_at: r.modified_at,
         delivery_date_verified_at: r.delivery_date_verified_at,
         units: Number(r.units),
-        delivered: Number(r.delivered),
+        // Redondeado acá y no en cada pantalla: es una suma de DECIMAL(10,2) que
+        // llega como float y salía en la tarjeta como "16.900000000000002 u.".
+        pending: Math.round(Number(r.pending) * 100) / 100,
         items: (r.items as any[]).map((i) => ({
             quantity: Number(i.quantity),
             product: i.product as string,

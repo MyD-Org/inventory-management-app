@@ -23,7 +23,7 @@ import { OrderActivity } from "@/components/order-activity"
 import { describeDrift, listDocumentDrift, listOrderEvents, type OrderEvent } from "@/lib/order-events"
 import { noteHasContent } from "@/lib/order-notes"
 import { listOrderRemissions, type EmittedRemission } from "@/lib/remissions"
-import { DELIVERY_LABELS, deliveredOverflow, deliveryState, pendingQuantity, type DeliveryState } from "@/lib/deliveries"
+import { DELIVERY_LABELS, deliveredOverflow, deliveryState, pendingQuantity, round2, type DeliveryState } from "@/lib/deliveries"
 
 export const dynamic = 'force-dynamic';
 
@@ -235,7 +235,7 @@ export default async function OrderDetailPage({
     const unanswered = (specs: Record<string, string>) =>
         Object.entries(vocab).filter(([k, f]) => f.kind === "list" && !specs[k])
 
-    const units = order.items.reduce((sum, i) => sum + Number(i.quantity), 0)
+    const units = round2(order.items.reduce((sum, i) => sum + Number(i.quantity), 0))
     // La salida va por partes: lo que ya tiene remito, lo que falta y en qué estado
     // queda el pedido. Es la cuenta que hacen la fila del producto, la celda de
     // Remito y los botones de emitir.
@@ -247,8 +247,10 @@ export default async function OrderDetailPage({
         handedOver: Number(i.handed_over_quantity),
     }))
     const estadoEntrega = deliveryState(entregables)
-    const entregado = entregables.reduce((sum, i) => sum + i.delivered, 0)
-    const pendiente = entregables.reduce((sum, i) => sum + pendingQuantity(i), 0)
+    // round2 en las dos: son sumas de DECIMAL(10,2) que llegan como float y la
+    // celda salía diciendo "10.000000000000002 de 24 u.".
+    const entregado = round2(entregables.reduce((sum, i) => sum + i.delivered, 0))
+    const pendiente = round2(entregables.reduce((sum, i) => sum + pendingQuantity(i), 0))
     // Se remitió más de lo que el pedido pide: alguien achicó una línea después de
     // remitir. El papel ya salió, así que lo único que corresponde es avisarlo.
     const sobreEntregado = deliveredOverflow(entregables)

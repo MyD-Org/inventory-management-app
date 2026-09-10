@@ -181,24 +181,38 @@ export function RemissionButton({
     // muestran (ver el comentario de arriba).
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
     useEffect(() => {
-        if (!open || actualizando || hayError || seleccion.length === 0) return
+        if (!open || actualizando) return
+        // Los avisos que hay en pantalla son de la selección ANTERIOR: apenas
+        // cambia algo dejan de ser ciertos, así que se van ya, antes de esperar la
+        // respuesta. Dejarlos describía una selección que quien mira ya cambió.
+        setPreview((p) => (p ? { ...p, warnings: [] } : p))
+        if (hayError || seleccion.length === 0) return
+
         const query = seleccion.map((s) => `${s.orderItemId}:${s.quantity}`).join(",")
         if (timer.current) clearTimeout(timer.current)
+        // Se cancela la consulta anterior: dos tecleos seguidos dejaban dos GET en
+        // vuelo y ganaba el que contestara último, que no es el que se está viendo.
+        const abort = new AbortController()
         timer.current = setTimeout(async () => {
             setRevisando(true)
             try {
-                const res = await fetch(`/api/pedidos/${orderId}/remito?items=${encodeURIComponent(query)}`)
+                const res = await fetch(
+                    `/api/pedidos/${orderId}/remito?items=${encodeURIComponent(query)}`,
+                    { signal: abort.signal },
+                )
                 const data = await res.json()
                 if (res.ok) setPreview((p) => (p ? { ...p, lines: data.lines, warnings: data.warnings } : p))
             } catch {
-                // El chequeo es informativo: si falla, el diálogo sigue usable y
-                // quien decide si se puede emitir es el POST.
+                // El chequeo es informativo: si falla —o si se canceló porque
+                // siguieron tipeando— el diálogo sigue usable y quien decide si se
+                // puede emitir es el POST.
             } finally {
                 setRevisando(false)
             }
         }, 400)
         return () => {
             if (timer.current) clearTimeout(timer.current)
+            abort.abort()
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, cantidades, sacadas])

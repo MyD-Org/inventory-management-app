@@ -162,7 +162,14 @@ export async function listOrderRemissions(orderId: number): Promise<EmittedRemis
  */
 async function lastRemissionEntrega(
     orderId: number,
-): Promise<{ remissionId: number; alegraId: number; number: string | null; entrega: DeliveryRequestItem[] } | null> {
+): Promise<{
+    remissionId: number
+    alegraId: number
+    number: string | null
+    /** Productos del remito cuya línea del pedido se borró: ver abajo. */
+    huerfanas: string[]
+    entrega: DeliveryRequestItem[]
+} | null> {
     const [ultimo] = await sql`
         SELECT id, alegra_remission_id, alegra_remission_number
         FROM order_remissions
@@ -173,17 +180,29 @@ async function lastRemissionEntrega(
     if (!ultimo) return null
 
     const filas = await sql`
-        SELECT order_item_id, quantity FROM order_remission_items
-        WHERE remission_id = ${ultimo.id} AND order_item_id IS NOT NULL
+        SELECT order_item_id, product, quantity FROM order_remission_items
+        WHERE remission_id = ${ultimo.id}
     `
+    // Las líneas cuyo ítem se borró del pedido quedan con order_item_id en NULL
+    // (ON DELETE SET NULL: lo que salió, salió). No se pueden volver a resolver
+    // contra el catálogo —no hay pedido de dónde sacar el producto y las specs—
+    // y omitirlas en silencio reescribiría el remito de Alegra SIN esa mercadería,
+    // que es un documento diciendo que salió menos de lo que salió.
+    const huerfanas = (filas as any[])
+        .filter((f) => f.order_item_id == null)
+        .map((f) => f.product as string)
+
     return {
         remissionId: Number(ultimo.id),
         alegraId: Number(ultimo.alegra_remission_id),
         number: (ultimo.alegra_remission_number as string) ?? null,
-        entrega: (filas as any[]).map((f) => ({
-            orderItemId: Number(f.order_item_id),
-            quantity: Number(f.quantity),
-        })),
+        huerfanas,
+        entrega: (filas as any[])
+            .filter((f) => f.order_item_id != null)
+            .map((f) => ({
+                orderItemId: Number(f.order_item_id),
+                quantity: Number(f.quantity),
+            })),
     }
 }
 
@@ -404,13 +423,19 @@ export async function remitOrder(
 
     // Las columnas de `orders` son el espejo del ÚLTIMO remito: las leen el
     // tablero, la lista y el selector de estado (ver scripts/41-remitos-parciales.sql).
+    //
+    // EL AVISO DE "DESACTUALIZADO" NO SE BAJA ACÁ, y no es un descuido: si estaba
+    // levantado es porque un remito ANTERIOR quedó diciendo algo que el pedido ya
+    // no dice, y emitir otro papel por lo que faltaba no arregla el primero.
+    // Bajarlo dejaba el pedido en verde con un documento mal en la contabilidad.
+    // remission_synced_at tampoco se mueve mientras el aviso siga en pie: es la
+    // marca contra la que se arma la lista de qué cambió, y adelantarla la vacía.
     await sql`
         UPDATE orders SET
             alegra_remission_id = ${creado.id},
             alegra_remission_number = ${creado.number},
             alegra_remitted_at = NOW(),
-            remission_synced_at = NOW(),
-            remission_stale = FALSE,
+            remission_synced_at = CASE WHEN remission_stale THEN remission_synced_at ELSE NOW() END,
             remission_warnings = ${JSON.stringify(warnings)}::jsonb
         WHERE id = ${orderId}
     `
@@ -449,6 +474,12 @@ export async function updateOrderRemission(orderId: number): Promise<RemissionRe
     const ultimo = await lastRemissionEntrega(orderId)
     if (!ultimo) {
         throw new Error("El pedido no tiene remitos emitidos: no hay nada que actualizar.")
+    }
+    if (ultimo.huerfanas.length > 0) {
+        throw new Error(
+            `El remito ${ultimo.number ?? ""} nombra productos que ya no están en el pedido (${ultimo.huerfanas.join(", ")}). ` +
+                "Actualizarlo los borraría del documento: corregilo en Alegra.",
+        )
     }
     if (ultimo.entrega.length === 0) {
         throw new Error("El remito no tiene ninguna línea del pedido: no se puede recalcular.")

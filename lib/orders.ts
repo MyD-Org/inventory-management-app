@@ -377,7 +377,10 @@ export async function markDocumentsStale(
         UPDATE orders SET
             invoice_stale = (alegra_invoice_id IS NOT NULL),
             remission_stale = CASE
-                WHEN ${deliveredOnTouchedLine} > 0 THEN alegra_remission_id IS NOT NULL
+                -- ::numeric explícito: sin el cast Postgres infiere int4 para el
+                -- parámetro y una línea con cantidad decimal —quantity es
+                -- DECIMAL(10,2)— voltea el UPDATE con el cambio del ítem ya hecho.
+                WHEN ${deliveredOnTouchedLine}::numeric > 0 THEN alegra_remission_id IS NOT NULL
                 ELSE remission_stale
             END
         WHERE id = ${orderId}
