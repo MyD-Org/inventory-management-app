@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Plus, Loader2, X, Trash2 } from "lucide-react"
+import { Plus, Loader2, X, Trash2, Pencil, Check } from "lucide-react"
 import {
     createSpecField,
     createSpecOption,
@@ -24,6 +24,7 @@ import {
     deleteSpecOption,
     toggleSpecFieldOffered,
     toggleSpecOption,
+    updateSpecOption,
 } from "@/lib/order-actions"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useToast } from "@/hooks/use-toast"
@@ -53,6 +54,7 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
     const [newFieldOpen, setNewFieldOpen] = useState(false)
     const [drafts, setDrafts] = useState<Record<string, string>>({})
     const [borrarOpcion, setBorrarOpcion] = useState<{ id: number; label: string } | null>(null)
+    const [editando, setEditando] = useState<{ id: number; valor: string } | null>(null)
     const [borrarCampo, setBorrarCampo] = useState<{ key: string; label: string } | null>(null)
 
     async function run(fn: () => Promise<{ error?: string }>, okMsg: string) {
@@ -75,11 +77,18 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
         if (ok) setDrafts((d) => ({ ...d, [fieldKey]: "" }))
     }
 
+    async function guardarEdicion() {
+        if (!editando) return
+        const valor = editando.valor.trim()
+        if (!valor) return
+        const ok = await run(() => updateSpecOption(editando.id, valor), "Opción renombrada")
+        if (ok) setEditando(null)
+    }
+
     async function addField(formData: FormData) {
-        const ok = await run(
-            () => createSpecField(String(formData.get("key") ?? ""), String(formData.get("label") ?? "")),
-            "Campo creado",
-        )
+        const key = String(formData.get("key") ?? "").trim()
+        if (!key) return
+        const ok = await run(() => createSpecField(key, key), "Campo creado")
         if (ok) setNewFieldOpen(false)
     }
 
@@ -95,20 +104,12 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                     </DialogTrigger>
                     <DialogContent>
                         <DialogHeader>
-                            <DialogTitle>Nuevo campo de pedido</DialogTitle>
+                            <DialogTitle>Nuevo campo de variación</DialogTitle>
                         </DialogHeader>
                         <form action={addField} className="space-y-4">
                             <div>
                                 <Label htmlFor="key">Clave</Label>
                                 <Input id="key" name="key" placeholder="ej: acabado" required />
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    Es el nombre que manda el CRM. Si cambiás una clave existente hay que
-                                    avisar del otro lado o deja de coincidir.
-                                </p>
-                            </div>
-                            <div>
-                                <Label htmlFor="label">Etiqueta</Label>
-                                <Input id="label" name="label" placeholder="ej: Acabado" required />
                             </div>
                             <Button type="submit" disabled={busy} className="w-full">
                                 {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -200,7 +201,41 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                         {field.options.length === 0 && (
                             <p className="text-base text-muted-foreground">Sin opciones todavía.</p>
                         )}
-                        {field.options.map((o) => (
+                        {field.options.map((o) =>
+                            editando?.id === o.id ? (
+                                <span key={o.id} className="inline-flex items-center gap-1">
+                                    <Input
+                                        autoFocus
+                                        className="h-7 w-36 px-2 text-sm"
+                                        value={editando.valor}
+                                        onChange={(e) => setEditando({ id: o.id, valor: e.target.value })}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                e.preventDefault()
+                                                guardarEdicion()
+                                            }
+                                            if (e.key === "Escape") setEditando(null)
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        title="Guardar"
+                                        onClick={guardarEdicion}
+                                        className="rounded-full p-1 hover:bg-secondary"
+                                    >
+                                        <Check className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        title="Cancelar"
+                                        onClick={() => setEditando(null)}
+                                        className="rounded-full p-1 hover:bg-secondary"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                </span>
+                            ) : (
                             <span
                                 key={o.id}
                                 className={`group inline-flex items-center gap-1 rounded-full border pl-2.5 pr-1 py-0.5 text-sm ${
@@ -223,6 +258,15 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                                 <button
                                     type="button"
                                     disabled={busy}
+                                    title="Renombrar la opción"
+                                    onClick={() => setEditando({ id: o.id, valor: o.label })}
+                                    className="rounded-full p-0.5 opacity-0 group-hover:opacity-100 hover:bg-secondary transition-opacity"
+                                >
+                                    <Pencil className="h-3 w-3" />
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={busy}
                                     title="Borrar la opción"
                                     onClick={() => setBorrarOpcion({ id: o.id, label: o.label })}
                                     className="rounded-full p-0.5 opacity-0 group-hover:opacity-100 hover:bg-destructive/15 hover:text-destructive transition-opacity"
@@ -230,7 +274,8 @@ export function SpecsManager({ fields }: { fields: SpecFieldRow[] }) {
                                     <X className="h-3 w-3" />
                                 </button>
                             </span>
-                        ))}
+                            ),
+                        )}
                     </div>
 
                     <div className="flex gap-2 max-w-sm">
