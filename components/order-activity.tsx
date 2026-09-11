@@ -163,6 +163,17 @@ function Cambio({ e }: { e: OrderEvent }) {
                 // La lista YA estaba y cambió porque se editó la ficha del
                 // producto. Se dice el motivo: si el taller ya anotó los
                 // materiales de este pedido en un papel, ese papel quedó viejo.
+                // La lista se puso al día sola al abrir el pedido. No dice por qué:
+                // pudo ser la ficha, la familia o una spec corregida, y a esta
+                // altura no se sabe cuál. Si fue una spec, el cambio está acá al
+                // lado en el mismo historial.
+                if (e.field === "materiales_al_dia") {
+                    return (
+                        <>
+                            puso al día la lista de materiales de <Val>{nuevo}</Val>
+                        </>
+                    )
+                }
                 if (e.field === "materiales_ficha") {
                     return (
                         <>

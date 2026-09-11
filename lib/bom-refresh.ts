@@ -230,3 +230,50 @@ export function bomFingerprint(rows: BomFingerprintRow[]): string {
     lines.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
     return JSON.stringify(lines)
 }
+
+// ---------- ¿La lista del pedido quedó vieja? ----------
+
+// Una línea de la lista del pedido (order_item_materials), o la que saldría hoy
+// de la receta. Los numeric llegan como string desde el driver, de ahí la unión.
+export interface OrderBomLine {
+    materialId: number | string | null
+    label: string
+    qtyPerUnit: number | string
+    qtyTotal: number | string
+    familyId?: number | string | null
+    specValue?: string | null
+}
+
+// Huella de la lista de materiales de UN pedido. Sirve para comparar lo que el
+// pedido tiene guardado contra lo que la receta daría hoy, al abrirlo.
+//
+// Compara por CONTENIDO y no por ids de fila: el BOM se reescribe entero en cada
+// re-explosión, así que los ids son nuevos siempre. Tampoco por orden, que
+// depende de cómo se insertó. Las cantidades se normalizan a número porque el
+// driver devuelve numeric como string ("2.0000" es 2).
+export function orderBomFingerprint(lines: OrderBomLine[]): string {
+    const norm = lines.map((l) => ({
+        m: l.materialId === null || l.materialId === undefined ? null : Number(l.materialId),
+        l: l.label?.trim() ?? "",
+        q: Number(l.qtyPerUnit),
+        t: Number(l.qtyTotal),
+        f: l.familyId === null || l.familyId === undefined ? null : Number(l.familyId),
+        v: l.specValue ?? null,
+    }))
+    norm.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+    return JSON.stringify(norm)
+}
+
+// ¿Lo que el pedido tiene guardado es lo mismo que daría la receta de hoy?
+//
+// Incluye los valores sin mapear: que aparezca —o desaparezca— un "no existe la
+// variante de X" es un cambio que el taller tiene que ver, aunque los materiales
+// resultantes sean los mismos.
+export function sameOrderBom(
+    guardado: { lines: OrderBomLine[]; unmapped: string[] },
+    receta: { lines: OrderBomLine[]; unmapped: string[] },
+): boolean {
+    const mismoUnmapped =
+        JSON.stringify([...(guardado.unmapped ?? [])].sort()) === JSON.stringify([...(receta.unmapped ?? [])].sort())
+    return mismoUnmapped && orderBomFingerprint(guardado.lines) === orderBomFingerprint(receta.lines)
+}

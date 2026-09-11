@@ -6,9 +6,11 @@ import {
     bomRefreshMessage,
     isReportableSkip,
     planBomRefresh,
+    sameOrderBom,
     BOM_REFRESHABLE_STATUSES,
     type BomFingerprintRow,
     type BomRefreshCandidate,
+    type OrderBomLine,
 } from "@/lib/bom-refresh"
 import { ORDER_STATUSES } from "@/lib/order-statuses"
 
@@ -253,5 +255,69 @@ describe("la huella de la receta", () => {
 
     it("una ficha sin materiales tiene huella estable", () => {
         expect(bomFingerprint([])).toBe(bomFingerprint([]))
+    })
+})
+
+describe("¿la lista del pedido quedó vieja?", () => {
+    const linea = (over: Partial<OrderBomLine> = {}): OrderBomLine => ({
+        materialId: 10,
+        label: "Tira LED cálida",
+        qtyPerUnit: 0.6,
+        qtyTotal: 1.2,
+        familyId: null,
+        specValue: null,
+        ...over,
+    })
+    const bom = (lines: OrderBomLine[], unmapped: string[] = []) => ({ lines, unmapped })
+
+    it("la misma lista en distinto orden es la misma lista", () => {
+        const a = bom([linea(), linea({ materialId: 20, label: "Fuente" })])
+        const b = bom([linea({ materialId: 20, label: "Fuente" }), linea()])
+        expect(sameOrderBom(a, b)).toBe(true)
+    })
+
+    it("los numeric como string son la misma cantidad", () => {
+        // order_item_materials es numeric: el driver devuelve "0.6000" y "1.2000".
+        const guardado = bom([linea({ qtyPerUnit: "0.6000", qtyTotal: "1.2000" })])
+        expect(sameOrderBom(guardado, bom([linea()]))).toBe(true)
+    })
+
+    it("cambiar la cantidad de la receta la deja vieja", () => {
+        expect(sameOrderBom(bom([linea()]), bom([linea({ qtyPerUnit: 1.2, qtyTotal: 2.4 })]))).toBe(false)
+    })
+
+    it("un material nuevo en la receta deja vieja la lista", () => {
+        const hoy = bom([linea(), linea({ materialId: 99, label: "Alto impacto" })])
+        expect(sameOrderBom(bom([linea()]), hoy)).toBe(false)
+    })
+
+    it("un material que se sacó de la receta deja vieja la lista", () => {
+        expect(sameOrderBom(bom([linea(), linea({ materialId: 99 })]), bom([linea()]))).toBe(false)
+    })
+
+    it("cambiar el material de una variante de familia deja vieja la lista", () => {
+        const antes = bom([linea({ materialId: 10, familyId: 3, specValue: "calido" })])
+        const hoy = bom([linea({ materialId: 11, familyId: 3, specValue: "calido" })])
+        expect(sameOrderBom(antes, hoy)).toBe(false)
+    })
+
+    it("un aviso de variante sin resolver que ya no corresponde deja vieja la lista", () => {
+        // Mismos materiales, pero el pedido arrastra un "no existe la variante"
+        // de cuando la spec decía otra cosa.
+        expect(sameOrderBom(bom([linea()], ["optic=30"]), bom([linea()], []))).toBe(false)
+    })
+
+    it("un aviso nuevo también la deja vieja", () => {
+        expect(sameOrderBom(bom([linea()], []), bom([linea()], ["equipment_color=aluminio"]))).toBe(false)
+    })
+
+    it("el orden de los avisos no importa", () => {
+        const a = bom([linea()], ["optic=30", "clamp=larga"])
+        const b = bom([linea()], ["clamp=larga", "optic=30"])
+        expect(sameOrderBom(a, b)).toBe(true)
+    })
+
+    it("dos listas vacías son iguales: sin receta no hay nada que rehacer", () => {
+        expect(sameOrderBom(bom([]), bom([]))).toBe(true)
     })
 })
