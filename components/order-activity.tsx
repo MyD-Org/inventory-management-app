@@ -216,6 +216,27 @@ function Cambio({ e }: { e: OrderEvent }) {
                 // El mismo kind cubre los dos documentos y los distingue el campo.
                 // Decir "la factura" cuando salió un remito manda a buscar a Alegra
                 // un documento que no existe.
+                // Vincular y desvincular no emiten nada: decir "emitió" mandaría a
+                // buscar en Alegra un documento que se hizo en otro momento.
+                if (e.field === "remito desvinculado") {
+                    return (
+                        <>
+                            desvinculó el remito <Val>{nuevo ?? "—"}</Val>
+                            {e.body && <> · {e.body}</>}
+                        </>
+                    )
+                }
+                if (e.field === "vinculada") return <>vinculó la factura <Val>{nuevo}</Val></>
+                if (e.field === "desvinculada") {
+                    return nuevo ? <>desvinculó la factura <Val>{nuevo}</Val></> : <>desvinculó la factura</>
+                }
+                if (e.field === "remito" && e.body?.startsWith("Vinculado desde Alegra")) {
+                    return (
+                        <>
+                            vinculó el remito <Val>{nuevo}</Val> · {e.body.replace(/^Vinculado desde Alegra · /, "")}
+                        </>
+                    )
+                }
                 if (e.field === "remito" || e.field === "remito actualizado") {
                     const actualizado = e.field === "remito actualizado"
                     return (

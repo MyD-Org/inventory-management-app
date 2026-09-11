@@ -594,7 +594,13 @@ export async function linkExistingInvoice(orderId: number, ref: string): Promise
 }
 
 /** Suelta la factura del pedido. No toca nada en Alegra: la factura sigue ahí. */
-export async function unlinkInvoice(orderId: number): Promise<void> {
+export async function unlinkInvoice(orderId: number): Promise<{ number: string | null }> {
+    // El número se lee antes de borrarlo: es lo que queda en la historia.
+    const [antes] = await sql`
+        SELECT alegra_invoice_id, alegra_invoice_number FROM orders WHERE id = ${orderId}
+    `
+    if (!antes?.alegra_invoice_id) throw new Error("El pedido no tiene factura vinculada.")
+
     await sql`
         UPDATE orders SET
             alegra_invoice_id = NULL,
@@ -604,4 +610,5 @@ export async function unlinkInvoice(orderId: number): Promise<void> {
             invoice_stale = FALSE
         WHERE id = ${orderId}
     `
+    return { number: (antes.alegra_invoice_number as string) ?? String(antes.alegra_invoice_id) }
 }

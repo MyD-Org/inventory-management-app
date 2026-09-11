@@ -83,13 +83,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
+    // El botón es del admin, como todo lo de Alegra en el pedido.
+    if (session.user.role !== "admin") return NextResponse.json({ error: "Solo un admin" }, { status: 403 })
 
     const orderId = Number.parseInt(params.id, 10)
     if (!Number.isFinite(orderId)) return NextResponse.json({ error: "Pedido inválido" }, { status: 400 })
 
     try {
-        await unlinkInvoice(orderId)
-        await logOrderEvent(orderId, { kind: "invoice", field: "desvinculada", newValue: null })
+        const { number } = await unlinkInvoice(orderId)
+        await logOrderEvent(orderId, { kind: "invoice", field: "desvinculada", newValue: number })
         return NextResponse.json({ ok: true })
     } catch (error) {
         console.error("Error desvinculando la factura:", error)

@@ -15,7 +15,7 @@
 // busca cada uno. La URL sale de abrir la factura en Alegra, siempre funciona y no
 // necesita aclaración.
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -52,24 +52,50 @@ export function LinkInvoiceButton({ orderId }: { orderId: number }) {
     const [buscando, setBuscando] = useState(false)
     const [vinculando, setVinculando] = useState(false)
 
+    // La búsqueda en curso. Cerrar el diálogo la cancela: si no, la respuesta
+    // llegaba después y tiraba un toast de un diálogo que ya no está.
+    const busqueda = useRef<AbortController | null>(null)
+
+    function cambiarAbierto(abierto: boolean) {
+        // Vincular sí es una escritura: una vez mandada no se puede cancelar a
+        // medias, así que mientras tanto el diálogo no se cierra.
+        if (!abierto && vinculando) return
+        if (!abierto) {
+            busqueda.current?.abort()
+            busqueda.current = null
+            setBuscando(false)
+            setEncontrada(null)
+        }
+        setOpen(abierto)
+    }
+
     async function buscar() {
         if (!ref.trim()) return
+        busqueda.current?.abort()
+        const controller = new AbortController()
+        busqueda.current = controller
         setBuscando(true)
         setEncontrada(null)
         try {
             const res = await fetch(
                 `/api/pedidos/${orderId}/factura-existente?ref=${encodeURIComponent(ref.trim())}`,
+                { signal: controller.signal },
             )
             const data = await res.json()
+            if (controller.signal.aborted) return
             if (!res.ok) {
                 toast.error("No se encontró la factura", { description: data.error })
                 return
             }
             setEncontrada(data)
         } catch {
+            if (controller.signal.aborted) return
             toast.error("No se pudo buscar la factura")
         } finally {
-            setBuscando(false)
+            if (busqueda.current === controller) {
+                busqueda.current = null
+                setBuscando(false)
+            }
         }
     }
 
@@ -110,7 +136,7 @@ export function LinkInvoiceButton({ orderId }: { orderId: number }) {
                 Vincular existente
             </Button>
 
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog open={open} onOpenChange={cambiarAbierto}>
                 <DialogContent className="max-w-lg w-[calc(100%-2rem)]">
                     <DialogHeader>
                         <DialogTitle>Vincular una factura de Alegra</DialogTitle>
@@ -189,7 +215,7 @@ export function LinkInvoiceButton({ orderId }: { orderId: number }) {
                     </div>
 
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => setOpen(false)} disabled={vinculando}>
+                        <Button variant="ghost" onClick={() => cambiarAbierto(false)} disabled={vinculando}>
                             Cancelar
                         </Button>
                         <Button onClick={vincular} disabled={vinculando || !encontrada}>
