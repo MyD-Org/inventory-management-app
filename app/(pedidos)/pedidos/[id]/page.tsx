@@ -13,6 +13,8 @@ import { OrderItemsEditor } from "@/components/order-items-editor"
 import { InvoiceButton } from "@/components/invoice-button"
 import { LinkInvoiceButton } from "@/components/link-invoice-button"
 import { RemissionButton } from "@/components/remission-button"
+import { LinkRemissionButton } from "@/components/link-remission-button"
+import { UnlinkDocumentButton } from "@/components/unlink-document-button"
 import { DocumentStaleTag } from "@/components/document-stale-tag"
 import { EmissionSlot, OrderEmissionProvider } from "@/components/order-emission"
 import { OrderMaterials } from "@/components/order-materials"
@@ -132,7 +134,7 @@ function ListaRemitos({
             )}
             <div className="flex flex-col items-start gap-0.5">
                 {remissions.map((r) => (
-                    <div key={r.id} className="flex items-center gap-1.5">
+                    <div key={r.id} className="group flex items-center gap-1.5">
                         {conLink && r.url ? (
                             <a
                                 href={r.url}
@@ -169,6 +171,15 @@ function ListaRemitos({
                             >
                                 <Printer className="h-3.5 w-3.5" />
                             </a>
+                        )}
+                        {/* Desvincular, en cambio, es del admin: con el mismo
+                            criterio que el link a Alegra. */}
+                        {conLink && (
+                            <UnlinkDocumentButton
+                                url={`/api/pedidos/${orderId}/remito-existente?remissionId=${r.id}`}
+                                doc="remito"
+                                number={r.number ?? `#${r.alegraId ?? r.id}`}
+                            />
                         )}
                     </div>
                 ))}
@@ -413,7 +424,7 @@ export default async function OrderDetailPage({
                                         qué cambió, y el botón queda debajo. Así el
                                         aviso no se lleva puesta la columna del
                                         trabajo, que es lo que el taller lee. */}
-                                    <div className="flex items-center gap-1.5">
+                                    <div className="group flex items-center gap-1.5">
                                         <a
                                             href={`https://app.alegra.com/invoice/view/id/${order.alegra_invoice_id}`}
                                             target="_blank"
@@ -423,6 +434,11 @@ export default async function OrderDetailPage({
                                             {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
                                             <ExternalLink className="h-3 w-3" />
                                         </a>
+                                        <UnlinkDocumentButton
+                                            url={`/api/pedidos/${order.id}/factura-existente`}
+                                            doc="factura"
+                                            number={order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
+                                        />
                                         {order.invoice_stale && (
                                             <DocumentStaleTag
                                                 label="Factura desactualizada"
@@ -495,12 +511,16 @@ export default async function OrderDetailPage({
                                     aviso, no de una decisión. Dos botones del mismo
                                     tamaño hacían pensar que había que elegir entre
                                     dos caminos parecidos. */}
+                                {/* Y al lado, vincular uno hecho a mano en Alegra,
+                                    igual que con la factura: emitir otro diría que
+                                    la mercadería salió dos veces. */}
                                 {pendiente > 0 && (
-                                    <div className="no-print">
+                                    <div className="no-print flex flex-wrap items-center gap-1">
                                         <RemissionButton
                                             orderId={order.id}
                                             label={remissions.length > 0 ? "Remitir el resto" : undefined}
                                         />
+                                        <LinkRemissionButton orderId={order.id} />
                                     </div>
                                 )}
                             </div>

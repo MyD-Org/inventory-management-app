@@ -1,5 +1,11 @@
 import { sql } from "@/lib/database"
-import { createRemission, type EstimateLine } from "@/lib/alegra"
+import {
+    createRemission,
+    findRemissionByNumber,
+    getRemission,
+    type EstimateLine,
+    type ExistingInvoice,
+} from "@/lib/alegra"
 import { previewInvoice, type InvoicePreview } from "@/lib/invoicing"
 import {
     deliveryState,
@@ -368,5 +374,194 @@ export async function remitOrder(
         delivery: toDeliverableLines(despues),
         deliveryState: deliveryState(despues),
         dryRun: false,
+    }
+}
+
+// ── Vincular un remito que YA estaba en Alegra ───────────────────────────────
+//
+// Lo mismo que con la factura: el remito se hizo a mano en Alegra —antes de que el
+// pedido existiera en la app, o porque la mercadería salió apurada— y emitir otro
+// sería decir que la mercadería salió dos veces.
+//
+// A DIFERENCIA DE LA FACTURA, HAY QUE DECIR CUÁNTO CUBRE. El pedido lleva la cuenta
+// de lo remitido línea por línea, y un remito vinculado sin cantidades dejaría el
+// pedido diciendo "faltan 10" con el papel de esas 10 ya emitido. Quien vincula
+// dice qué cantidades nombra el papel; por defecto, todo lo pendiente.
+//
+// NO SE LEEN LAS LÍNEAS DEL REMITO para deducirlo: un remito hecho a mano nombra los
+// productos como quiso quien lo cargó —el producto base en vez de la variante, la
+// estaca aparte o no— y adivinar a qué línea del pedido va cada renglón es
+// equivocarse en silencio. Lo decide la persona que tiene el papel adelante.
+
+export interface LinkedRemission extends ExistingInvoice {
+    /** El cliente del remito no es el del pedido. No bloquea: avisa. */
+    clienteDistinto: boolean
+    orderClientName: string | null
+    /** Las líneas del pedido con lo pendiente, para elegir qué cubre el remito. */
+    delivery: DeliverableLine[]
+    deliveryState: DeliveryState
+}
+
+/** De lo que se pega a un remito: la URL de Alegra, el id o el número. */
+export async function resolveRemissionRef(ref: string): Promise<ExistingInvoice | null> {
+    const limpio = ref.trim()
+    if (!limpio) return null
+
+    // Mismo cuidado que con la factura, al revés: la URL de una factura tiene la
+    // misma forma, y tomarle el id sería buscar el remito equivocado.
+    if (/alegra\.com\//i.test(limpio)) {
+        const enUrl = limpio.match(/alegra\.com\/remission\/.*?\/id\/(\d+)/i)
+        if (!enUrl) {
+            throw new Error(
+                "Esa URL de Alegra no es de un remito. Abrí el remito y copiá la dirección: tiene que decir /remission/.",
+            )
+        }
+        return getRemission(Number(enUrl[1]))
+    }
+
+    if (/^\d+$/.test(limpio)) {
+        return (await findRemissionByNumber(limpio)) ?? (await getRemission(Number(limpio)))
+    }
+    return findRemissionByNumber(limpio)
+}
+
+/** Qué remito es, si su cliente coincide y qué falta remitir. No escribe nada. */
+export async function previewRemissionLink(orderId: number, ref: string): Promise<LinkedRemission> {
+    const [order] = await sql`
+        SELECT customer_external_id, customer_name FROM orders WHERE id = ${orderId}
+    `
+    if (!order) throw new Error("El pedido no existe")
+
+    const remission = await resolveRemissionRef(ref)
+    if (!remission) {
+        throw new Error("No se encontró ese remito. Abrilo en Alegra y copiá la dirección del navegador.")
+    }
+
+    // El mismo papel dos veces en el mismo pedido duplicaría lo remitido. En OTRO
+    // pedido sí se deja: un remito puede llevar la mercadería de varios pedidos.
+    const [repetido] = await sql`
+        SELECT 1 FROM order_remissions
+        WHERE order_id = ${orderId} AND alegra_remission_id = ${remission.id}
+        LIMIT 1
+    `
+    if (repetido) {
+        throw new Error(`El remito ${remission.number ?? remission.id} ya está vinculado a este pedido.`)
+    }
+
+    const externalId = String(order.customer_external_id ?? "")
+    const clientIdPedido = externalId.startsWith("alegra:") ? Number(externalId.slice(7)) : null
+    const items = await deliverableItems(orderId)
+
+    return {
+        ...remission,
+        clienteDistinto:
+            clientIdPedido != null && remission.clientId != null && clientIdPedido !== remission.clientId,
+        orderClientName: (order.customer_name as string) ?? null,
+        delivery: toDeliverableLines(items),
+        deliveryState: deliveryState(items),
+    }
+}
+
+/**
+ * Anota en el pedido un remito que ya existía en Alegra, cubriendo las cantidades
+ * de `request` (null = todo lo pendiente).
+ *
+ * NO TOCA ALEGRA: el remito ya está emitido y dice lo que dice. Queda en el pedido
+ * igual que uno emitido desde acá —con sus líneas, sumando a lo remitido—, así que
+ * el resto de la app no tiene que saber de dónde salió.
+ */
+export async function linkExistingRemission(
+    orderId: number,
+    ref: string,
+    request: DeliveryRequestItem[] | null,
+    actor?: { name: string; email?: string | null },
+): Promise<LinkedRemission> {
+    const remission = await previewRemissionLink(orderId, ref)
+
+    const items = await deliverableItems(orderId)
+    const plan = planDelivery(items, request)
+    if ("error" in plan) throw new Error(plan.error)
+
+    // La fecha es la del papel, no la de hoy: la lista de remitos va en orden de
+    // salida, y este salió cuando Alegra dice.
+    const fecha = remission.date ? `${remission.date}T12:00:00Z` : null
+    const [remito] = await sql`
+        INSERT INTO order_remissions (
+            order_id, alegra_remission_id, alegra_remission_number, remitted_at, actor_name, actor_email
+        )
+        VALUES (
+            ${orderId}, ${remission.id}, ${remission.number},
+            COALESCE(${fecha}::timestamptz, NOW()), ${actor?.name ?? null}, ${actor?.email ?? null}
+        )
+        RETURNING id
+    `
+    for (const linea of plan.items) {
+        await sql`
+            INSERT INTO order_remission_items (remission_id, order_item_id, product, quantity)
+            VALUES (${remito.id}, ${linea.orderItemId}, ${linea.product}, ${linea.quantity})
+        `
+    }
+    await refreshDeliveredQuantities(orderId)
+    // Uno vinculado puede ser más viejo que los que ya había: el espejo se
+    // recalcula en vez de pisarlo.
+    await refreshRemissionMirror(orderId)
+
+    const despues = await deliverableItems(orderId)
+    return {
+        ...remission,
+        delivery: toDeliverableLines(despues),
+        deliveryState: deliveryState(despues),
+    }
+}
+
+/**
+ * Las columnas de `orders` son el espejo del ÚLTIMO remito por fecha. Se
+ * recalculan enteras: sin remitos quedan en NULL, que es "sin remitir".
+ */
+async function refreshRemissionMirror(orderId: number): Promise<void> {
+    await sql`
+        UPDATE orders o SET
+            alegra_remission_id = r.alegra_remission_id,
+            alegra_remission_number = r.alegra_remission_number,
+            alegra_remitted_at = r.remitted_at,
+            remission_synced_at = CASE WHEN r.alegra_remission_id IS NULL THEN NULL ELSE NOW() END,
+            remission_warnings = COALESCE(r.warnings, '[]'::jsonb)
+        FROM (SELECT 1) uno
+        LEFT JOIN LATERAL (
+            SELECT alegra_remission_id, alegra_remission_number, remitted_at, warnings
+            FROM order_remissions WHERE order_id = ${orderId}
+            ORDER BY remitted_at DESC, id DESC LIMIT 1
+        ) r ON TRUE
+        WHERE o.id = ${orderId}
+    `
+}
+
+/**
+ * Suelta un remito del pedido. NO TOCA ALEGRA: el documento sigue ahí, emitido.
+ *
+ * Sirve para lo que se vinculó por error, y también para uno emitido desde acá
+ * que en Alegra se anuló: el pedido deja de contarlo y sus unidades vuelven a
+ * pendientes. Si el papel sigue vivo en Alegra, anularlo es cosa de Alegra.
+ */
+export async function unlinkRemission(
+    orderId: number,
+    remissionId: number,
+): Promise<{ number: string | null; delivery: DeliverableLine[] }> {
+    const [borrado] = await sql`
+        DELETE FROM order_remissions
+        WHERE id = ${remissionId} AND order_id = ${orderId}
+        RETURNING alegra_remission_number, alegra_remission_id
+    `
+    if (!borrado) throw new Error("Ese remito no está en este pedido.")
+
+    await refreshDeliveredQuantities(orderId)
+    await refreshRemissionMirror(orderId)
+
+    const despues = await deliverableItems(orderId)
+    return {
+        number:
+            (borrado.alegra_remission_number as string) ??
+            (borrado.alegra_remission_id ? String(borrado.alegra_remission_id) : null),
+        delivery: toDeliverableLines(despues),
     }
 }

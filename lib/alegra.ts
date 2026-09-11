@@ -384,13 +384,23 @@ export async function findInvoiceByNumber(
     numero: string,
     maxPages = 12,
 ): Promise<ExistingInvoice | null> {
+    return findDocumentByNumber("invoices", numero, maxPages)
+}
+
+// Facturas y remitos tienen la misma forma en Alegra —numberTemplate, client,
+// date— y el mismo problema: la API no filtra por número.
+async function findDocumentByNumber(
+    resource: "invoices" | "remissions",
+    numero: string,
+    maxPages: number,
+): Promise<ExistingInvoice | null> {
     const buscado = numero.trim().toLowerCase()
     if (!buscado) return null
     const PAGE = 30
 
     for (let page = 0; page < maxPages; page++) {
         const rows = await alegraFetch<any[]>(
-            `/invoices?limit=${PAGE}&start=${page * PAGE}&order_field=id&order_direction=DESC`,
+            `/${resource}?limit=${PAGE}&start=${page * PAGE}&order_field=id&order_direction=DESC`,
         )
         if (!Array.isArray(rows) || rows.length === 0) return null
 
@@ -444,6 +454,28 @@ export async function updateRemission(
 export async function getRemissionPdfUrl(remissionId: number): Promise<string | null> {
     const rem = await alegraFetch<{ pdf?: string | null }>(`/remissions/${remissionId}?fields=pdf`)
     return rem.pdf || null
+}
+
+/**
+ * Un remito puntual por su id de Alegra. null si no existe.
+ *
+ * Devuelve la misma forma que una factura: los dos documentos traen número,
+ * cliente y fecha en los mismos campos. El total viene en 0 porque así se emiten.
+ */
+export async function getRemission(remissionId: number): Promise<ExistingInvoice | null> {
+    try {
+        const rem = await alegraFetch<any>(`/remissions/${remissionId}`)
+        if (rem?.id == null) return null
+        return toExistingInvoice(rem)
+    } catch (error) {
+        if (error instanceof AlegraError && error.status === 404) return null
+        throw error
+    }
+}
+
+/** Un remito por su número impreso. Mismo recorrido y mismo tope que las facturas. */
+export async function findRemissionByNumber(numero: string, maxPages = 12): Promise<ExistingInvoice | null> {
+    return findDocumentByNumber("remissions", numero, maxPages)
 }
 
 // Emite un remito. ESCRIBE en la contabilidad real, igual que createInvoice.
