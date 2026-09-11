@@ -98,6 +98,7 @@ function ListaRemitos({
     orderId,
     remissions,
     conLink,
+    conAcciones = false,
     pendiente,
     pedido,
     fueraDelPedido,
@@ -105,6 +106,8 @@ function ListaRemitos({
     orderId: number
     remissions: EmittedRemission[]
     conLink: boolean
+    /** Si debajo van los botones de emitir y vincular. */
+    conAcciones?: boolean
     /** Lo que falta remitir. 0 = está todo. */
     pendiente: number
     pedido: number
@@ -112,6 +115,13 @@ function ListaRemitos({
     fueraDelPedido: number
 }) {
     if (remissions.length === 0) {
+        // Con "Emitir remito" y "Vincular existente" justo debajo, el cartel
+        // repite lo que los botones ya dicen. Es como se comporta la celda de
+        // Factura: sin factura muestra los botones y nada más.
+        //
+        // SIN BOTONES SÍ VA: el taller y el mostrador no los tienen, y una celda
+        // muda no distingue "no hay remito" de "algo no cargó".
+        if (conAcciones) return null
         return <span className="text-muted-foreground">Sin emitir</span>
     }
 
@@ -502,6 +512,7 @@ export default async function OrderDetailPage({
                                     orderId={order.id}
                                     remissions={remissions}
                                     conLink
+                                    conAcciones={pendiente > 0}
                                     pendiente={pendiente}
                                     pedido={units}
                                     fueraDelPedido={fueraDelPedido}
