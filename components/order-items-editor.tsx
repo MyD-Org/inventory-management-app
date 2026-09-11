@@ -407,7 +407,7 @@ export function OrderItemsEditor({
                                                     })
                                                 }
                                             >
-                                                <SelectTrigger className="h-9 text-base w-full px-2">
+                                                <SelectTrigger className="h-9 text-base w-full gap-1 px-1.5">
                                                     <span className="min-w-0 flex-1 truncate">
                                                         {draft?.specs[key]
                                                             ? field.labels[draft.specs[key]] ?? draft.specs[key]
@@ -561,7 +561,7 @@ export function OrderItemsEditor({
                                                         })
                                                     }
                                                 >
-                                                    <SelectTrigger className="h-9 text-base w-full px-2">
+                                                    <SelectTrigger className="h-9 text-base w-full gap-1 px-1.5">
                                                         <span className="min-w-0 flex-1 truncate">
                                                             {nuevo.specs[key] ? (
                                                                 field.labels[nuevo.specs[key]] ?? nuevo.specs[key]
