@@ -3,18 +3,19 @@ import { auth } from "@/auth"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
 import { isAlegraConfigured } from "@/lib/alegra"
 import { currentActor, logOrderEvent } from "@/lib/order-events"
-import { previewRemission, previewRemissionUpdate, remitOrder, updateOrderRemission } from "@/lib/remissions"
+import { previewRemission, remitOrder } from "@/lib/remissions"
 import { describeDelivery, type DeliveryRequestItem } from "@/lib/deliveries"
 
 // Emitir un remito de un pedido en Alegra.
 //
 // GET  -> SIMULACIÓN. Qué diría el remito si se emitiera ahora, sin tocar Alegra.
-//         Acepta ?items=1:4,2:3 para simular una entrega parcial, y
-//         ?modo=actualizar para simular la corrección del último remito emitido.
+//         Acepta ?items=1:4,2:3 para simular una entrega parcial.
 // POST -> EMITE de verdad. Con body { items: [{ orderItemId, quantity }] } entrega
 //         solo eso; sin body entrega todo lo que quede pendiente.
-// PUT  -> ACTUALIZA el ÚLTIMO remito emitido, cuando el pedido cambió después.
-//         Edita el mismo remito: no emite otro ni cambia el número.
+//
+// NO HAY PUT: un remito emitido no se corrige desde acá. Dice qué salió ese día y
+// eso no cambia; lo que falta sale en OTRO remito (POST de nuevo). Si un papel
+// quedó mal de verdad, se anula en Alegra, que es donde vive la contabilidad.
 //
 // UN PEDIDO PUEDE TENER VARIOS REMITOS: la mercadería sale por partes y cada
 // salida es un papel propio. POST dos veces no duplica la entrega —lo que frena es
@@ -57,11 +58,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     if (!Number.isFinite(orderId)) return NextResponse.json({ error: "Pedido inválido" }, { status: 400 })
 
     try {
-        // Actualizar no entrega nada nuevo: recalcula lo que el último remito ya
-        // dice. Por eso es otra simulación y no esta con otras cantidades.
-        if (request.nextUrl.searchParams.get("modo") === "actualizar") {
-            return NextResponse.json(await previewRemissionUpdate(orderId))
-        }
         return NextResponse.json(await previewRemission(orderId, parseItemsParam(request)))
     } catch (error) {
         console.error("Error simulando remito:", error)
@@ -122,33 +118,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         return NextResponse.json(resultado)
     } catch (error) {
         console.error("Error emitiendo remito:", error)
-        return NextResponse.json({ error: error instanceof Error ? error.message : "Error" }, { status: 502 })
-    }
-}
-
-// Poner al día el remito de un pedido que se modificó después de emitirse.
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-    const session = await auth()
-    if (!session?.user) {
-        return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-    }
-    if (!isAlegraConfigured()) {
-        return NextResponse.json({ error: "Alegra no está configurado" }, { status: 503 })
-    }
-
-    const orderId = Number.parseInt(params.id, 10)
-    if (!Number.isFinite(orderId)) return NextResponse.json({ error: "Pedido inválido" }, { status: 400 })
-
-    try {
-        const resultado = await updateOrderRemission(orderId)
-        await logOrderEvent(orderId, {
-            kind: "invoice",
-            field: "remito actualizado",
-            newValue: resultado.remissionNumber ?? String(resultado.remissionId),
-        })
-        return NextResponse.json(resultado)
-    } catch (error) {
-        console.error("Error actualizando remito:", error)
         return NextResponse.json({ error: error instanceof Error ? error.message : "Error" }, { status: 502 })
     }
 }

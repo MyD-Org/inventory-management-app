@@ -36,7 +36,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { Loader2, RefreshCw, RotateCcw, Truck, TriangleAlert, X } from "lucide-react"
+import { Loader2, RotateCcw, Truck, TriangleAlert, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { DeliveryState } from "@/lib/deliveries"
 
@@ -67,23 +67,12 @@ interface Preview {
 
 export function RemissionButton({
     orderId,
-    mode = "emitir",
     label,
-    variant = "boton",
 }: {
     orderId: number
-    /** "actualizar" = corregir el último remito, sin entregar nada nuevo. */
-    mode?: "emitir" | "actualizar"
     /** Para distinguir el primer remito de los que siguen: "Remitir el resto". */
     label?: string
-    /**
-     * "link" = texto chico en vez de botón. Para corregir un papel ya emitido, que
-     * sale de un aviso y no de una decisión: al lado del botón de remitir, del
-     * mismo tamaño, parecían dos caminos entre los que hay que elegir.
-     */
-    variant?: "boton" | "link"
 }) {
-    const actualizando = mode === "actualizar"
     const router = useRouter()
     const { toast } = useToast()
     const [open, setOpen] = useState(false)
@@ -106,7 +95,7 @@ export function RemissionButton({
     async function abrir() {
         setCargando(true)
         try {
-            const res = await fetch(`/api/pedidos/${orderId}/remito${actualizando ? "?modo=actualizar" : ""}`)
+            const res = await fetch(`/api/pedidos/${orderId}/remito`)
             const data = await res.json()
             if (!res.ok) {
                 toast.error("No se pudo calcular el remito", { description: data.error })
@@ -188,7 +177,7 @@ export function RemissionButton({
     // muestran (ver el comentario de arriba).
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
     useEffect(() => {
-        if (!open || actualizando) return
+        if (!open) return
         // Los avisos que hay en pantalla son de la selección ANTERIOR: apenas
         // cambia algo dejan de ser ciertos, así que se van ya, antes de esperar la
         // respuesta. Dejarlos describía una selección que quien mira ya cambió.
@@ -228,23 +217,20 @@ export function RemissionButton({
         setEmitiendo(true)
         try {
             const res = await fetch(`/api/pedidos/${orderId}/remito`, {
-                method: actualizando ? "PUT" : "POST",
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: actualizando ? undefined : JSON.stringify({ items: seleccion }),
+                body: JSON.stringify({ items: seleccion }),
             })
             const data = await res.json()
             if (!res.ok) {
-                toast.error(actualizando ? "No se pudo actualizar el remito" : "No se pudo emitir el remito", {
-                    description: data.error,
-                })
+                toast.error("No se pudo emitir el remito", { description: data.error })
                 return
             }
-            const verbo = actualizando ? "actualizado" : "emitido"
-            const nombre = `Remito ${data.remissionNumber ?? data.remissionId} ${verbo}`
+            const nombre = `Remito ${data.remissionNumber ?? data.remissionId} emitido`
             // Después de un remito parcial lo que hace falta saber es cuánto quedó
             // sin remitir, no solo que el papel salió.
             const resto =
-                !actualizando && data.deliveryState === "parcial"
+                data.deliveryState === "parcial"
                     ? "El pedido mantiene unidades sin remitir."
                     : null
             if (data.warnings?.length > 0) {
@@ -257,82 +243,37 @@ export function RemissionButton({
             setOpen(false)
             router.refresh()
         } catch {
-            toast.error(actualizando ? "No se pudo actualizar el remito" : "No se pudo emitir el remito")
+            toast.error("No se pudo emitir el remito")
         } finally {
             setEmitiendo(false)
         }
     }
 
     const sinCliente = preview != null && preview.clientId == null
-    // En "actualizar" el remito ya dijo qué salió: lo que puede faltar son los
-    // renglones, no la selección.
-    const sinNada = actualizando ? (preview?.lines.length ?? 0) === 0 : seleccion.length === 0
+    const sinNada = seleccion.length === 0
 
     return (
         <>
-            {variant === "link" ? (
-                <button
-                    type="button"
-                    onClick={abrir}
-                    disabled={cargando}
-                    className="no-print inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-60"
-                >
-                    {cargando && <Loader2 className="h-3 w-3 animate-spin" />}
-                    {label ?? (actualizando ? "Actualizar remito" : "Emitir remito")}
-                </button>
-            ) : (
-                <Button variant="outline" size="sm" onClick={abrir} disabled={cargando} className="no-print">
-                    {cargando ? (
-                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                    ) : actualizando ? (
-                        <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                    ) : (
-                        <Truck className="mr-2 h-3.5 w-3.5" />
-                    )}
-                    {label ?? (actualizando ? "Actualizar remito" : "Emitir remito")}
-                </Button>
-            )}
+            <Button variant="outline" size="sm" onClick={abrir} disabled={cargando} className="no-print">
+                {cargando ? (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                    <Truck className="mr-2 h-3.5 w-3.5" />
+                )}
+                {label ?? "Emitir remito"}
+            </Button>
 
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="max-w-xl w-[calc(100%-2rem)] overflow-hidden">
                     <DialogHeader>
                         <DialogTitle>
-                            {actualizando ? "Actualizar remito de " : "Remito para "}
-                            {preview?.clientName ?? "el cliente"}
+                            Remito para {preview?.clientName ?? "el cliente"}
                         </DialogTitle>
                     </DialogHeader>
 
                     {preview && (
                         <div className="space-y-3 overflow-hidden">
-                            {actualizando ? (
-                                // Actualizar no entrega nada nuevo: corrige lo que
-                                // el papel dice de cada producto. No hay nada que
-                                // elegir, así que la lista es de solo lectura.
-                                <>
-                                    <p className="text-sm text-muted-foreground">
-                                        Se actualiza el detalle del remito ya emitido. Las cantidades no se
-                                        modifican: una entrega adicional requiere un remito nuevo.
-                                    </p>
-                                    <div className="rounded-md border divide-y">
-                                        {preview.lines.map((l, i) => (
-                                            <div key={i} className="flex items-center gap-3 px-3 py-2 text-sm">
-                                                <span className="min-w-0 flex-1 font-medium break-words">
-                                                    {l.name}
-                                                </span>
-                                                <span className="shrink-0 tabular-nums text-muted-foreground">
-                                                    {l.quantity}
-                                                </span>
-                                            </div>
-                                        ))}
-                                        {preview.lines.length === 0 && (
-                                            <p className="px-3 py-4 text-sm text-muted-foreground text-center">
-                                                No hay ninguna línea que se pueda remitir.
-                                            </p>
-                                        )}
-                                    </div>
-                                </>
-                            ) : (
-                                <>
+                            <>
                                     <p className="text-sm text-muted-foreground">
                                         Cantidades a remitir. Lo que quede fuera del remito queda
                                         sin remitir.
@@ -426,8 +367,7 @@ export function RemissionButton({
                                             {entregadas.map((l) => l.product).join(", ")}.
                                         </p>
                                     )}
-                                </>
-                            )}
+                            </>
 
                             {preview.warnings.length > 0 && (
                                 <div className="rounded-md bg-amber-50 dark:bg-amber-950/40 p-2.5 space-y-1 overflow-hidden">
@@ -452,7 +392,7 @@ export function RemissionButton({
                             línea que el server va a rechazar da un total que nunca
                             va a salir en el papel. */}
                         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                            {!actualizando && preview && !hayError && (
+                            {preview && !hayError && (
                                 <>
                                     Total a remitir{" "}
                                     <span className="font-medium tabular-nums text-foreground">
@@ -468,10 +408,10 @@ export function RemissionButton({
                             </Button>
                             <Button
                                 onClick={emitir}
-                                disabled={emitiendo || sinCliente || sinNada || (!actualizando && hayError)}
+                                disabled={emitiendo || sinCliente || sinNada || hayError}
                             >
                                 {emitiendo && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                                {actualizando ? "Actualizar en Alegra" : "Emitir en Alegra"}
+                                Emitir en Alegra
                             </Button>
                         </div>
                     </DialogFooter>

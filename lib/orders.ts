@@ -314,8 +314,6 @@ export interface Order {
     /** Remito emitido en Alegra. null = todavía no se remitió. */
     alegra_remission_id: number | null
     alegra_remission_number: string | null
-    /** El pedido cambió después de remitir y el remito todavía no se actualizó. */
-    remission_stale: boolean
     items: OrderItem[]
     modified_at: string | null
     delivery_date_verified_at: string | null
@@ -351,40 +349,26 @@ export function normalizeOrigin(v: unknown): OrderOrigin {
 // independientemente. No hace nada si el pedido no tiene ninguno de los dos, así
 // que se puede llamar sin preguntar antes.
 //
-// LA FACTURA Y EL REMITO NO SE ENSUCIAN POR LO MISMO, y la diferencia la trajo la
-// entrega por partes:
+// SOLO LA FACTURA SE ENSUCIA, y el remito no, aunque los dos sean documentos del
+// mismo pedido:
 //
-//   La factura cubre el pedido ENTERO. Cualquier cambio de ítem la desalinea:
-//   agregar un producto significa que hay algo más para cobrar y la factura
-//   emitida ya no lo dice.
+//   La factura cubre el pedido ENTERO y es UNA. Cualquier cambio de ítem la
+//   desalinea —agregar un producto significa que hay algo más para cobrar— y se
+//   arregla reescribiendo la que está.
 //
-//   El remito dice qué mercadería SALIÓ. Agregar un producto no lo desmiente:
-//   esa mercadería nunca salió, así que ningún papel emitido mintió. Lo que
-//   corresponde ahí es emitir OTRO remito cuando salga, no corregir el anterior
-//   —y para eso está "Remitir el resto"—. El remito solo queda viejo cuando el
-//   cambio toca una línea de la que YA se entregó algo: ahí sí el papel nombra
-//   mercadería que salió y la describe mal.
+//   El remito dice qué mercadería SALIÓ ESE DÍA. Que el pedido cambie después no
+//   lo desmiente: lo que salió, salió. Lo que falta sale en OTRO remito, y para
+//   eso está "Remitir el resto". Un papel realmente mal emitido se anula en
+//   Alegra, que es donde vive la contabilidad; la app no reescribe documentos
+//   emitidos.
 //
-// Por eso el llamador pasa cuánto se había entregado de la línea que tocó, leído
-// ANTES de tocarla —borrarla se lleva el dato—. Sin ese dato (una línea nueva) el
-// remito no se ensucia, pero una bandera ya levantada no se baja: eso lo hace
-// ponerlo al día, no otro cambio encima.
-export async function markDocumentsStale(
-    orderId: number,
-    deliveredOnTouchedLine = 0,
-): Promise<void> {
+// La columna orders.remission_stale queda en la base sin que nadie la lea: viene
+// de 29-remito-stale.sql y sacarla es una migración sobre producción a cambio de
+// nada. Lo que importa es que dejó de escribirse.
+export async function markDocumentsStale(orderId: number): Promise<void> {
     await sql`
-        UPDATE orders SET
-            invoice_stale = (alegra_invoice_id IS NOT NULL),
-            remission_stale = CASE
-                -- ::numeric explícito: sin el cast Postgres infiere int4 para el
-                -- parámetro y una línea con cantidad decimal —quantity es
-                -- DECIMAL(10,2)— voltea el UPDATE con el cambio del ítem ya hecho.
-                WHEN ${deliveredOnTouchedLine}::numeric > 0 THEN alegra_remission_id IS NOT NULL
-                ELSE remission_stale
-            END
-        WHERE id = ${orderId}
-          AND (alegra_invoice_id IS NOT NULL OR alegra_remission_id IS NOT NULL)
+        UPDATE orders SET invoice_stale = (alegra_invoice_id IS NOT NULL)
+        WHERE id = ${orderId} AND alegra_invoice_id IS NOT NULL
     `
 }
 
@@ -397,7 +381,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
                delivery_date_estimate::text AS delivery_date_estimate,
                source_conversation, reference, notes, invoice_terms, invoice_notes, created_at, updated_at,
                alegra_invoice_id, alegra_invoice_number, invoice_warnings, invoice_stale,
-               alegra_remission_id, alegra_remission_number, remission_stale,
+               alegra_remission_id, alegra_remission_number,
                modified_at::text AS modified_at,
                delivery_date_verified_at::text AS delivery_date_verified_at
         FROM orders WHERE id = ${orderId}

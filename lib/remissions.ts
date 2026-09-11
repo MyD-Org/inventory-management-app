@@ -1,5 +1,5 @@
 import { sql } from "@/lib/database"
-import { createRemission, updateRemission, type EstimateLine } from "@/lib/alegra"
+import { createRemission, type EstimateLine } from "@/lib/alegra"
 import { previewInvoice, type InvoicePreview } from "@/lib/invoicing"
 import {
     deliveryState,
@@ -30,6 +30,13 @@ import {
 // INDEPENDIENTE DE LA FACTURA, EN CUALQUIER ORDEN: a veces se remite y se factura
 // después, a veces al revés. Ninguno espera al otro. La factura sigue siendo UNA
 // —el cliente paga el pedido entero— y por eso invoiceOrder sí es idempotente.
+//
+// UN REMITO EMITIDO NO SE CORRIGE, y por eso acá no hay nada parecido a
+// updateOrderInvoice. La factura es una sola y se reescribe cuando el pedido
+// cambia; el remito dice qué mercadería salió ESE día, y eso no cambia porque el
+// pedido haya cambiado después. Lo que falta sale en otro remito —para eso está
+// remitOrder de nuevo— y un papel realmente mal emitido se anula en Alegra, que es
+// donde vive la contabilidad.
 
 export interface RemissionLine {
     /** De qué línea del pedido salió este renglón. */
@@ -154,59 +161,6 @@ export async function listOrderRemissions(orderId: number): Promise<EmittedRemis
 }
 
 /**
- * Qué se entregó en el ÚLTIMO remito, línea del pedido por línea del pedido.
- *
- * Es lo que hay que volver a mandar cuando ese remito se pone al día: actualizar
- * corrige QUÉ dice el papel de cada producto, no CUÁNTO salió. Si lo que cambió es
- * cuánto sale, eso es otra entrega y va en un remito nuevo.
- */
-async function lastRemissionEntrega(
-    orderId: number,
-): Promise<{
-    remissionId: number
-    alegraId: number
-    number: string | null
-    /** Productos del remito cuya línea del pedido se borró: ver abajo. */
-    huerfanas: string[]
-    entrega: DeliveryRequestItem[]
-} | null> {
-    const [ultimo] = await sql`
-        SELECT id, alegra_remission_id, alegra_remission_number
-        FROM order_remissions
-        WHERE order_id = ${orderId} AND alegra_remission_id IS NOT NULL
-        ORDER BY remitted_at DESC, id DESC
-        LIMIT 1
-    `
-    if (!ultimo) return null
-
-    const filas = await sql`
-        SELECT order_item_id, product, quantity FROM order_remission_items
-        WHERE remission_id = ${ultimo.id}
-    `
-    // Las líneas cuyo ítem se borró del pedido quedan con order_item_id en NULL
-    // (ON DELETE SET NULL: lo que salió, salió). No se pueden volver a resolver
-    // contra el catálogo —no hay pedido de dónde sacar el producto y las specs—
-    // y omitirlas en silencio reescribiría el remito de Alegra SIN esa mercadería,
-    // que es un documento diciendo que salió menos de lo que salió.
-    const huerfanas = (filas as any[])
-        .filter((f) => f.order_item_id == null)
-        .map((f) => f.product as string)
-
-    return {
-        remissionId: Number(ultimo.id),
-        alegraId: Number(ultimo.alegra_remission_id),
-        number: (ultimo.alegra_remission_number as string) ?? null,
-        huerfanas,
-        entrega: (filas as any[])
-            .filter((f) => f.order_item_id != null)
-            .map((f) => ({
-                orderItemId: Number(f.order_item_id),
-                quantity: Number(f.quantity),
-            })),
-    }
-}
-
-/**
  * Los renglones de Alegra de una entrega, sin importes.
  *
  * EL RECORTE ES PROPORCIONAL: previewInvoice resuelve el pedido ENTERO, y una
@@ -307,38 +261,6 @@ export async function previewRemission(
 }
 
 /**
- * Qué diría el último remito si se pusiera al día ahora. No toca Alegra.
- *
- * NO PASA POR planDelivery, a diferencia de previewRemission: lo que este remito
- * remitió ya está remitido, así que compararlo contra lo pendiente lo rechazaría
- * siempre. La cantidad no se discute acá, es la que el papel ya dice.
- */
-export async function previewRemissionUpdate(orderId: number): Promise<RemissionResult> {
-    const items = await deliverableItems(orderId)
-    const ultimo = await lastRemissionEntrega(orderId)
-    const preview = await previewInvoice(orderId)
-
-    const ordered = new Map(items.map((i) => [i.id, i.quantity]))
-    const lines = ultimo ? toRemissionLines(preview, ordered, ultimo.entrega) : []
-    const warnings = [...preview.warnings]
-    if (!ultimo) warnings.push("El pedido no tiene remito emitido: no hay nada que actualizar.")
-
-    return {
-        orderId,
-        clientId: preview.clientId,
-        clientName: preview.clientName,
-        lines,
-        warnings,
-        remissionId: ultimo?.alegraId ?? null,
-        remissionNumber: ultimo?.number ?? null,
-        remissionUrl: remissionUrl(ultimo?.alegraId ?? null),
-        delivery: toDeliverableLines(items),
-        deliveryState: deliveryState(items),
-        dryRun: true,
-    }
-}
-
-/**
  * Emite UN remito con lo que se entrega ahora y lo deja anotado en el pedido.
  *
  * `request` en null significa "todo lo pendiente": es el caso normal —el pedido
@@ -423,19 +345,12 @@ export async function remitOrder(
 
     // Las columnas de `orders` son el espejo del ÚLTIMO remito: las leen el
     // tablero, la lista y el selector de estado (ver scripts/41-remitos-parciales.sql).
-    //
-    // EL AVISO DE "DESACTUALIZADO" NO SE BAJA ACÁ, y no es un descuido: si estaba
-    // levantado es porque un remito ANTERIOR quedó diciendo algo que el pedido ya
-    // no dice, y emitir otro papel por lo que faltaba no arregla el primero.
-    // Bajarlo dejaba el pedido en verde con un documento mal en la contabilidad.
-    // remission_synced_at tampoco se mueve mientras el aviso siga en pie: es la
-    // marca contra la que se arma la lista de qué cambió, y adelantarla la vacía.
     await sql`
         UPDATE orders SET
             alegra_remission_id = ${creado.id},
             alegra_remission_number = ${creado.number},
             alegra_remitted_at = NOW(),
-            remission_synced_at = CASE WHEN remission_stale THEN remission_synced_at ELSE NOW() END,
+            remission_synced_at = NOW(),
             remission_warnings = ${JSON.stringify(warnings)}::jsonb
         WHERE id = ${orderId}
     `
@@ -452,86 +367,6 @@ export async function remitOrder(
         remissionUrl: creado.url,
         delivery: toDeliverableLines(despues),
         deliveryState: deliveryState(despues),
-        dryRun: false,
-    }
-}
-
-/**
- * Poner al día el ÚLTIMO remito de un pedido que cambió después de emitirse.
- *
- * Espejo de updateOrderInvoice: edita el MISMO remito, no emite otro, y es manual
- * a propósito. Lo único distinto es que acá no hay importes que recalcular.
- *
- * RESPETA LAS CANTIDADES DE ESE REMITO: se corrige lo que el papel dice de cada
- * producto —el color que se resolvió mal, el renglón que cambió de nombre—, no
- * cuánto salió. Si lo que cambió es cuánto sale, eso es otra entrega y va en un
- * remito nuevo.
- */
-export async function updateOrderRemission(orderId: number): Promise<RemissionResult> {
-    const [order] = await sql`
-        SELECT alegra_invoice_number FROM orders WHERE id = ${orderId}
-    `
-    const ultimo = await lastRemissionEntrega(orderId)
-    if (!ultimo) {
-        throw new Error("El pedido no tiene remitos emitidos: no hay nada que actualizar.")
-    }
-    if (ultimo.huerfanas.length > 0) {
-        throw new Error(
-            `El remito ${ultimo.number ?? ""} nombra productos que ya no están en el pedido (${ultimo.huerfanas.join(", ")}). ` +
-                "Actualizarlo los borraría del documento: corregilo en Alegra.",
-        )
-    }
-    if (ultimo.entrega.length === 0) {
-        throw new Error("El remito no tiene ninguna línea del pedido: no se puede recalcular.")
-    }
-
-    const items = await deliverableItems(orderId)
-    const preview = await previewInvoice(orderId)
-    const ordered = new Map(items.map((i) => [i.id, i.quantity]))
-    const lines = toRemissionLines(preview, ordered, ultimo.entrega)
-    if (lines.length === 0) {
-        throw new Error("El pedido no tiene ninguna línea remitible: el remito no se tocó.")
-    }
-
-    const lineas: EstimateLine[] = lines.map((l) => ({
-        id: l.alegraItemId,
-        description: l.description,
-        price: 0,
-        quantity: l.quantity,
-    }))
-
-    const quedaPendiente = items.some((i) => i.quantity - i.delivered > 0.005)
-    const actualizado = await updateRemission(ultimo.alegraId, {
-        lines: lineas,
-        // La referencia a la factura se rehace acá: puede haberse emitido después
-        // del remito, y en ese caso el remito todavía no la nombraba.
-        observations: observaciones(orderId, (order?.alegra_invoice_number as string) ?? null, quedaPendiente),
-    })
-
-    // Recién con Alegra confirmando se baja la bandera.
-    await sql`
-        UPDATE order_remissions SET warnings = ${JSON.stringify(preview.warnings)}::jsonb
-        WHERE id = ${ultimo.remissionId}
-    `
-    await sql`
-        UPDATE orders SET
-            remission_warnings = ${JSON.stringify(preview.warnings)}::jsonb,
-            remission_stale = FALSE,
-            remission_synced_at = NOW()
-        WHERE id = ${orderId}
-    `
-
-    return {
-        orderId,
-        clientId: preview.clientId,
-        clientName: preview.clientName,
-        lines,
-        warnings: preview.warnings,
-        remissionId: actualizado.id,
-        remissionNumber: actualizado.number ?? ultimo.number,
-        remissionUrl: actualizado.url,
-        delivery: toDeliverableLines(items),
-        deliveryState: deliveryState(items),
         dryRun: false,
     }
 }

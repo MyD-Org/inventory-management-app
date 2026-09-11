@@ -218,7 +218,7 @@ export default async function OrderDetailPage({
 
     // Los productos del selector salen del CATÁLOGO de Alegra, no de las hojas
     // de costo: un producto existe porque se vende, y la hoja es opcional.
-    const [needs, extras, consumed, recipes, vocab, products, events, remissions, invoiceDrift, remissionDrift] = await Promise.all([
+    const [needs, extras, consumed, recipes, vocab, products, events, remissions, invoiceDrift] = await Promise.all([
         materialNeeds(id),
         extraConsumedMaterials(id),
         // Lo que hoy está afuera del depósito por el pedido: es lo devolvible.
@@ -230,9 +230,9 @@ export default async function OrderDetailPage({
         listOrderEvents(id),
         // Los remitos emitidos: son varios cuando la mercadería sale por partes.
         listOrderRemissions(id),
-        // Qué se tocó desde que cada documento quedó al día. Vacío si está en hora.
+        // Qué se tocó desde que la factura quedó al día. Vacío si está en hora.
+        // El remito no tiene equivalente: ver el comentario de la celda de remitos.
         order.invoice_stale ? listDocumentDrift(id, "invoice") : Promise.resolve([]),
-        order.remission_stale ? listDocumentDrift(id, "remission") : Promise.resolve([]),
     ])
 
     // Specs en el orden del vocabulario y solo los valores: "ámbar · grampa larga · 25°"
@@ -436,6 +436,14 @@ export default async function OrderDetailPage({
                     {/* El remito es independiente de la factura y en cualquier
                         orden: a veces sale primero uno, a veces el otro.
 
+                        NO HAY "ACTUALIZAR REMITO", a diferencia de la factura, y no
+                        es una falta: la factura es UNA sola y se corrige: si el
+                        pedido cambia, hay que reescribir la que está. El remito no
+                        se corrige, se suma —lo que falta sale en otro papel— y para
+                        eso está "Remitir el resto". Un remito ya emitido dice lo que
+                        salió ese día y eso no cambia; si de verdad quedó mal, se
+                        anula en Alegra, que es donde vive la contabilidad.
+
                         Y son VARIOS cuando la mercadería sale por partes, así que
                         la celda no muestra "el" remito: muestra los que salieron y
                         cuánto del pedido ya se entregó. Eso último lo ve todo el
@@ -473,27 +481,6 @@ export default async function OrderDetailPage({
                                             orderId={order.id}
                                             label={remissions.length > 0 ? "Remitir el resto" : undefined}
                                         />
-                                    </div>
-                                )}
-                                {/* El triángulo explica QUÉ cambió y el link al lado
-                                    es qué hacer al respecto. No se ofrece si el remito
-                                    nombra productos que ya no están en el pedido: ahí
-                                    actualizar solo puede fallar —no hay de dónde
-                                    volver a resolverlos contra el catálogo— y se
-                                    arregla en Alegra, no acá. */}
-                                {order.remission_stale && remissions.length > 0 && (
-                                    <div className="no-print flex items-center gap-1">
-                                        <DocumentStaleTag
-                                            label="Último remito desactualizado"
-                                            changes={remissionDrift.map(describeDrift)}
-                                        />
-                                        {fueraDelPedido <= 0.005 && (
-                                            <RemissionButton
-                                                orderId={order.id}
-                                                mode="actualizar"
-                                                variant="link"
-                                            />
-                                        )}
                                     </div>
                                 )}
                             </div>
