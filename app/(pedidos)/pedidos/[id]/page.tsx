@@ -4,8 +4,7 @@ import { unstable_noStore } from "next/cache"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
 import { consumedMaterials, extraConsumedMaterials, getSpecs, listSellableProducts, materialNeeds, orderItemRecipes, readOrder, reconcileOrderBoms } from "@/lib/orders"
-import { orderNeedsReview } from "@/lib/order-statuses"
-import { STATUS_LABELS } from "@/lib/order-statuses"
+import { orderCustomerLabel, orderNeedsReview, STATUS_LABELS } from "@/lib/order-statuses"
 import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
 import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
@@ -159,7 +158,7 @@ export default async function OrderDetailPage({
     // el tablero, para que un pedido no aparezca vencido en un lado y no en el otro.
     const overdue = (() => {
         const d = order.delivery_date_estimate
-        if (!d || order.status === "retirado" || order.status === "cancelado") return false
+        if (!d || order.status === "retirado" || order.status === "cancelado" || order.status === "en_deposito") return false
         const [y, m, day] = d.split("-").map(Number)
         const eta = new Date(y, m - 1, day)
         const today = new Date()
@@ -175,7 +174,7 @@ export default async function OrderDetailPage({
                 están las migas y la barra de propiedades. */}
             <div className="hidden print:flex items-baseline justify-between gap-4 border-b pb-3 mb-5">
                 <h1 className="text-lg font-semibold">
-                    {order.customer_name ?? order.customer_external_id}
+                    {orderCustomerLabel(order)}
                 </h1>
                 <span className="text-base text-muted-foreground tabular-nums">
                     Pedido #{order.order_number}
@@ -196,7 +195,7 @@ export default async function OrderDetailPage({
                 <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                         <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight leading-tight truncate">
-                            {order.customer_name ?? order.customer_external_id}
+                            {orderCustomerLabel(order)}
                         </h1>
                         {/* Debajo del cliente va solo cuándo entró el pedido. El
                             teléfono, el cliente de Alegra y la referencia viven en la
@@ -227,6 +226,7 @@ export default async function OrderDetailPage({
                             status={order.status}
                             hasInvoice={Boolean(order.alegra_invoice_id)}
                             hasRemission={Boolean(order.alegra_remission_id)}
+                            forStock={order.for_stock}
                         />
                     </Fact>
                     {/* Editable acá y en un solo lugar: antes estaba dos veces,
@@ -258,6 +258,7 @@ export default async function OrderDetailPage({
                         número. Por eso la celda se ve siempre y lo que cambia es el
                         contenido: el admin tiene el link a Alegra, los avisos de
                         desactualizado y los botones; el resto, el número y nada más. */}
+                    {!order.for_stock && (
                     <Fact label="Factura">
                         {!isAdmin ? (
                             <DocumentoEmitido
@@ -315,8 +316,10 @@ export default async function OrderDetailPage({
                         </EmissionSlot>
                         )}
                     </Fact>
+                    )}
                     {/* El remito es independiente de la factura y en cualquier
                         orden: a veces sale primero uno, a veces el otro. */}
+                    {!order.for_stock && (
                     <Fact label="Remito">
                         {!isAdmin ? (
                             <DocumentoEmitido
@@ -358,6 +361,7 @@ export default async function OrderDetailPage({
                         </EmissionSlot>
                         )}
                     </Fact>
+                    )}
                 </dl>
                 </OrderEmissionProvider>
             </header>

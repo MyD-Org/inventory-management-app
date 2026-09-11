@@ -20,8 +20,8 @@ export default async function OrdersPage({
     const session = await auth()
 
     const rows = await sql`
-        SELECT o.id, o.order_number, o.external_id, o.customer_name, o.customer_external_id, o.reference,
-               o.status, o.priority, o.origin, o.source_conversation,
+        SELECT o.id, o.order_number, o.external_id, o.customer_name, o.customer_external_id,
+               o.for_stock, o.status, o.priority, o.origin, o.source_conversation,
                o.delivery_date_estimate::text AS delivery_date_estimate, o.created_at,
                o.alegra_invoice_id, o.alegra_remission_id,
                o.modified_at::text AS modified_at,
@@ -52,6 +52,7 @@ export default async function OrdersPage({
         external_id: r.external_id,
         customer_name: r.customer_name,
         customer_external_id: r.customer_external_id,
+        for_stock: r.for_stock,
         reference: r.reference,
         status: r.status,
         priority: r.priority,

@@ -141,6 +141,31 @@ describe("validateOrderPayloadWith", () => {
         )
         expect(errores).toHaveLength(3)
     })
+
+    it("un pedido para stock no necesita cliente", () => {
+        const errores = validateOrderPayloadWith(
+            {
+                external_id: "MAN-20260909-abc12",
+                for_stock: true,
+                customer: { external_id: "" },
+                items: [{ product: "Optic 1", quantity: 2 }],
+            },
+            vocab,
+        )
+        expect(errores).toEqual([])
+    })
+
+    it("un pedido normal sin cliente sigue fallando", () => {
+        const errores = validateOrderPayloadWith(
+            {
+                external_id: "MAN-20260909-abc12",
+                customer: { external_id: "" },
+                items: [{ product: "Optic 1", quantity: 2 }],
+            },
+            vocab,
+        )
+        expect(errores.some((e) => e.includes("customer.external_id"))).toBe(true)
+    })
 })
 
 describe("normalizePhone", () => {

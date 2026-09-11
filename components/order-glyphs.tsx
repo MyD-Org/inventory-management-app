@@ -14,6 +14,7 @@ const STATUS_STYLE: Record<OrderStatus, { progress: number; className: string }>
     por_facturar: { progress: 0.7, className: "text-violet-500" },
     listo_para_retirar: { progress: 1, className: "text-emerald-500" },
     retirado: { progress: 1, className: "text-emerald-600" },
+    en_deposito: { progress: 1, className: "text-sky-600" },
     cancelado: { progress: 0, className: "text-muted-foreground" },
 }
 

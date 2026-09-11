@@ -12,12 +12,15 @@ export const ORDER_STATUSES = [
     "por_facturar",
     "listo_para_retirar",
     "retirado",
+    "en_deposito",
     "cancelado",
 ] as const
 export type OrderStatus = (typeof ORDER_STATUSES)[number]
 
-// 'cancelado' queda fuera del flujo visible del kanban.
-export const BOARD_STATUSES = ORDER_STATUSES.filter((s) => s !== "cancelado")
+// 'cancelado' y 'en_deposito' quedan fuera del flujo visible del kanban: el
+// primero es un cementerio y el segundo es el final de la producción propia,
+// que se elige solo desde el detalle del pedido.
+export const BOARD_STATUSES = ORDER_STATUSES.filter((s) => s !== "cancelado" && s !== "en_deposito")
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
     por_revisar: "Por revisar",
@@ -29,6 +32,7 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
     por_facturar: "Preparando entrega",
     listo_para_retirar: "Listo para retirar",
     retirado: "Retirado",
+    en_deposito: "En depósito",
     cancelado: "Cancelado",
 }
 
@@ -42,6 +46,7 @@ export const DEFAULT_CUSTOMER_STATUS: Record<OrderStatus, string> = {
     por_facturar: "Preparando entrega",
     listo_para_retirar: "Listo para retirar",
     retirado: "Entregado",
+    en_deposito: "En depósito",
     cancelado: "Cancelado",
 }
 
@@ -64,6 +69,16 @@ export function orderNeedsReview(order: {
     if (!order.modified_at) return false
     if (!order.delivery_date_verified_at) return true
     return new Date(order.modified_at) > new Date(order.delivery_date_verified_at)
+}
+
+// Cómo se nombra al "cliente" de un pedido en tablero, lista y detalle. Los
+// pedidos para stock no tienen cliente: se leen como producción propia.
+export function orderCustomerLabel(order: {
+    for_stock: boolean
+    customer_name: string | null
+    customer_external_id: string
+}): string {
+    return order.for_stock ? "Producción propia" : (order.customer_name ?? order.customer_external_id)
 }
 
 // Campos de variación que NO se administran: existen siempre y no se pueden

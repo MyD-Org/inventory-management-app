@@ -58,6 +58,8 @@ export interface OrderItemPayload {
 export interface OrderPayload {
     external_id: string
     origin?: string
+    /** Producción propia: sin cliente, termina en "en_deposito". */
+    for_stock?: boolean
     customer: {
         external_id: string
         name?: string | null
@@ -80,7 +82,7 @@ export function validateOrderPayloadWith(
 ): string[] {
     const errors: string[] = []
     if (!payload.external_id?.trim()) errors.push("Falta external_id")
-    if (!payload.customer?.external_id?.trim()) errors.push("Falta customer.external_id")
+    if (!payload.for_stock && !payload.customer?.external_id?.trim()) errors.push("Falta customer.external_id")
     if (!payload.items || payload.items.length === 0) errors.push("El pedido no tiene items")
     if (payload.priority && !ORDER_PRIORITIES.includes(payload.priority as any)) {
         errors.push(`priority inválida: "${payload.priority}". Válidas: ${ORDER_PRIORITIES.join(", ")}`)

@@ -55,6 +55,15 @@ export async function createOrderManual(payload: OrderPayload) {
             },
         };
     }
+    // Pedido para stock: producción propia sin cliente. El cliente queda en el
+    // valor fijo 'stock' (mismo estilo que los 'manual:xxx'); la UI lo lee como
+    // "Producción propia" gracias a la columna for_stock.
+    if (payload.for_stock) {
+        payload = {
+            ...payload,
+            customer: { external_id: 'stock', name: null, phone: null },
+        };
+    }
 
     try {
         const errors = await validateOrderPayload(payload);
@@ -85,13 +94,23 @@ export async function updateOrderStatus(id: number, status: string) {
     if (!ORDER_STATUSES.includes(status as any)) return { error: 'Estado inválido' };
 
     try {
+        const [row] = await sql`SELECT for_stock, alegra_invoice_id FROM orders WHERE id = ${id}`;
+        const forStock = Boolean(row?.for_stock);
+
+        // La producción propia no se factura ni se remite: esos estados no
+        // existen para ella. Y "en_deposito" es exclusivo de los pedidos para
+        // stock: un pedido de cliente termina en retirado, con su factura.
+        if (forStock && (status === 'por_facturar' || status === 'listo_para_retirar')) {
+            return { error: 'El pedido es de producción propia: no se factura ni se remite' };
+        }
+        if (status === 'en_deposito' && !forStock) {
+            return { error: 'Solo los pedidos para stock pueden pasar a "En depósito"' };
+        }
+
         // No se puede pasar a listo para retirar sin haber facturado: la factura
         // es el paso previo obligatorio en el flujo.
-        if (status === 'listo_para_retirar') {
-            const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${id}`;
-            if (!order?.alegra_invoice_id) {
-                return { error: 'Falta emitir la factura antes de pasar a listo para retirar' };
-            }
+        if (status === 'listo_para_retirar' && !row?.alegra_invoice_id) {
+            return { error: 'Falta emitir la factura antes de pasar a listo para retirar' };
         }
 
         const [previo] = await sql`SELECT status FROM orders WHERE id = ${id}`;

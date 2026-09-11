@@ -276,6 +276,7 @@ export interface Order {
     order_number: number
     external_id: string
     origin: string
+    for_stock: boolean
     customer_external_id: string
     customer_name: string | null
     customer_phone: string | null
@@ -350,7 +351,7 @@ export async function markDocumentsStale(orderId: number): Promise<void> {
 export async function readOrder(orderId: number): Promise<Order | null> {
     const overrides = await getCustomerStatusMap()
     const [order] = await sql`
-        SELECT id, order_number, external_id, origin, customer_external_id, customer_name,
+        SELECT id, order_number, external_id, origin, for_stock, customer_external_id, customer_name,
                customer_phone, status, priority,
                -- ::text para no arrastrar corrimiento de zona: es una fecha, no un instante
                delivery_date_estimate::text AS delivery_date_estimate,
@@ -636,12 +637,13 @@ export async function createOrder(payload: OrderPayload) {
 
     const inserted = await sql`
         INSERT INTO orders (
-            external_id, origin, customer_external_id, customer_name, customer_phone,
+            external_id, origin, for_stock, customer_external_id, customer_name, customer_phone,
             status, priority, delivery_date_estimate, source_conversation, reference, notes
         )
         VALUES (
             ${externalId},
             ${origin},
+            ${Boolean(payload.for_stock)},
             ${payload.customer.external_id.trim()},
             ${payload.customer.name ?? null},
             ${payload.customer.phone ?? null},

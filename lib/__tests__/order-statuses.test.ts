@@ -3,13 +3,15 @@ import {
     BOARD_STATUSES,
     customerStatus,
     ORDER_STATUSES,
+    orderCustomerLabel,
     STATUS_LABELS,
 } from "@/lib/order-statuses"
 
 describe("estados del pedido", () => {
-    it("el tablero muestra todos los estados menos cancelado", () => {
+    it("el tablero muestra todos los estados menos cancelado y en_deposito", () => {
         expect(BOARD_STATUSES).not.toContain("cancelado")
-        expect(BOARD_STATUSES).toHaveLength(ORDER_STATUSES.length - 1)
+        expect(BOARD_STATUSES).not.toContain("en_deposito")
+        expect(BOARD_STATUSES).toHaveLength(ORDER_STATUSES.length - 2)
     })
 
     it("empieza en por_revisar y termina en retirado", () => {
@@ -43,5 +45,21 @@ describe("estados del pedido", () => {
 
     it("un estado desconocido se devuelve tal cual en vez de romper", () => {
         expect(customerStatus("inventado")).toBe("inventado")
+    })
+
+    it("en_deposito tiene etiqueta para el taller y para el cliente", () => {
+        expect(STATUS_LABELS.en_deposito).toBe("En depósito")
+    })
+
+    it("los pedidos para stock se nombran Producción propia", () => {
+        expect(
+            orderCustomerLabel({ for_stock: true, customer_name: null, customer_external_id: "stock" }),
+        ).toBe("Producción propia")
+        expect(
+            orderCustomerLabel({ for_stock: false, customer_name: "Juan", customer_external_id: "alegra:1" }),
+        ).toBe("Juan")
+        expect(
+            orderCustomerLabel({ for_stock: false, customer_name: null, customer_external_id: "manual:juan" }),
+        ).toBe("manual:juan")
     })
 })
