@@ -6,7 +6,7 @@ import { sql } from "@/lib/database"
 import { consumedMaterials, extraConsumedMaterials, getSpecs, listSellableProducts, materialNeeds, orderItemRecipes, readOrder, reconcileOrderBoms } from "@/lib/orders"
 import { orderNeedsReview } from "@/lib/order-statuses"
 import { acceptsItemChanges, STATUS_LABELS } from "@/lib/order-statuses"
-import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
+import { ChevronRight, ExternalLink, MessageSquare, Printer } from "lucide-react"
 import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
 import { OrderItemsEditor } from "@/components/order-items-editor"
@@ -93,12 +93,14 @@ function DocumentoEmitido({ numero, genero }: { numero: string | null; genero: "
 // taller y el mostrador no entran a Alegra y el link es una puerta a un sistema
 // que les pediría una cuenta que no tienen.
 function ListaRemitos({
+    orderId,
     remissions,
     conLink,
     pendiente,
     pedido,
     fueraDelPedido,
 }: {
+    orderId: number
     remissions: EmittedRemission[]
     conLink: boolean
     /** Lo que falta remitir. 0 = está todo. */
@@ -129,31 +131,47 @@ function ListaRemitos({
                 </span>
             )}
             <div className="flex flex-col items-start gap-0.5">
-                {remissions.map((r) =>
-                    conLink && r.url ? (
-                        <a
-                            key={r.id}
-                            href={r.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                        >
-                            {r.number ?? `#${r.alegraId}`}
-                            <span className="font-normal text-muted-foreground tabular-nums">
-                                · {unidades(r)} u.
+                {remissions.map((r) => (
+                    <div key={r.id} className="flex items-center gap-1.5">
+                        {conLink && r.url ? (
+                            <a
+                                href={r.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                            >
+                                {r.number ?? `#${r.alegraId}`}
+                                <span className="font-normal text-muted-foreground tabular-nums">
+                                    · {unidades(r)} u.
+                                </span>
+                                <ExternalLink className="h-3 w-3" />
+                            </a>
+                        ) : (
+                            <span className="text-sm font-medium">
+                                {r.number ?? `#${r.alegraId}`}
+                                <span className="font-normal text-muted-foreground tabular-nums">
+                                    {" · "}
+                                    {unidades(r)} u.
+                                </span>
                             </span>
-                            <ExternalLink className="h-3 w-3" />
-                        </a>
-                    ) : (
-                        <span key={r.id} className="text-sm font-medium">
-                            {r.number ?? `#${r.alegraId}`}
-                            <span className="font-normal text-muted-foreground tabular-nums">
-                                {" · "}
-                                {unidades(r)} u.
-                            </span>
-                        </span>
-                    ),
-                )}
+                        )}
+                        {/* IMPRIMIR ES DE TODOS, a diferencia del link: el que
+                            entrega la mercadería es el taller o el mostrador, y
+                            el papel va con ella. Abre el PDF que arma Alegra. */}
+                        {r.alegraId && (
+                            <a
+                                href={`/pedidos/${orderId}/remitos/${r.id}/pdf`}
+                                target="_blank"
+                                rel="noreferrer"
+                                title={`Imprimir el remito ${r.number ?? ""}`.trim()}
+                                aria-label={`Imprimir el remito ${r.number ?? ""}`.trim()}
+                                className="no-print inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                            >
+                                <Printer className="h-3.5 w-3.5" />
+                            </a>
+                        )}
+                    </div>
+                ))}
             </div>
             {fueraDelPedido > 0.005 && (
                 <span
@@ -453,6 +471,7 @@ export default async function OrderDetailPage({
                     <Fact label={remissions.length > 1 ? "Remitos" : "Remito"}>
                         {!isAdmin ? (
                             <ListaRemitos
+                                orderId={order.id}
                                 remissions={remissions}
                                 conLink={false}
                                 pendiente={pendiente}
@@ -463,6 +482,7 @@ export default async function OrderDetailPage({
                         <EmissionSlot doc="remission">
                             <div className="flex flex-col items-start gap-1.5">
                                 <ListaRemitos
+                                    orderId={order.id}
                                     remissions={remissions}
                                     conLink
                                     pendiente={pendiente}
