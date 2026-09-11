@@ -160,6 +160,16 @@ function Cambio({ e }: { e: OrderEvent }) {
                 if (e.field === "materiales") {
                     return <>cargó la lista de materiales de <Val>{nuevo}</Val></>
                 }
+                // La lista YA estaba y cambió porque se editó la ficha del
+                // producto. Se dice el motivo: si el taller ya anotó los
+                // materiales de este pedido en un papel, ese papel quedó viejo.
+                if (e.field === "materiales_ficha") {
+                    return (
+                        <>
+                            actualizó la lista de materiales de <Val>{nuevo}</Val> porque cambió su ficha
+                        </>
+                    )
+                }
                 return viejo && nuevo && viejo !== nuevo ? (
                     <>
                         cambió <Val tachado>{viejo}</Val> <span aria-hidden>→</span> <Val>{nuevo}</Val>

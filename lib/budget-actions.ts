@@ -7,6 +7,8 @@
 import { neon } from '@neondatabase/serverless';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
+import { refreshBomsForBudget } from '@/lib/orders';
+import { bomFingerprint, bomRefreshMessage, type BomFingerprintRow, type BomRefreshReport } from '@/lib/bom-refresh';
 
 const sql = neon(process.env.DATABASE_URL!);
 
@@ -222,6 +224,27 @@ function validBudgetPayload(p: BudgetPayload): string | null {
     return null;
 }
 
+// Lee la lista de materiales de la ficha para sacarle la huella. La huella —qué
+// cuenta como "cambió la receta" y qué no— la calcula lib/bom-refresh.ts, que no
+// toca la base y por eso se puede testear.
+async function readBomFingerprint(budgetId: number): Promise<string> {
+    const rows = await sql`
+        SELECT
+            bm.material_id, bm.label, bm.qty, bm.spec_field_key, bm.family_id,
+            COALESCE(
+                json_agg(
+                    json_build_object('v', o.spec_value, 'm', o.material_id, 'q', o.qty)
+                ) FILTER (WHERE o.id IS NOT NULL),
+                '[]'
+            ) AS options
+        FROM budget_materials bm
+        LEFT JOIN budget_material_options o ON o.budget_material_id = bm.id
+        WHERE bm.budget_id = ${budgetId}
+        GROUP BY bm.id, bm.material_id, bm.label, bm.qty, bm.spec_field_key, bm.family_id
+    `;
+    return bomFingerprint(rows as unknown as BomFingerprintRow[]);
+}
+
 // Crea (id null) o actualiza (id) un presupuesto completo. Las líneas se reemplazan
 // (delete + insert): simple y suficiente para el volumen de un taller.
 export async function saveBudget(id: number | null, payload: BudgetPayload) {
@@ -257,6 +280,8 @@ export async function saveBudget(id: number | null, payload: BudgetPayload) {
         }
 
         let budgetId = id;
+        // null = ficha nueva: no hay pedidos en marcha que dependan de ella.
+        let bomAntes: string | null = null;
         if (budgetId == null) {
             const [row] = await sql`
                 INSERT INTO budgets (name, description, alegra_item_id, status, margin_pct, created_by)
@@ -274,6 +299,8 @@ export async function saveBudget(id: number | null, payload: BudgetPayload) {
                 RETURNING id
             `;
             if (updated.length === 0) return { error: 'Presupuesto no encontrado' };
+            // Antes de borrar las líneas: después ya no hay con qué comparar.
+            bomAntes = await readBomFingerprint(budgetId);
             await sql`DELETE FROM budget_materials WHERE budget_id = ${budgetId}`;
             await sql`DELETE FROM budget_labor WHERE budget_id = ${budgetId}`;
             await sql`DELETE FROM budget_extras WHERE budget_id = ${budgetId}`;
@@ -309,8 +336,22 @@ export async function saveBudget(id: number | null, payload: BudgetPayload) {
             `;
         }
 
+        // La ficha cambió de receta: los pedidos que todavía se están
+        // fabricando con ella tienen que descontar lo que dice la ficha de
+        // ahora, no la copia que se congeló cuando entró el pedido. Los que ya
+        // descontaron stock o ya están fabricados no se tocan: vuelven en
+        // `pending` para que quien guardó sepa cuáles mirar a mano.
+        let bomRefresh: BomRefreshReport | null = null;
+        if (bomAntes !== null && (await readBomFingerprint(budgetId)) !== bomAntes) {
+            bomRefresh = await refreshBomsForBudget(budgetId);
+            if (bomRefresh.updated.length > 0) {
+                revalidatePath('/pedidos');
+                for (const o of bomRefresh.updated) revalidatePath(`/pedidos/${o.orderId}`);
+            }
+        }
+
         revalidatePath('/fichas');
-        return { success: true, id: budgetId };
+        return { success: true, id: budgetId, bomRefresh: bomRefresh && bomRefreshMessage(bomRefresh) };
     } catch (error) {
         console.error('Error saving budget:', error);
         return { error: 'Error al guardar el presupuesto' };
