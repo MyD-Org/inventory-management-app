@@ -127,6 +127,40 @@ export function OrderItemsEditor({
     // porcentajes fijos, agregar un campo de spec volvía a romperlo.
     const anchoCol = (kind: string) => (kind === "boolean" ? "w-[80px]" : "")
 
+    // ...pero en partes iguales tampoco: "Óptica" nunca pasa de "25°" y se
+    // llevaba el mismo lugar que "Color de LED", donde "Blanco calido 3000"
+    // quedaba cortado. Cada columna pide según el valor más largo que el
+    // VOCABULARIO admite, así que el reparto se acomoda solo cuando se agregan
+    // campos o valores, sin tocar nada acá.
+    //
+    // Manda el VALOR y no el título: "Óptica (grados)" es un título largo para
+    // una columna que solo muestra "25°", y el título puede partirse en dos
+    // líneas sin perder nada mientras que el valor cortado obliga a abrir la
+    // fila para leerlo.
+    //
+    // Con piso y techo: una columna no puede quedar ilegible ni comerse la fila.
+    // El piso es más alto que el valor más corto porque del ancho hay que
+    // descontar el padding de la celda, y al abrir la fila ese lugar lo ocupa un
+    // desplegable que se lleva otro tanto en su flecha (por eso las celdas de
+    // specs van con menos padding en la fila abierta que en la cerrada).
+    // El texto libre no tiene valores conocidos (cualquier cosa puede entrar),
+    // así que pide una medida fija y se recorta con puntos suspensivos.
+    const pesoCol = (field: SpecField) => {
+        if (field.kind === "boolean") return 0
+        if (field.kind === "text") return 16
+        const valores = field.options.map((o) => field.labels[o] ?? o)
+        const masLargo = Math.max(...valores.map((v) => v.length), 0)
+        return Math.min(Math.max(masLargo, 10), 20)
+    }
+
+    // Lo que queda para las specs después de Cant. (72px) y Producto (18%).
+    const ESPACIO_SPECS = 78
+    const pesoTotal = columnas.reduce((total, [, field]) => total + pesoCol(field), 0)
+    const anchoSpec = (field: SpecField) =>
+        field.kind === "boolean" || pesoTotal === 0
+            ? undefined
+            : `${((pesoCol(field) / pesoTotal) * ESPACIO_SPECS).toFixed(2)}%`
+
     // Specs de corrido, solo los valores, en el orden del vocabulario.
     const specsLine = (specs: Record<string, string>) =>
         Object.keys(vocab)
@@ -175,11 +209,15 @@ export function OrderItemsEditor({
                             {columnas.map(([key, field]) => (
                                 <th
                                     key={key}
+                                    style={{ width: anchoSpec(field) }}
                                     className={`px-3 py-2 text-sm font-medium text-muted-foreground ${anchoCol(
                                         field.kind,
                                     )}`}
                                 >
-                                    <span className="block truncate" title={field.label}>
+                                    {/* Se parte en líneas en vez de cortarse: el ancho
+                                        lo decide el valor más largo (ver pesoCol) y
+                                        un título cortado no se entiende. */}
+                                    <span className="block leading-tight" title={field.label}>
                                         {field.label}
                                     </span>
                                 </th>
@@ -346,7 +384,10 @@ export function OrderItemsEditor({
                                 </td>
 
                                 {columnas.map(([key, field]) => (
-                                    <td key={key} className="px-3 py-2">
+                                    // px-2 y no px-3 como en la fila cerrada: acá el
+                                    // ancho se lo come el control, así que cada píxel
+                                    // que no sea padding es texto que se lee.
+                                    <td key={key} className="px-2 py-2">
                                         {field.kind === "boolean" ? (
                                             <label
                                                 className="flex items-center h-9 cursor-pointer select-none"
@@ -397,7 +438,7 @@ export function OrderItemsEditor({
                                                     })
                                                 }
                                             >
-                                                <SelectTrigger className="h-9 text-base w-full px-2">
+                                                <SelectTrigger className="h-9 text-sm w-full px-2 gap-1">
                                                     <span className="truncate">
                                                         {draft?.specs[key]
                                                             ? field.labels[draft.specs[key]] ?? draft.specs[key]
