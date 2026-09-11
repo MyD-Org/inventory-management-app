@@ -1,5 +1,5 @@
 import { resolveBom, sameSpecs, type BomLine, type BomOption } from "@/lib/bom"
-import { bomRefreshDecision, type BomRefreshReport } from "@/lib/bom-refresh"
+import { planBomRefresh, type BomRefreshReport } from "@/lib/bom-refresh"
 import { sql } from "@/lib/database"
 import { customerStatus as toCustomerStatus, type OrderStatus as Status } from "@/lib/order-statuses"
 import { logOrderEvent } from "@/lib/order-events"
@@ -1459,28 +1459,23 @@ export async function refreshBomsForBudget(budgetId: number): Promise<BomRefresh
             ORDER BY o.id ASC
         `
 
-        for (const pedido of pedidos as any[]) {
-            // La referencia es como el taller nombra al pedido; el external_id es
-            // el del CRM y sirve igual cuando no hay referencia cargada.
-            const orden = {
-                orderId: pedido.id as number,
-                label: (pedido.reference as string | null)?.trim() || String(pedido.external_id),
-            }
-            const decision = bomRefreshDecision({
-                status: String(pedido.status),
-                consumed: Boolean(pedido.consumed),
-            })
+        // Quién se rehace y quién no lo decide lib/bom-refresh.ts; acá solo se
+        // ejecuta.
+        const plan = planBomRefresh(
+            (pedidos as any[]).map((p) => ({
+                orderId: p.id as number,
+                externalId: String(p.external_id),
+                reference: (p.reference as string | null) ?? null,
+                status: String(p.status),
+                consumed: Boolean(p.consumed),
+            })),
+        )
+        report.pending = plan.pending
 
-            if (!decision.refresh) {
-                // 'cerrado' no se reporta: el BOM de un pedido retirado o
-                // cancelado es historia, no algo pendiente de revisar.
-                if (decision.skip && decision.skip !== "cerrado") {
-                    report.pending.push({ ...orden, reason: decision.skip })
-                }
-                continue
-            }
-
+        for (const orden of plan.refresh) {
             const rehechas = await reexplodeOrderItems(orden.orderId, budgetId)
+            // Vacío = ninguna línea se pudo rehacer: el pedido quedó como estaba,
+            // así que no se anuncia como actualizado ni se le registra nada.
             if (rehechas.length === 0) continue
 
             report.updated.push(orden)

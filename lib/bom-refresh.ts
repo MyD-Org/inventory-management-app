@@ -92,3 +92,102 @@ export function bomRefreshMessage(report: BomRefreshReport): { title: string; de
 
     return { title, description: partes.join(" · ") }
 }
+
+// A quién se le rehace el BOM y a quién no, decidido de una vez sobre TODOS los
+// pedidos que usan la ficha. Separar el reparto de la consulta es lo que permite
+// testear la parte que importa —la clasificación y cómo se nombra cada pedido—
+// sin levantar Postgres.
+//
+// `refresh` son los que hay que volver a explotar; `pending` los que quedaron
+// sin tocar y alguien tiene que mirar. Cuáles terminaron efectivamente
+// actualizados lo sabe el que explota (una línea puede fallar), así que
+// `updated` lo arma el llamador.
+export interface BomRefreshCandidate {
+    orderId: number
+    externalId: string
+    reference: string | null
+    status: string
+    consumed: boolean
+}
+
+export interface BomRefreshPlan {
+    refresh: BomRefreshOrder[]
+    pending: BomRefreshReport["pending"]
+}
+
+// Cómo lo nombra el taller: la referencia si la tiene cargada, si no el id con
+// el que entró desde el CRM. Nunca el id interno, que no le dice nada a nadie.
+export function bomRefreshLabel(order: { externalId: string; reference: string | null }): string {
+    return order.reference?.trim() || String(order.externalId)
+}
+
+export function planBomRefresh(candidates: BomRefreshCandidate[]): BomRefreshPlan {
+    const plan: BomRefreshPlan = { refresh: [], pending: [] }
+
+    for (const candidate of candidates) {
+        const orden: BomRefreshOrder = { orderId: candidate.orderId, label: bomRefreshLabel(candidate) }
+        const decision = bomRefreshDecision(candidate)
+
+        if (decision.refresh) {
+            plan.refresh.push(orden)
+            continue
+        }
+        // 'cerrado' no se reporta: el BOM de un pedido retirado o cancelado es
+        // historia, no algo pendiente de revisar.
+        if (decision.skip && decision.skip !== "cerrado") {
+            plan.pending.push({ ...orden, reason: decision.skip })
+        }
+    }
+
+    return plan
+}
+
+// ---------- Huella de la receta ----------
+
+// Una línea de la lista de materiales de la ficha, como vuelve de la base.
+// Los numeric llegan como string desde el driver (ver 32-stock-decimal.sql), de
+// ahí la unión.
+export interface BomFingerprintRow {
+    material_id: number | string | null
+    label: string
+    qty: number | string
+    spec_field_key: string | null
+    family_id: number | string | null
+    options: Array<{ v: string; m: number | string | null; q: number | string | null }>
+}
+
+const num = (v: number | string | null | undefined): number | null =>
+    v === null || v === undefined || v === "" ? null : Number(v)
+
+// Huella de la RECETA: qué material sale, cuánto, con qué nombre y qué variantes.
+// Sirve para saber si un guardado de la ficha cambió lo que se va a descontar
+// del depósito o solo el resto (margen, mano de obra, descripción).
+//
+// Hace falta porque las líneas se reemplazan enteras en cada guardado (delete +
+// insert): los ids son nuevos siempre, así que sin comparar contenido no hay
+// forma de distinguir un cambio real de un guardado que no tocó nada — y
+// re-explotar de gusto llenaría de eventos el historial de todos los pedidos en
+// marcha.
+//
+// NO incluye unit_cost: el costo de la hoja no cambia qué se descuenta, y en el
+// BOM del pedido ni siquiera se copia. Cambiar el precio de un material no tiene
+// por qué tocar ningún pedido.
+//
+// El orden lo pone esta función y no el ORDER BY: dos guardados con las mismas
+// líneas en distinto orden son la misma receta, y las cantidades se normalizan a
+// número porque el driver puede devolver "2.00" donde antes devolvía "2".
+export function bomFingerprint(rows: BomFingerprintRow[]): string {
+    const lines = rows.map((r) => ({
+        material_id: num(r.material_id),
+        label: r.label?.trim() ?? "",
+        qty: num(r.qty),
+        spec_field_key: r.spec_field_key?.trim() || null,
+        family_id: num(r.family_id),
+        options: (r.options ?? [])
+            .map((o) => ({ v: String(o.v), m: num(o.m), q: num(o.q) }))
+            .sort((a, b) => a.v.localeCompare(b.v) || (a.m ?? 0) - (b.m ?? 0)),
+    }))
+
+    lines.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+    return JSON.stringify(lines)
+}
