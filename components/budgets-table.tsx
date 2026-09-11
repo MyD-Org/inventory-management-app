@@ -10,6 +10,7 @@ import { deleteBudget } from "@/lib/budget-actions"
 import { useToast } from "@/hooks/use-toast"
 import { formatArs } from "@/components/budget-editor"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { DuplicateBudgetButton } from "@/components/duplicate-budget-button"
 
 export interface BudgetRow {
     id: number
@@ -21,7 +22,7 @@ export interface BudgetRow {
     created_at: string
 }
 
-export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
+export function BudgetsTable({ budgets, alegraEnabled = false }: { budgets: BudgetRow[]; alegraEnabled?: boolean }) {
     const router = useRouter()
     const { toast } = useToast()
     const [pendingId, setPendingId] = useState<number | null>(null)
@@ -75,16 +76,20 @@ export function BudgetsTable({ budgets }: { budgets: BudgetRow[] }) {
                                 </TableCell>
                                 <TableCell className="text-muted-foreground">{b.created_by || "-"}</TableCell>
                                 <TableCell className="text-right">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={(e) => {
-                                            e.stopPropagation()
-                                            setPendingId(b.id)
-                                        }}
-                                    >
-                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
+                                    <div className="flex justify-end gap-1">
+                                        <DuplicateBudgetButton budgetId={b.id} budgetName={b.name} alegraEnabled={alegraEnabled} />
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Eliminar"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                setPendingId(b.id)
+                                            }}
+                                        >
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         )
