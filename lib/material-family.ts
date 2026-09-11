@@ -19,10 +19,16 @@ export interface MaterialFamilyOption {
 
 export type CostStrategy = "average" | "highest" | "specific"
 
+// Valor de spec de las opciones de una familia MANUAL (spec_field_key NULL).
+// Una opción real de variación nunca es vacía, así el sentinela no colisiona.
+export const MANUAL_SPEC_VALUE = ""
+
 export interface MaterialFamily {
     id: number
     name: string
-    specFieldKey: string
+    // null = familia manual: no varía según ninguna variación, es solo un grupo
+    // de materiales del que el operario elige uno al fabricar.
+    specFieldKey: string | null
     // Con qué variante se costea la línea que use esta familia. null = familia
     // incompleta: la UI no la deja usar hasta que se elija una.
     defaultSpecValue: string | null
@@ -61,16 +67,21 @@ export function optionsBySpecValue(family: MaterialFamily): Map<string, Material
 }
 
 // La variante con la que se costea. Si el color tiene varios materiales, usa el
-// marcado como default; si no hay marca, cae al primero. Cae a la primera opción
-// de la familia si la predeterminada no existe: es mejor costear con algo cargado
-// que dejar la línea en cero.
+// marcado como default; si no hay marca, cae al primero. Cae a la opción marcada
+// como default —o a la primera de la familia— si la predeterminada no existe: es
+// mejor costear con algo cargado que dejar la línea en cero.
 export function defaultOption(family: MaterialFamily): MaterialFamilyOption | undefined {
+    if (family.specFieldKey === null) {
+        // Familia manual: todas las opciones comparten el sentinela, no hay
+        // "variante predeterminada". El material de referencia es el marcado.
+        return family.options.find((o) => o.isDefault) ?? family.options[0]
+    }
     const bySpec = optionsBySpecValue(family)
     const candidates = family.defaultSpecValue ? bySpec.get(family.defaultSpecValue) : undefined
     if (candidates && candidates.length > 0) {
         return candidates.find((o) => o.isDefault) ?? candidates[0]
     }
-    return family.options[0]
+    return family.options.find((o) => o.isDefault) ?? family.options[0]
 }
 
 // Costo unitario de la familia según la estrategia elegida.
@@ -117,6 +128,9 @@ export function familyLineOptions(
     // las borraría en silencio y el taller volvería a descontar de menos.
     qtyBySpecValue?: Map<string, number | null>,
 ): FamilyLineFields["options"] {
+    // Familia manual: no hay variantes que guardar en la hoja. La elección de
+    // material pasa en el descuento, contra la familia viva.
+    if (family.specFieldKey === null) return []
     return Array.from(optionsBySpecValue(family).values()).map((options) => {
         const chosen = options.find((o) => o.isDefault) ?? options[0]
         return {

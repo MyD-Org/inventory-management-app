@@ -191,9 +191,11 @@ function validBudgetPayload(p: BudgetPayload): string | null {
             return 'Hay líneas de materiales inválidas';
         }
         const options = m.options ?? [];
-        if (m.family_id != null && !m.spec_field_key?.trim()) {
-            return `La línea "${m.label.trim()}" usa una familia pero no dice según qué campo varía`;
-        }
+        // Una línea de familia puede no tener spec_field_key: es una familia MANUAL
+        // (grupo sin variación, scripts/41-familia-manual.sql), cuyo campo autoritativo
+        // es el de la familia —al explotar el BOM manda COALESCE(familia, línea)—.
+        // Lo que sí se exige es coherencia interna: si la línea declara variantes
+        // propias, tiene que decir según qué campo varían.
         if (options.length > 0 && !m.spec_field_key?.trim()) {
             return `La línea "${m.label.trim()}" tiene variantes pero no dice según qué campo varía`;
         }

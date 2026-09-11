@@ -17,11 +17,13 @@ export interface SpecFieldChoice {
 //
 // Solo campos de LISTA: variar por un texto libre ('other') no tiene sentido, y
 // los boolean ('stake', con/sin estaca) son un agregado o no de la receta, no una
-// sustitución de material.
+// sustitución de material. Los campos SIN opciones también se listan: así se puede
+// elegir uno recién creado y cargarle las opciones (familias) o ver el aviso de
+// que faltan (fichas) en vez de un campo invisible que parece un bug.
 export async function listSpecChoices(): Promise<SpecFieldChoice[]> {
     const specs = await getSpecs()
     return Object.entries(specs)
-        .filter(([, f]) => f.kind === "list" && f.options.length > 0)
+        .filter(([, f]) => f.kind === "list")
         .map(([key, f]) => ({
             key,
             label: f.label,

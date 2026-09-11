@@ -377,3 +377,72 @@ describe("normalizeSpecDefaults", () => {
         expect(rows[0].materialId).toBe(11)
     })
 })
+
+// Familia MANUAL: grupo de materiales sin variación (scripts/41-familia-manual.sql).
+// Todas las opciones comparten el spec_value sentinela ''; el operario elige cuál
+// consume al fabricar.
+const tornilleria = (over: Partial<MaterialFamily> = {}): MaterialFamily => ({
+    id: 9,
+    name: "Tornillería",
+    specFieldKey: null,
+    defaultSpecValue: null,
+    costStrategy: "average",
+    costMaterialId: null,
+    options: [
+        { specValue: "", materialId: 21, label: "Tornillo 8x40", unitCost: 15, barcode: "T21" },
+        { specValue: "", materialId: 22, label: "Tornillo 8x60", unitCost: 25, barcode: "T22", isDefault: true },
+    ],
+    ...over,
+})
+
+describe("familias manuales", () => {
+    it("defaultOption usa el material marcado, no el primero alfabético", () => {
+        expect(defaultOption(tornilleria())?.materialId).toBe(22)
+    })
+
+    it("defaultOption cae al primero si ninguno está marcado", () => {
+        expect(defaultOption(tornilleria({
+            options: [
+                { specValue: "", materialId: 21, label: "Tornillo 8x40", unitCost: 15, barcode: "T21" },
+                { specValue: "", materialId: 22, label: "Tornillo 8x60", unitCost: 25, barcode: "T22" },
+            ],
+        }))?.materialId).toBe(21)
+    })
+
+    it("lineFromFamily arma una línea sin variantes", () => {
+        const line = lineFromFamily(tornilleria())
+        expect(line.specFieldKey).toBeNull()
+        expect(line.options).toEqual([])
+        expect(line.materialId).toBe(22)
+        expect(line.label).toBe("Tornillería")
+        expect(line.unitCost).toBe(20) // promedio de 15 y 25
+    })
+
+    it("familyLineOptions no guarda variantes para una familia manual", () => {
+        expect(familyLineOptions(tornilleria())).toEqual([])
+    })
+
+    it("syncLineWithFamily mantiene la línea sin variantes", () => {
+        const lineaManual: FamilyLineFields = {
+            familyId: 9,
+            label: "Tornillería",
+            materialId: 22,
+            unitCost: 20,
+            specFieldKey: null,
+            options: [],
+        }
+        const sync = syncLineWithFamily(lineaManual, tornilleria())
+        expect(sync.specFieldKey).toBeNull()
+        expect(sync.options).toEqual([])
+        // Si el default de la familia cambia, la línea sigue al material marcado.
+        expect(sync.materialId).toBe(22)
+    })
+
+    it("familyUnitCost aplica la estrategia sobre los materiales del grupo", () => {
+        expect(familyUnitCost(tornilleria())).toBe(20)
+        expect(familyUnitCost(tornilleria({ costStrategy: "highest" }))).toBe(25)
+        expect(
+            familyUnitCost(tornilleria({ costStrategy: "specific", costMaterialId: 21 })),
+        ).toBe(15)
+    })
+})

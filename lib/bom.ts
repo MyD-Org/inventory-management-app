@@ -63,7 +63,20 @@ function optionQty(option: BomOption, lineQty: number): number {
 export function resolveBomLine(line: BomLine, specs: Record<string, unknown>): ResolvedBomLine {
     const base = { materialId: line.materialId, label: line.label, qty: line.qty }
 
-    if (!line.specFieldKey) return { ...base, substituted: false, unmapped: null }
+    if (!line.specFieldKey) {
+        // Línea de familia MANUAL (sin variación): el material de referencia sale
+        // de la línea y la elección real pasa al descuento. Hay que conservar el
+        // vínculo con la familia: es lo que permite ofrecer las alternativas al
+        // consumir. spec_value '' es el sentinela de las familias manuales (ver
+        // scripts/41-familia-manual.sql); una línea suelta no toca este camino.
+        return {
+            ...base,
+            substituted: false,
+            unmapped: null,
+            familyId: line.familyId ?? null,
+            specValue: line.familyId != null ? "" : null,
+        }
+    }
 
     const raw = specs?.[line.specFieldKey]
     if (raw === "" || raw === null || raw === undefined) {
