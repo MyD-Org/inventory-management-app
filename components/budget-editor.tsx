@@ -1012,6 +1012,63 @@ export function BudgetEditor({
                                                     </div>
                                                 )
                                             })()
+                                        ) : m.familyId !== null && familyById.get(m.familyId)?.specFieldKey === null ? (
+                                            // Familia MANUAL: no hay condición que armar, pero sí hay que
+                                            // poder ver entre qué materiales va a elegir el operario al
+                                            // fabricar. Solo lectura: la lista se edita en la familia.
+                                            (() => {
+                                                const f = familyById.get(m.familyId)!
+                                                return (
+                                                    <div className="mt-1 md:pl-1">
+                                                        <div className="space-y-2 rounded-md border border-dashed bg-muted/30 p-2">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => toggleVariants(i)}
+                                                                    aria-expanded={variantsOpen(i)}
+                                                                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                                                                >
+                                                                    <ChevronRight
+                                                                        className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+                                                                            variantsOpen(i) ? "rotate-90" : ""
+                                                                        }`}
+                                                                    />
+                                                                    <p className="truncate text-xs text-muted-foreground">
+                                                                        Se elige al fabricar entre{" "}
+                                                                        <span className="font-medium text-foreground">
+                                                                            {f.options.length}{" "}
+                                                                            {f.options.length === 1 ? "material" : "materiales"}
+                                                                        </span>
+                                                                    </p>
+                                                                </button>
+                                                                <Link
+                                                                    href="/materials/familias"
+                                                                    className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline"
+                                                                >
+                                                                    Editar familia
+                                                                </Link>
+                                                            </div>
+                                                            {variantsOpen(i) && (
+                                                                <div className="space-y-0">
+                                                                    {f.options.map((o) => (
+                                                                        <div
+                                                                            key={o.materialId}
+                                                                            className="flex items-center justify-between gap-2 border-t py-1.5 text-xs"
+                                                                        >
+                                                                            <span className="truncate">{o.label}</span>
+                                                                            {o.isDefault && (
+                                                                                <span className="shrink-0 text-[11px] text-muted-foreground">
+                                                                                    predeterminado
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })()
                                         ) : m.familyId === null && m.materialId !== null && specFields.length > 0 ? (
                                             // Línea de material fijo. La cantidad puede depender de una
                                             // respuesta del pedido: la arandela es la misma con las dos

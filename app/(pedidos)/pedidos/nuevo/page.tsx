@@ -9,6 +9,6 @@ export default async function NuevoPedidoPage() {
     // Los productos salen del CATÁLOGO de Alegra, no de las hojas de costo: un
     // producto existe porque se vende, y la hoja es información opcional sobre
     // cómo se fabrica.
-    const [specs, products] = await Promise.all([getSpecs(), listSellableProducts()])
+    const [specs, products] = await Promise.all([getSpecs({ soloCliente: true }), listSellableProducts()])
     return <NewOrderPage specs={specs} products={products} />
 }

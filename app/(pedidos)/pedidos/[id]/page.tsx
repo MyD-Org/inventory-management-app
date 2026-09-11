@@ -254,7 +254,8 @@ export default async function OrderDetailPage({
         consumedMaterials(id),
         // La receta por unidad de cada producto, para devolver por producto.
         orderItemRecipes(id),
-        getSpecs(),
+        // Sin las variaciones internas: no son columnas del pedido.
+        getSpecs({ soloCliente: true }),
         listSellableProducts(),
         listOrderEvents(id),
         // Los remitos emitidos: son varios cuando la mercadería sale por partes.

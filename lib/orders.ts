@@ -60,10 +60,11 @@ export {
  * El vocabulario de variaciones.
  *
  * `soloCliente` deja afuera las variaciones INTERNAS —las que define el taller y
- * el cliente no elige—. Lo usa únicamente GET /api/specs, que es lo que consulta
- * el bot del CRM. Todo lo demás —la validación, el editor de ítems, las familias—
- * tiene que seguir viendo todos los campos: un campo interno igual se completa, lo
- * completa el taller.
+ * el cliente no elige—. Lo usan GET /api/specs (el bot del CRM) y las pantallas
+ * del pedido (alta y detalle), donde una variación interna no va como columna.
+ * La validación, las fichas y las familias siguen viendo todos los campos. El
+ * editor de líneas copia las specs guardadas antes de tocarlas, así que un valor
+ * interno ya cargado no se pierde al editar.
  */
 export async function getSpecs(
     opts: { soloCliente?: boolean } = {},

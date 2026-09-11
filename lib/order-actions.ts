@@ -748,7 +748,8 @@ export async function getNewOrderOptions() {
     // Del CATÁLOGO de Alegra, no de las hojas de costo: un producto existe
     // porque se vende. Listar hojas dejaba el selector vacío en producción,
     // donde hay 162 productos vendibles y ninguna hoja cargada.
-    const [specs, products] = await Promise.all([getSpecs(), listSellableProducts()]);
+    // Sin las variaciones internas: no son columnas del pedido.
+    const [specs, products] = await Promise.all([getSpecs({ soloCliente: true }), listSellableProducts()]);
     return { specs, products };
 }
 
