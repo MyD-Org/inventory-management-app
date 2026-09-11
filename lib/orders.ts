@@ -1482,10 +1482,14 @@ export async function refreshBomsForBudget(budgetId: number): Promise<BomRefresh
 
             for (const producto of [...new Set(rehechas)]) {
                 await logOrderEvent(orden.orderId, {
+                    // Campo propio y no "materiales": ese es "la línea no tenía
+                    // hoja de costo y ahora sí", y en el historial se lee "cargó
+                    // la lista de materiales". Acá la lista ya estaba y cambió,
+                    // que para el taller es otra cosa: lo que anotó del pedido
+                    // puede haber quedado viejo.
                     kind: "item_updated",
-                    field: "materiales",
+                    field: "materiales_ficha",
                     newValue: producto,
-                    body: `Se actualizó la lista de materiales de "${producto}" porque cambió su ficha de costo.`,
                 })
             }
         }
