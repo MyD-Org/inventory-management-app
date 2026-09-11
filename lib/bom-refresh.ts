@@ -24,18 +24,29 @@ export const BOM_REFRESHABLE_STATUSES: OrderStatus[] = ["por_revisar", "recibido
 //   - cerrado: retirado o cancelado. El BOM es historia.
 //   - listo: listo para retirar. El equipo está armado y esperando al cliente:
 //     la lista ya cumplió su función, no hay nada para ir a revisar.
-//   - consumido: ya se descontó stock. Mismo criterio que updateOrderItemInternal:
-//     meter materiales nuevos abajo de un descuento hecho deja los números
-//     mintiendo. Y es el freno de verdad: mientras no se haya descontado nada,
-//     el BOM se rehace.
 //   - en_entrega: 'preparando entrega', la etapa administrativa (factura,
-//     remito). El equipo ya está fabricado pero el pedido sigue en movimiento.
-export type BomRefreshSkipReason = "cerrado" | "listo" | "consumido" | "en_entrega"
+//     remito). El equipo ya está fabricado pero el pedido sigue en movimiento,
+//     así que se avisa.
+//
+// Haber descontado stock NO frena nada, y es a propósito: el descuento se hace
+// material por material y un pedido grande convive días con la mitad retirada y
+// la mitad no. Frenar el pedido entero por un solo movimiento dejaba sin
+// corregir las líneas que nadie fue a buscar todavía, que son justo las que
+// importan. materialNeeds() ya compara, material por material, lo que pide la
+// lista contra lo que realmente salió del depósito (neto de devoluciones), así
+// que subir una cantidad ya descontada deja la línea en "descontado en parte" y
+// el taller va por la diferencia.
+//
+// Lo que el recálculo NO puede arreglar es lo que ya salió de más: si la ficha
+// BAJA una cantidad que el taller ya retiró, el excedente queda afuera del
+// depósito sin que la pantalla lo muestre. Por eso el pedido con descuentos se
+// rehace igual pero se reporta, para que alguien lo mire.
+export type BomRefreshSkipReason = "cerrado" | "listo" | "en_entrega"
 
 // De los motivos de arriba, los que hay que contarle a quien guardó la ficha
 // porque hay algo para hacer a mano. Los otros se saltean en silencio: avisar de
 // un pedido que ya está armado o entregado es ruido, no información.
-export const REPORTABLE_SKIPS = ["consumido", "en_entrega"] as const
+export const REPORTABLE_SKIPS = ["en_entrega"] as const
 export type ReportableSkip = (typeof REPORTABLE_SKIPS)[number]
 
 export function isReportableSkip(reason: BomRefreshSkipReason): reason is ReportableSkip {
@@ -45,21 +56,24 @@ export function isReportableSkip(reason: BomRefreshSkipReason): reason is Report
 export interface BomRefreshDecision {
     refresh: boolean
     skip: BomRefreshSkipReason | null
+    /**
+     * Se rehace, pero el pedido ya tenía material retirado del depósito: hay que
+     * mirar que lo descontado siga teniendo sentido con la lista nueva.
+     */
+    checkConsumption: boolean
 }
 
 // El orden de las reglas importa: los estados en los que no hay nada para hacer
-// van PRIMERO, así un pedido ya armado que además descontó stock se saltea en
-// silencio en vez de pedir una revisión que no tiene sentido.
+// van PRIMERO, así un pedido ya armado o entregado no pide una revisión que no
+// tiene sentido por haber descontado stock.
 export function bomRefreshDecision(order: { status: string; consumed: boolean }): BomRefreshDecision {
-    if (order.status === "retirado" || order.status === "cancelado") {
-        return { refresh: false, skip: "cerrado" }
-    }
-    if (order.status === "listo_para_retirar") return { refresh: false, skip: "listo" }
-    if (order.consumed) return { refresh: false, skip: "consumido" }
-    if (!(BOM_REFRESHABLE_STATUSES as string[]).includes(order.status)) {
-        return { refresh: false, skip: "en_entrega" }
-    }
-    return { refresh: true, skip: null }
+    const no = (skip: BomRefreshSkipReason): BomRefreshDecision => ({ refresh: false, skip, checkConsumption: false })
+
+    if (order.status === "retirado" || order.status === "cancelado") return no("cerrado")
+    if (order.status === "listo_para_retirar") return no("listo")
+    if (!(BOM_REFRESHABLE_STATUSES as string[]).includes(order.status)) return no("en_entrega")
+
+    return { refresh: true, skip: null, checkConsumption: order.consumed }
 }
 
 export interface BomRefreshOrder {
@@ -70,19 +84,20 @@ export interface BomRefreshOrder {
 
 export interface BomRefreshReport {
     updated: BomRefreshOrder[]
-    /** Solo los que hay que mirar a mano: ver REPORTABLE_SKIPS. */
+    /** Subconjunto de `updated`: los que además ya tenían material retirado. */
+    checkConsumption: BomRefreshOrder[]
+    /** No se rehicieron y hay algo para mirar: ver REPORTABLE_SKIPS. */
     pending: Array<BomRefreshOrder & { reason: ReportableSkip }>
 }
 
 const REASON_TEXT: Record<ReportableSkip, string> = {
-    consumido: "ya descontaron stock",
     en_entrega: "están preparando la entrega",
 }
 
 // El aviso que ve quien guardó la ficha. null = no hay nada que contar (ningún
 // pedido en marcha usaba este producto).
 export function bomRefreshMessage(report: BomRefreshReport): { title: string; description?: string } | null {
-    const { updated, pending } = report
+    const { updated, checkConsumption, pending } = report
     if (updated.length === 0 && pending.length === 0) return null
 
     const list = (orders: BomRefreshOrder[]) => orders.map((o) => o.label).join(", ")
@@ -96,6 +111,14 @@ export function bomRefreshMessage(report: BomRefreshReport): { title: string; de
 
     const partes: string[] = []
     if (updated.length > 0) partes.push(list(updated))
+
+    // Los que ya tenían material afuera del depósito: lo que falta se recalcula
+    // solo, pero lo que se retiró de más no lo muestra ninguna pantalla.
+    if (checkConsumption.length > 0) {
+        partes.push(
+            `${list(checkConsumption)} ${checkConsumption.length === 1 ? "ya había descontado" : "ya habían descontado"} stock: revisá que lo que ya salió del depósito siga coincidiendo.`,
+        )
+    }
 
     // Los que no se tocaron se agrupan por motivo: el taller necesita saber cuál
     // mirar a mano y por qué, no una lista suelta de números de pedido.
@@ -126,7 +149,8 @@ export interface BomRefreshCandidate {
 }
 
 export interface BomRefreshPlan {
-    refresh: BomRefreshOrder[]
+    /** `checkConsumption` viaja con cada pedido: se rehace igual, pero hay que mirarlo. */
+    refresh: Array<BomRefreshOrder & { checkConsumption: boolean }>
     pending: BomRefreshReport["pending"]
 }
 
@@ -144,7 +168,7 @@ export function planBomRefresh(candidates: BomRefreshCandidate[]): BomRefreshPla
         const decision = bomRefreshDecision(candidate)
 
         if (decision.refresh) {
-            plan.refresh.push(orden)
+            plan.refresh.push({ ...orden, checkConsumption: decision.checkConsumption })
             continue
         }
         // Un pedido entregado o ya armado no se reporta: su lista es historia,
