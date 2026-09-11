@@ -408,7 +408,7 @@ export function OrderItemsEditor({
                                                 }
                                             >
                                                 <SelectTrigger className="h-9 text-base w-full px-2">
-                                                    <span className="truncate">
+                                                    <span className="min-w-0 flex-1 truncate">
                                                         {draft?.specs[key]
                                                             ? field.labels[draft.specs[key]] ?? draft.specs[key]
                                                             : <span className="text-muted-foreground/60">—</span>}
@@ -562,7 +562,7 @@ export function OrderItemsEditor({
                                                     }
                                                 >
                                                     <SelectTrigger className="h-9 text-base w-full px-2">
-                                                        <span className="truncate">
+                                                        <span className="min-w-0 flex-1 truncate">
                                                             {nuevo.specs[key] ? (
                                                                 field.labels[nuevo.specs[key]] ?? nuevo.specs[key]
                                                             ) : (

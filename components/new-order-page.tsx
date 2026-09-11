@@ -86,7 +86,7 @@ function SpecControl({
     return (
         <Select value={value ?? SIN} onValueChange={(v) => onChange(v === SIN ? null : v)}>
             <SelectTrigger className="h-9 w-full px-2 text-base">
-                <span className="truncate">
+                <span className="min-w-0 flex-1 truncate">
                     {value ? (
                         field.labels[value] ?? value
                     ) : (
