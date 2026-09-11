@@ -1,4 +1,5 @@
 import { resolveBom, sameSpecs, type BomLine, type BomOption } from "@/lib/bom"
+import { bomRefreshDecision, type BomRefreshReport } from "@/lib/bom-refresh"
 import { sql } from "@/lib/database"
 import { customerStatus as toCustomerStatus, type OrderStatus as Status } from "@/lib/order-statuses"
 import { logOrderEvent } from "@/lib/order-events"
@@ -1261,11 +1262,12 @@ export interface ReconciledItem {
 //      esos casos caían al material de referencia.
 //
 // Por qué acá y no un botón: que falte la hoja de costo NO es un dato del
-// pedido, es un dato del catálogo que cambia por su cuenta. Congelar el BOM al
-// crear el pedido tiene sentido cuando HAY receta —cambiarla después no debe
-// reescribir pedidos en marcha—, pero cuando no había nada que congelar la
-// marca roja quedaba pegada para siempre aunque el taller cargara la hoja al
-// rato.
+// pedido, es un dato del catálogo que cambia por su cuenta, y la marca roja
+// quedaba pegada para siempre aunque el taller cargara la hoja al rato.
+//
+// Cuando la hoja SÍ existía y después cambia, el que pone al día los pedidos en
+// marcha es refreshBomsForBudget, desde el guardado de la ficha: ahí se sabe
+// qué cambió y a quién avisarle. Acá no se compara contra la receta de hoy.
 //
 // Es conservadora a propósito. No toca nada si:
 //   - el pedido ya salió (retirado) o se canceló: ahí el BOM es historia;
@@ -1417,4 +1419,123 @@ export async function reconcileOrderBoms(orderId: number): Promise<ReconciledIte
         console.error("Error en reconcileOrderBoms:", error)
         return []
     }
+}
+
+// ---------- Ficha de costo modificada: poner al día los pedidos en marcha ----------
+
+// Rehace el BOM de los pedidos que todavía se están fabricando y usan esta hoja
+// de costo. La llama saveBudget cuando la lista de materiales de la ficha cambió.
+//
+// Por qué existe: el BOM del pedido es una copia congelada de la receta, y eso
+// es correcto para lo que ya salió del depósito. Pero mientras el pedido se está
+// armando, la copia vieja hace que el taller descuente el material que la ficha
+// acaba de corregir. Ver lib/bom-refresh.ts, donde vive la regla de a quién se
+// le toca y a quién no.
+//
+// Es conservadora igual que reconcileOrderBoms: no toca un pedido que ya
+// descontó stock ni uno que ya está fabricado; esos se reportan para que alguien
+// los mire a mano.
+//
+// Nunca hace throw: que no se pueda poner al día un pedido no puede voltear el
+// guardado de la ficha, que es lo que la persona pidió.
+export async function refreshBomsForBudget(budgetId: number): Promise<BomRefreshReport> {
+    const report: BomRefreshReport = { updated: [], pending: [] }
+
+    try {
+        const pedidos = await sql`
+            SELECT
+                o.id,
+                o.external_id,
+                o.reference,
+                o.status,
+                EXISTS (
+                    SELECT 1 FROM stock_movements sm
+                    WHERE sm.order_id = o.id AND sm.movement_type = 'salida'
+                ) AS consumed
+            FROM orders o
+            WHERE EXISTS (
+                SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.budget_id = ${budgetId}
+            )
+            ORDER BY o.id ASC
+        `
+
+        for (const pedido of pedidos as any[]) {
+            // La referencia es como el taller nombra al pedido; el external_id es
+            // el del CRM y sirve igual cuando no hay referencia cargada.
+            const orden = {
+                orderId: pedido.id as number,
+                label: (pedido.reference as string | null)?.trim() || String(pedido.external_id),
+            }
+            const decision = bomRefreshDecision({
+                status: String(pedido.status),
+                consumed: Boolean(pedido.consumed),
+            })
+
+            if (!decision.refresh) {
+                // 'cerrado' no se reporta: el BOM de un pedido retirado o
+                // cancelado es historia, no algo pendiente de revisar.
+                if (decision.skip && decision.skip !== "cerrado") {
+                    report.pending.push({ ...orden, reason: decision.skip })
+                }
+                continue
+            }
+
+            const rehechas = await reexplodeOrderItems(orden.orderId, budgetId)
+            if (rehechas.length === 0) continue
+
+            report.updated.push(orden)
+
+            for (const producto of [...new Set(rehechas)]) {
+                await logOrderEvent(orden.orderId, {
+                    kind: "item_updated",
+                    field: "materiales",
+                    newValue: producto,
+                    body: `Se actualizó la lista de materiales de "${producto}" porque cambió su ficha de costo.`,
+                })
+            }
+        }
+    } catch (error) {
+        console.error("Error en refreshBomsForBudget:", error)
+    }
+
+    return report
+}
+
+// Vuelve a explotar las líneas de UN pedido que usan esta hoja. Devuelve el
+// nombre de los productos rehechos.
+//
+// Si explotar falla, esa línea se deja como estaba: un pedido a medio rehacer
+// es peor que uno desactualizado, porque en pantalla no se distingue.
+async function reexplodeOrderItems(orderId: number, budgetId: number): Promise<string[]> {
+    const items = await sql`
+        SELECT id, product, specs, quantity
+        FROM order_items
+        WHERE order_id = ${orderId} AND budget_id = ${budgetId}
+        ORDER BY line_no ASC
+    `
+
+    const rehechas: string[] = []
+    for (const item of items as any[]) {
+        const itemId = item.id as number
+        const previo = await sql`
+            SELECT material_id, label, qty_per_unit, qty_total, family_id, spec_value
+            FROM order_item_materials WHERE order_item_id = ${itemId} ORDER BY id ASC
+        `
+        await sql`DELETE FROM order_item_materials WHERE order_item_id = ${itemId}`
+        try {
+            await explodeBom(itemId, budgetId, (item.specs ?? {}) as Record<string, unknown>, Number(item.quantity))
+            rehechas.push(String(item.product))
+        } catch (error) {
+            console.error(`Error re-explotando el BOM de la línea ${itemId}:`, error)
+            await sql`DELETE FROM order_item_materials WHERE order_item_id = ${itemId}`
+            for (const m of previo as any[]) {
+                await sql`
+                    INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total, family_id, spec_value)
+                    VALUES (${itemId}, ${m.material_id}, ${m.label}, ${m.qty_per_unit}, ${m.qty_total}, ${m.family_id}, ${m.spec_value})
+                `
+            }
+        }
+    }
+
+    return rehechas
 }

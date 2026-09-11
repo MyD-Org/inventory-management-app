@@ -700,6 +700,15 @@ export function BudgetEditor({
             return
         }
         toast.success("Ficha guardada")
+        // Cambiar la receta cambia lo que van a descontar los pedidos que todavía
+        // se están fabricando. Se avisa cuál se puso al día y cuál quedó sin
+        // tocar: si el pedido ya descontó stock, ese ajuste lo hace una persona.
+        if (result.bomRefresh) {
+            toast.info(result.bomRefresh.title, {
+                description: result.bomRefresh.description,
+                duration: 10000,
+            })
+        }
         router.push("/fichas")
         router.refresh()
     }
