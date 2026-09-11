@@ -21,25 +21,40 @@ import { type OrderStatus } from "@/lib/order-statuses"
 export const BOM_REFRESHABLE_STATUSES: OrderStatus[] = ["por_revisar", "recibido", "en_proceso"]
 
 // Por qué un pedido NO se rehace:
-//   - cerrado: retirado o cancelado. El BOM es historia y no se avisa nada.
+//   - cerrado: retirado o cancelado. El BOM es historia.
+//   - listo: listo para retirar. El equipo está armado y esperando al cliente:
+//     la lista ya cumplió su función, no hay nada para ir a revisar.
 //   - consumido: ya se descontó stock. Mismo criterio que updateOrderItemInternal:
 //     meter materiales nuevos abajo de un descuento hecho deja los números
-//     mintiendo. Se avisa: alguien tiene que mirar el descuento a mano.
-//   - en_entrega: el equipo ya está fabricado (preparando entrega, listo para
-//     retirar). Se avisa por el mismo motivo.
-export type BomRefreshSkipReason = "cerrado" | "consumido" | "en_entrega"
+//     mintiendo. Y es el freno de verdad: mientras no se haya descontado nada,
+//     el BOM se rehace.
+//   - en_entrega: 'preparando entrega', la etapa administrativa (factura,
+//     remito). El equipo ya está fabricado pero el pedido sigue en movimiento.
+export type BomRefreshSkipReason = "cerrado" | "listo" | "consumido" | "en_entrega"
+
+// De los motivos de arriba, los que hay que contarle a quien guardó la ficha
+// porque hay algo para hacer a mano. Los otros se saltean en silencio: avisar de
+// un pedido que ya está armado o entregado es ruido, no información.
+export const REPORTABLE_SKIPS = ["consumido", "en_entrega"] as const
+export type ReportableSkip = (typeof REPORTABLE_SKIPS)[number]
+
+export function isReportableSkip(reason: BomRefreshSkipReason): reason is ReportableSkip {
+    return (REPORTABLE_SKIPS as readonly string[]).includes(reason)
+}
 
 export interface BomRefreshDecision {
     refresh: boolean
     skip: BomRefreshSkipReason | null
 }
 
-// El orden de las reglas importa: un pedido retirado que además descontó stock
-// es "cerrado" (no se avisa nada), no "consumido" (que pide revisión a mano).
+// El orden de las reglas importa: los estados en los que no hay nada para hacer
+// van PRIMERO, así un pedido ya armado que además descontó stock se saltea en
+// silencio en vez de pedir una revisión que no tiene sentido.
 export function bomRefreshDecision(order: { status: string; consumed: boolean }): BomRefreshDecision {
     if (order.status === "retirado" || order.status === "cancelado") {
         return { refresh: false, skip: "cerrado" }
     }
+    if (order.status === "listo_para_retirar") return { refresh: false, skip: "listo" }
     if (order.consumed) return { refresh: false, skip: "consumido" }
     if (!(BOM_REFRESHABLE_STATUSES as string[]).includes(order.status)) {
         return { refresh: false, skip: "en_entrega" }
@@ -55,13 +70,13 @@ export interface BomRefreshOrder {
 
 export interface BomRefreshReport {
     updated: BomRefreshOrder[]
-    /** Solo los que hay que mirar a mano: 'cerrado' no entra acá. */
-    pending: Array<BomRefreshOrder & { reason: Exclude<BomRefreshSkipReason, "cerrado"> }>
+    /** Solo los que hay que mirar a mano: ver REPORTABLE_SKIPS. */
+    pending: Array<BomRefreshOrder & { reason: ReportableSkip }>
 }
 
-const REASON_TEXT: Record<Exclude<BomRefreshSkipReason, "cerrado">, string> = {
+const REASON_TEXT: Record<ReportableSkip, string> = {
     consumido: "ya descontaron stock",
-    en_entrega: "ya están fabricados",
+    en_entrega: "están preparando la entrega",
 }
 
 // El aviso que ve quien guardó la ficha. null = no hay nada que contar (ningún
@@ -84,7 +99,7 @@ export function bomRefreshMessage(report: BomRefreshReport): { title: string; de
 
     // Los que no se tocaron se agrupan por motivo: el taller necesita saber cuál
     // mirar a mano y por qué, no una lista suelta de números de pedido.
-    for (const reason of ["consumido", "en_entrega"] as const) {
+    for (const reason of REPORTABLE_SKIPS) {
         const afectados = pending.filter((p) => p.reason === reason)
         if (afectados.length === 0) continue
         partes.push(`Sin tocar porque ${REASON_TEXT[reason]}: ${list(afectados)}. Revisá los materiales a mano.`)
@@ -132,9 +147,9 @@ export function planBomRefresh(candidates: BomRefreshCandidate[]): BomRefreshPla
             plan.refresh.push(orden)
             continue
         }
-        // 'cerrado' no se reporta: el BOM de un pedido retirado o cancelado es
-        // historia, no algo pendiente de revisar.
-        if (decision.skip && decision.skip !== "cerrado") {
+        // Un pedido entregado o ya armado no se reporta: su lista es historia,
+        // no algo pendiente de revisar.
+        if (decision.skip && isReportableSkip(decision.skip)) {
             plan.pending.push({ ...orden, reason: decision.skip })
         }
     }

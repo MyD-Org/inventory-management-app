@@ -4,6 +4,7 @@ import {
     bomRefreshDecision,
     bomRefreshLabel,
     bomRefreshMessage,
+    isReportableSkip,
     planBomRefresh,
     BOM_REFRESHABLE_STATUSES,
     type BomFingerprintRow,
@@ -33,9 +34,21 @@ describe("a qué pedidos se les rehace el BOM", () => {
         expect(bomRefreshDecision(pedido("en_proceso", true))).toEqual({ refresh: false, skip: "consumido" })
     })
 
-    it("fabricado pero sin entregar tampoco se rehace", () => {
-        expect(bomRefreshDecision(pedido("por_facturar")).skip).toBe("en_entrega")
-        expect(bomRefreshDecision(pedido("listo_para_retirar")).skip).toBe("en_entrega")
+    it("preparando entrega no se rehace, y se avisa: el pedido sigue en movimiento", () => {
+        const d = bomRefreshDecision(pedido("por_facturar"))
+        expect(d.skip).toBe("en_entrega")
+        expect(isReportableSkip(d.skip!)).toBe(true)
+    })
+
+    it("listo para retirar no se rehace y NO se avisa: ya está armado", () => {
+        const d = bomRefreshDecision(pedido("listo_para_retirar"))
+        expect(d.refresh).toBe(false)
+        expect(d.skip).toBe("listo")
+        expect(isReportableSkip(d.skip!)).toBe(false)
+    })
+
+    it("listo para retirar con stock descontado sigue siendo silencioso", () => {
+        expect(bomRefreshDecision(pedido("listo_para_retirar", true)).skip).toBe("listo")
     })
 
     it("todo estado conocido cae en alguna de las dos ramas", () => {
@@ -73,7 +86,7 @@ describe("el aviso de lo que pasó con los pedidos", () => {
         })
         expect(msg?.title).toContain("Ningún pedido")
         expect(msg?.description).toContain("ya descontaron stock: PED-9")
-        expect(msg?.description).toContain("ya están fabricados: PED-8")
+        expect(msg?.description).toContain("están preparando la entrega: PED-8")
         expect(msg?.description).toContain("a mano")
     })
 })
@@ -92,8 +105,9 @@ describe("el reparto de todos los pedidos que usan la ficha", () => {
         const plan = planBomRefresh([
             candidato({ orderId: 1, externalId: "CRM-001", status: "recibido" }),
             candidato({ orderId: 2, externalId: "CRM-002", status: "en_proceso", consumed: true }),
-            candidato({ orderId: 3, externalId: "CRM-003", status: "listo_para_retirar" }),
+            candidato({ orderId: 3, externalId: "CRM-003", status: "por_facturar" }),
             candidato({ orderId: 4, externalId: "CRM-004", status: "retirado" }),
+            candidato({ orderId: 5, externalId: "CRM-005", status: "listo_para_retirar" }),
         ])
 
         expect(plan.refresh).toEqual([{ orderId: 1, label: "CRM-001" }])
@@ -103,8 +117,12 @@ describe("el reparto de todos los pedidos que usan la ficha", () => {
         ])
     })
 
-    it("el pedido retirado no aparece en ninguna de las dos listas", () => {
-        const plan = planBomRefresh([candidato({ status: "retirado" }), candidato({ status: "cancelado" })])
+    it("el retirado, el cancelado y el listo para retirar no aparecen en ninguna lista", () => {
+        const plan = planBomRefresh([
+            candidato({ status: "retirado" }),
+            candidato({ status: "cancelado" }),
+            candidato({ status: "listo_para_retirar" }),
+        ])
         expect(plan.refresh).toEqual([])
         expect(plan.pending).toEqual([])
     })
