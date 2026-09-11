@@ -125,7 +125,17 @@ export function OrderItemsEditor({
     // reparten lo que sobra. Antes tenían 13% cada una y con el vocabulario
     // actual la suma daba 101%: la tabla quedaba más ancha que su recuadro. Con
     // porcentajes fijos, agregar un campo de spec volvía a romperlo.
-    const anchoCol = (kind: string) => (kind === "boolean" ? "w-[80px]" : "")
+    // Anchos por campo, no por tipo: la óptica es un número corto ("30°") y la
+    // grampa una palabra; no necesitan lo mismo que el color del equipo o las
+    // indicaciones, que se leen enteros. Lo que no tiene ancho fijo se reparte
+    // lo que sobra entre el resto de las columnas de specs.
+    const ANCHO_POR_CAMPO: Record<string, string> = {
+        optic: "w-[96px]",
+        clamp: "w-[88px]",
+        stake: "w-[80px]",
+        body_color: "w-[15%]",
+    }
+    const anchoCol = (key: string) => ANCHO_POR_CAMPO[key] ?? ""
 
     // Specs de corrido, solo los valores, en el orden del vocabulario.
     const specsLine = (specs: Record<string, string>) =>
@@ -176,7 +186,7 @@ export function OrderItemsEditor({
                                 <th
                                     key={key}
                                     className={`px-3 py-2 text-sm font-medium text-muted-foreground ${anchoCol(
-                                        field.kind,
+                                        key,
                                     )}`}
                                 >
                                     <span className="block truncate" title={field.label}>
@@ -397,8 +407,8 @@ export function OrderItemsEditor({
                                                     })
                                                 }
                                             >
-                                                <SelectTrigger className="h-9 text-base w-full px-2">
-                                                    <span className="truncate">
+                                                <SelectTrigger className="h-9 text-base w-full gap-1 px-1.5">
+                                                    <span className="min-w-0 flex-1 truncate">
                                                         {draft?.specs[key]
                                                             ? field.labels[draft.specs[key]] ?? draft.specs[key]
                                                             : <span className="text-muted-foreground/60">—</span>}
@@ -551,8 +561,8 @@ export function OrderItemsEditor({
                                                         })
                                                     }
                                                 >
-                                                    <SelectTrigger className="h-9 text-base w-full px-2">
-                                                        <span className="truncate">
+                                                    <SelectTrigger className="h-9 text-base w-full gap-1 px-1.5">
+                                                        <span className="min-w-0 flex-1 truncate">
                                                             {nuevo.specs[key] ? (
                                                                 field.labels[nuevo.specs[key]] ?? nuevo.specs[key]
                                                             ) : (

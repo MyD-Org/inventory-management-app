@@ -85,8 +85,8 @@ function SpecControl({
 
     return (
         <Select value={value ?? SIN} onValueChange={(v) => onChange(v === SIN ? null : v)}>
-            <SelectTrigger className="h-9 w-full px-2 text-base">
-                <span className="truncate">
+            <SelectTrigger className="h-9 w-full gap-1 px-1.5 text-base">
+                <span className="min-w-0 flex-1 truncate">
                     {value ? (
                         field.labels[value] ?? value
                     ) : (
@@ -129,14 +129,18 @@ export function NewOrderPage({
     const [saving, setSaving] = useState(false)
 
     const columnas = Object.entries(specs)
-    // Anchos: solo se fijan los extremos (cantidad, producto y acciones). Las
-    // columnas de specs NO llevan ancho y se reparten lo que sobra.
-    //
-    // Antes tenían 13% cada una y con el vocabulario actual la suma daba 101%:
-    // la tabla quedaba más ancha que su recuadro y el botón de la última columna
-    // se desbordaba. Con porcentajes fijos, agregar un campo de spec volvía a
-    // romperlo; repartiendo el resto, entra siempre.
-    const anchoCol = (kind: string) => (kind === "boolean" ? "w-[80px]" : "")
+    // Anchos por campo, no por tipo: la óptica es un número corto ("30°") y la
+    // grampa una palabra; no necesitan lo mismo que el color del equipo o las
+    // indicaciones, que se leen enteros. Lo que no tiene ancho fijo se reparte
+    // lo que sobra entre el resto de las columnas de specs. Mismo criterio que
+    // la tabla del detalle (order-items-editor).
+    const ANCHO_POR_CAMPO: Record<string, string> = {
+        optic: "w-[96px]",
+        clamp: "w-[88px]",
+        stake: "w-[80px]",
+        body_color: "w-[15%]",
+    }
+    const anchoCol = (key: string) => ANCHO_POR_CAMPO[key] ?? ""
 
     function setSpec(idx: number, key: string, value: string | null) {
         setLines((ls) =>
@@ -275,7 +279,7 @@ export function NewOrderPage({
                                             <th
                                                 key={key}
                                                 className={`px-3 py-2 text-sm font-medium text-muted-foreground ${anchoCol(
-                                                    field.kind,
+                                                    key,
                                                 )}`}
                                             >
                                                 <span className="block truncate">{field.label}</span>
