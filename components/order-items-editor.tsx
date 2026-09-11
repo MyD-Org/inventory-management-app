@@ -130,7 +130,7 @@ export function OrderItemsEditor({
     // indicaciones, que se leen enteros. Lo que no tiene ancho fijo se reparte
     // lo que sobra entre el resto de las columnas de specs.
     const ANCHO_POR_CAMPO: Record<string, string> = {
-        optic: "w-[72px]",
+        optic: "w-[96px]",
         clamp: "w-[88px]",
         stake: "w-[80px]",
         body_color: "w-[22%]",

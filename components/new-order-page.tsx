@@ -135,7 +135,7 @@ export function NewOrderPage({
     // lo que sobra entre el resto de las columnas de specs. Mismo criterio que
     // la tabla del detalle (order-items-editor).
     const ANCHO_POR_CAMPO: Record<string, string> = {
-        optic: "w-[72px]",
+        optic: "w-[96px]",
         clamp: "w-[88px]",
         stake: "w-[80px]",
         body_color: "w-[22%]",
