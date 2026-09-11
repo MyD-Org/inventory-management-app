@@ -263,6 +263,36 @@ export async function createSpecOption(fieldKey: string, value: string, label: s
     }
 }
 
+// Renombrar una opción: se actualizan value y label juntos (se cargan iguales).
+// Los pedidos que ya guardaron el valor viejo lo siguen mostrando como texto
+// crudo, sin mapear a etiqueta nueva.
+export async function updateSpecOption(id: number, value: string) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') return { error: 'Solo un admin puede editar el vocabulario' };
+
+    const cleanValue = value.trim();
+    if (!cleanValue) return { error: 'El valor es requerido' };
+
+    try {
+        const [current] = await sql`SELECT field_key, value FROM spec_options WHERE id = ${id}`;
+        if (!current) return { error: 'La opción ya no existe' };
+
+        const [other] = await sql`
+            SELECT id FROM spec_options WHERE field_key = ${current.field_key} AND value = ${cleanValue} AND id != ${id}
+        `;
+        if (other) return { error: `"${cleanValue}" ya está en la lista` };
+
+        await sql`UPDATE spec_options SET value = ${cleanValue}, label = ${cleanValue} WHERE id = ${id}`;
+        revalidatePath('/settings/variaciones');
+        revalidatePath('/materials/familias');
+        revalidatePath('/fichas');
+        return { ok: true };
+    } catch (error) {
+        console.error('Error en updateSpecOption:', error);
+        return { error: 'No se pudo renombrar la opción' };
+    }
+}
+
 // Desactivar en vez de borrar: la opción sale del vocabulario que ve el bot pero
 // los pedidos históricos que la usaron siguen siendo legibles.
 export async function toggleSpecOption(id: number, active: boolean) {
