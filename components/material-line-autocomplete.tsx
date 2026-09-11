@@ -6,9 +6,11 @@
 // materiales del inventario: si lo escrito no corresponde a uno elegido de la lista, la
 // línea queda inválida y no se puede guardar hasta elegir uno existente (o crearlo).
 
-import { useEffect, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import Link from "next/link"
+import * as PopoverPrimitive from "@radix-ui/react-popover"
 import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent } from "@/components/ui/popover"
 import { useListNavigation } from "@/hooks/use-list-navigation"
 import { Layers, Plus } from "lucide-react"
 import { formatArs, formatStock } from "@/lib/format"
@@ -63,14 +65,6 @@ export function MaterialLineAutocomplete({
     const [open, setOpen] = useState(false)
     const boxRef = useRef<HTMLDivElement>(null)
 
-    useEffect(() => {
-        const onDoc = (e: MouseEvent) => {
-            if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false)
-        }
-        document.addEventListener("mousedown", onDoc)
-        return () => document.removeEventListener("mousedown", onDoc)
-    }, [])
-
     // Busca por nombre y por código de barras, difuso y sin acentos.
     const matches = fuzzyFilter(catalog, value, ["name", "barcode"], 12)
     const familyMatches = onPickFamily ? fuzzyFilter(families, value, ["name"], 4) : []
@@ -96,7 +90,13 @@ export function MaterialLineAutocomplete({
         onClose: () => setOpen(false),
     })
 
+    // La lista va en un Popover (portal) y no absoluta adentro del campo: en el
+    // modal de familias el contenido tiene overflow-y-auto y la recortaba, quedaba
+    // escondida abajo del borde del modal. Radix además la trata como parte del
+    // Dialog, así que elegir un material no cierra el modal.
     return (
+        <Popover open={open} onOpenChange={setOpen}>
+        <PopoverPrimitive.Anchor asChild>
         <div className="relative" ref={boxRef}>
             <Input
                 // Chrome abriría su historial encima de nuestra lista.
@@ -115,11 +115,27 @@ export function MaterialLineAutocomplete({
                 aria-invalid={invalid}
                 className={invalid ? "border-destructive focus-visible:ring-destructive" : undefined}
             />
-            {open && (
+        </div>
+        </PopoverPrimitive.Anchor>
+            <PopoverContent
+                align="start"
+                className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0"
+                // El foco se queda en el campo para seguir escribiendo.
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                onCloseAutoFocus={(e) => e.preventDefault()}
+                // Tocar el propio campo no cuenta como "afuera".
+                onInteractOutside={(e) => {
+                    if (boxRef.current?.contains(e.target as Node)) e.preventDefault()
+                }}
+                // El Dialog bloquea la rueda fuera de su contenido; sin esto la
+                // lista no se podía desplazar dentro del modal.
+                onWheel={(e) => e.stopPropagation()}
+                onTouchMove={(e) => e.stopPropagation()}
+            >
                 <div
                     ref={nav.listRef}
                     role="listbox"
-                    className="absolute z-30 mt-1 w-full min-w-[280px] rounded-md border bg-popover shadow-md max-h-60 overflow-auto"
+                    className="max-h-60 overflow-auto"
                 >
                     {familyMatches.map((f, i) => (
                         <button
@@ -196,7 +212,7 @@ export function MaterialLineAutocomplete({
                         Crear un material nuevo
                     </Link>
                 </div>
-            )}
-        </div>
+            </PopoverContent>
+        </Popover>
     )
 }
