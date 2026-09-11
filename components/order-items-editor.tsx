@@ -133,7 +133,7 @@ export function OrderItemsEditor({
         optic: "w-[96px]",
         clamp: "w-[88px]",
         stake: "w-[80px]",
-        body_color: "w-[22%]",
+        body_color: "w-[15%]",
     }
     const anchoCol = (key: string) => ANCHO_POR_CAMPO[key] ?? ""
 
