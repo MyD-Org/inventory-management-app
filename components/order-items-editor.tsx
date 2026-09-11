@@ -125,7 +125,17 @@ export function OrderItemsEditor({
     // reparten lo que sobra. Antes tenían 13% cada una y con el vocabulario
     // actual la suma daba 101%: la tabla quedaba más ancha que su recuadro. Con
     // porcentajes fijos, agregar un campo de spec volvía a romperlo.
-    const anchoCol = (kind: string) => (kind === "boolean" ? "w-[80px]" : "")
+    // Anchos por campo, no por tipo: la óptica es un número corto ("30°") y la
+    // grampa una palabra; no necesitan lo mismo que el color del equipo o las
+    // indicaciones, que se leen enteros. Lo que no tiene ancho fijo se reparte
+    // lo que sobra entre el resto de las columnas de specs.
+    const ANCHO_POR_CAMPO: Record<string, string> = {
+        optic: "w-[72px]",
+        clamp: "w-[88px]",
+        stake: "w-[80px]",
+        body_color: "w-[22%]",
+    }
+    const anchoCol = (key: string) => ANCHO_POR_CAMPO[key] ?? ""
 
     // Specs de corrido, solo los valores, en el orden del vocabulario.
     const specsLine = (specs: Record<string, string>) =>
@@ -176,7 +186,7 @@ export function OrderItemsEditor({
                                 <th
                                     key={key}
                                     className={`px-3 py-2 text-sm font-medium text-muted-foreground ${anchoCol(
-                                        field.kind,
+                                        key,
                                     )}`}
                                 >
                                     <span className="block truncate" title={field.label}>
