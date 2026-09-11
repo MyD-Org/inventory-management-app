@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
+import { isAlegraConfigured } from "@/lib/alegra"
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +52,7 @@ export default async function CostsPage() {
                         </Button>
                     </Link>
                 </div>
-                <BudgetsTable budgets={budgets} />
+                <BudgetsTable budgets={budgets} alegraEnabled={isAlegraConfigured()} />
             </main>
         </div>
     )

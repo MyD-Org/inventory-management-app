@@ -360,6 +360,110 @@ export async function saveBudget(id: number | null, payload: BudgetPayload) {
     }
 }
 
+// Copia una ficha entera con otro nombre. Lo único que se pregunta es el nombre
+// del producto nuevo: el resto —líneas de material con sus variantes, mano de
+// obra y otros costos— se copia tal cual para editar la diferencia, que es
+// justo para lo que se duplica (dos productos que comparten casi toda la receta).
+//
+// EL VÍNCULO CON ALEGRA NO SE HEREDA, SE ELIGE. El ítem de Alegra es de ESE
+// producto: copiarlo haría que dos fichas apunten al mismo y se facture el
+// equivocado sin avisar. Pero dejarlo vacío tampoco sirve —al cotizar se crearía
+// un producto duplicado en Alegra—, así que el diálogo pregunta cuál es el
+// producto nuevo con el mismo buscador que la ficha y lo vincula acá. Sin
+// elegir ninguno queda NULL, que es "todavía no está en Alegra, crealo al
+// cotizar": exactamente lo que hace una ficha nueva.
+//
+// LO QUE NO SE COPIA, a propósito:
+//   - status. La copia entra como BORRADOR aunque el original esté en final:
+//     todavía no la revisó nadie.
+//   - created_by. La copia la crea quien aprieta el botón, no el autor original.
+export async function duplicateBudget(id: number, nombre: string, alegraItemId: number | null = null) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') {
+        return { error: 'No tienes permisos para realizar esta acción' };
+    }
+
+    const name = nombre.trim();
+    if (!name) return { error: 'Poné el nombre del producto nuevo' };
+
+    const userName = session.user.name || session.user.email || 'Desconocido';
+
+    let nuevoId: number | null = null;
+    try {
+        const [origen] = await sql`
+            SELECT name, description, margin_pct FROM budgets WHERE id = ${id}
+        `;
+        if (!origen) return { error: 'La ficha que querés duplicar ya no existe' };
+
+        // Mismo chequeo y mismo mensaje que saveBudget: el nombre es la clave con
+        // la que el módulo de pedidos y las tools de IA encuentran el producto, y
+        // hay un índice único por lower(name). Preguntar antes deja ver el
+        // mensaje en lugar de un error de base.
+        const repetido = await sql`
+            SELECT id FROM budgets WHERE lower(name) = lower(${name}) LIMIT 1
+        `;
+        if (repetido.length > 0) {
+            return {
+                error: `Ya hay una ficha de "${name}". Abrila y editala en vez de crear otra.`,
+                existingId: repetido[0].id as number,
+            };
+        }
+
+        const [creada] = await sql`
+            INSERT INTO budgets (name, description, alegra_item_id, status, margin_pct, created_by)
+            VALUES (${name}, ${origen.description}, ${alegraItemId}, 'draft', ${origen.margin_pct}, ${userName})
+            RETURNING id
+        `;
+        nuevoId = creada.id as number;
+
+        // Las variantes cuelgan del id de la LÍNEA, no del de la ficha, así que
+        // hay que copiar línea por línea para saber a qué id nuevo colgarlas.
+        const lineas = await sql`
+            SELECT id, material_id, label, qty, unit_cost, spec_field_key, family_id
+            FROM budget_materials WHERE budget_id = ${id} ORDER BY id ASC
+        `;
+        for (const m of lineas) {
+            const [linea] = await sql`
+                INSERT INTO budget_materials (budget_id, material_id, label, qty, unit_cost, spec_field_key, family_id)
+                VALUES (${nuevoId}, ${m.material_id}, ${m.label}, ${m.qty}, ${m.unit_cost}, ${m.spec_field_key}, ${m.family_id})
+                RETURNING id
+            `;
+            await sql`
+                INSERT INTO budget_material_options (budget_material_id, spec_value, material_id, label, qty)
+                SELECT ${linea.id}, spec_value, material_id, label, qty
+                FROM budget_material_options WHERE budget_material_id = ${m.id}
+            `;
+        }
+
+        await sql`
+            INSERT INTO budget_labor (budget_id, resource_id, label, hours, hourly_rate)
+            SELECT ${nuevoId}, resource_id, label, hours, hourly_rate
+            FROM budget_labor WHERE budget_id = ${id}
+        `;
+        await sql`
+            INSERT INTO budget_extras (budget_id, label, amount, material_id, qty, unit_cost)
+            SELECT ${nuevoId}, label, amount, material_id, qty, unit_cost
+            FROM budget_extras WHERE budget_id = ${id}
+        `;
+
+        revalidatePath('/fichas');
+        return { success: true, id: nuevoId, copiadaDe: origen.name as string };
+    } catch (error) {
+        console.error('Error duplicating budget:', error);
+        // La copia se arma en varios pasos y el driver no da transacción entre
+        // ellos. Si se rompió a mitad, la ficha a medio copiar es peor que
+        // ninguna: se borra (las líneas caen por CASCADE) y no queda basura.
+        if (nuevoId != null) {
+            try {
+                await sql`DELETE FROM budgets WHERE id = ${nuevoId}`;
+            } catch (limpieza) {
+                console.error('Error limpiando la copia a medias:', limpieza);
+            }
+        }
+        return { error: 'Error al duplicar la ficha' };
+    }
+}
+
 export async function deleteBudget(id: number) {
     const session = await auth();
     if (session?.user?.role !== 'admin') {

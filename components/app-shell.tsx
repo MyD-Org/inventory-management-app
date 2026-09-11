@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { signOut } from "next-auth/react"
@@ -426,12 +426,37 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
 
 export function AppShell({ user, materials, flags, defaultCollapsed = false, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(defaultCollapsed)
   const pathname = usePathname()
+
+  // La ficha de producto es la pantalla más ancha que hay: una tabla de
+  // materiales con cantidad, unidad, costo y subtotal, más las variantes de cada
+  // línea. Con el menú abierto se corta y hay que andar scrolleando de costado,
+  // así que al abrir una ficha el menú se pliega solo y devuelve esos 192px.
+  // "/fichas" (la lista) NO entra: es una tabla angosta y ahí el menú no molesta.
+  const enFicha = pathname?.startsWith("/fichas/") ?? false
+
+  // Arranca plegado si la preferencia lo dice O si se está entrando a una ficha.
+  // Esto se evalúa también en el render del server —usePathname() ya sabe la ruta
+  // ahí—, así que entrar por URL directa a una ficha pinta el menú angosto de una
+  // y no se ve el salto de ancho.
+  const [collapsed, setCollapsed] = useState(defaultCollapsed || enFicha)
 
   useEffect(() => {
     setMobileOpen(false)
   }, [pathname])
+
+  // Plegar al entrar a una ficha y devolverlo como estaba al salir. Se mira el
+  // CAMBIO de entrar/salir y no cada navegación, para no pisar al que pliega o
+  // despliega a mano mientras está adentro de la ficha.
+  const veniaDeFicha = useRef(enFicha)
+  useEffect(() => {
+    if (enFicha === veniaDeFicha.current) return
+    veniaDeFicha.current = enFicha
+    // Al salir se restaura la preferencia REAL, leída de la cookie en este
+    // momento: `defaultCollapsed` es la foto del server en la primera carga y
+    // queda vieja si alguien tocó el botón navegando por el cliente.
+    setCollapsed(enFicha ? true : document.cookie.includes(`${SIDEBAR_COOKIE}=1`))
+  }, [enFicha])
 
   // Un año: es una preferencia de la persona, no algo de la sesión. Se escribe
   // en el momento del click para que la próxima carga ya venga con este ancho
