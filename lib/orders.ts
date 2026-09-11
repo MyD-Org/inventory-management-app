@@ -1432,14 +1432,15 @@ export async function reconcileOrderBoms(orderId: number): Promise<ReconciledIte
 // acaba de corregir. Ver lib/bom-refresh.ts, donde vive la regla de a quién se
 // le toca y a quién no.
 //
-// Es conservadora igual que reconcileOrderBoms: no toca un pedido que ya
-// descontó stock ni uno que ya está fabricado; esos se reportan para que alguien
-// los mire a mano.
+// Haber descontado stock no la frena: el descuento se hace material por material
+// y materialNeeds() recalcula el pendiente de cada uno contra lo que salió del
+// depósito. Esos pedidos vuelven en `checkConsumption` para que alguien mire lo
+// que ya se retiró. Los que están fabricados o entregados sí se saltean.
 //
 // Nunca hace throw: que no se pueda poner al día un pedido no puede voltear el
 // guardado de la ficha, que es lo que la persona pidió.
 export async function refreshBomsForBudget(budgetId: number): Promise<BomRefreshReport> {
-    const report: BomRefreshReport = { updated: [], pending: [] }
+    const report: BomRefreshReport = { updated: [], checkConsumption: [], pending: [] }
 
     try {
         const pedidos = await sql`
@@ -1472,13 +1473,14 @@ export async function refreshBomsForBudget(budgetId: number): Promise<BomRefresh
         )
         report.pending = plan.pending
 
-        for (const orden of plan.refresh) {
+        for (const { checkConsumption, ...orden } of plan.refresh) {
             const rehechas = await reexplodeOrderItems(orden.orderId, budgetId)
             // Vacío = ninguna línea se pudo rehacer: el pedido quedó como estaba,
             // así que no se anuncia como actualizado ni se le registra nada.
             if (rehechas.length === 0) continue
 
             report.updated.push(orden)
+            if (checkConsumption) report.checkConsumption.push(orden)
 
             for (const producto of [...new Set(rehechas)]) {
                 await logOrderEvent(orden.orderId, {

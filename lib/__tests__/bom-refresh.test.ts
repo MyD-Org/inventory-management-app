@@ -17,21 +17,31 @@ const pedido = (status: string, consumed = false) => ({ status, consumed })
 describe("a qué pedidos se les rehace el BOM", () => {
     it("los que todavía se están armando se rehacen", () => {
         for (const status of BOM_REFRESHABLE_STATUSES) {
-            expect(bomRefreshDecision(pedido(status))).toEqual({ refresh: true, skip: null })
+            expect(bomRefreshDecision(pedido(status))).toEqual({ refresh: true, skip: null, checkConsumption: false })
         }
     })
 
     it("un pedido retirado no se toca y no se reporta: su BOM es historia", () => {
-        expect(bomRefreshDecision(pedido("retirado"))).toEqual({ refresh: false, skip: "cerrado" })
-        expect(bomRefreshDecision(pedido("cancelado"))).toEqual({ refresh: false, skip: "cerrado" })
+        expect(bomRefreshDecision(pedido("retirado")).skip).toBe("cerrado")
+        expect(bomRefreshDecision(pedido("cancelado")).skip).toBe("cerrado")
     })
 
     it("un pedido retirado que además descontó stock sigue siendo historia", () => {
         expect(bomRefreshDecision(pedido("retirado", true)).skip).toBe("cerrado")
     })
 
-    it("si ya descontó stock queda para revisar a mano", () => {
-        expect(bomRefreshDecision(pedido("en_proceso", true))).toEqual({ refresh: false, skip: "consumido" })
+    it("haber descontado stock no frena el recálculo, pero lo marca para revisar", () => {
+        // El descuento es material por material: frenar el pedido entero dejaba
+        // sin corregir las líneas que nadie fue a buscar todavía.
+        expect(bomRefreshDecision(pedido("en_proceso", true))).toEqual({
+            refresh: true,
+            skip: null,
+            checkConsumption: true,
+        })
+    })
+
+    it("sin descuentos no hay nada que revisar", () => {
+        expect(bomRefreshDecision(pedido("en_proceso")).checkConsumption).toBe(false)
     })
 
     it("preparando entrega no se rehace, y se avisa: el pedido sigue en movimiento", () => {
@@ -48,7 +58,9 @@ describe("a qué pedidos se les rehace el BOM", () => {
     })
 
     it("listo para retirar con stock descontado sigue siendo silencioso", () => {
-        expect(bomRefreshDecision(pedido("listo_para_retirar", true)).skip).toBe("listo")
+        const d = bomRefreshDecision(pedido("listo_para_retirar", true))
+        expect(d.skip).toBe("listo")
+        expect(d.checkConsumption).toBe(false)
     })
 
     it("todo estado conocido cae en alguna de las dos ramas", () => {
@@ -62,30 +74,36 @@ describe("a qué pedidos se les rehace el BOM", () => {
 describe("el aviso de lo que pasó con los pedidos", () => {
     const orden = (label: string) => ({ orderId: 1, label })
 
+    const vacio = { updated: [], checkConsumption: [], pending: [] }
+
     it("sin pedidos en marcha no hay nada que avisar", () => {
-        expect(bomRefreshMessage({ updated: [], pending: [] })).toBeNull()
+        expect(bomRefreshMessage(vacio)).toBeNull()
     })
 
     it("cuenta los actualizados y los nombra", () => {
-        const msg = bomRefreshMessage({ updated: [orden("PED-1"), orden("PED-2")], pending: [] })
+        const msg = bomRefreshMessage({ ...vacio, updated: [orden("PED-1"), orden("PED-2")] })
         expect(msg?.title).toContain("2 pedidos")
         expect(msg?.description).toContain("PED-1, PED-2")
     })
 
     it("un solo pedido se cuenta en singular", () => {
-        expect(bomRefreshMessage({ updated: [orden("PED-1")], pending: [] })?.title).toContain("1 pedido")
+        expect(bomRefreshMessage({ ...vacio, updated: [orden("PED-1")] })?.title).toContain("1 pedido")
+    })
+
+    it("el que se actualizó con stock ya descontado pide que se lo revise", () => {
+        const msg = bomRefreshMessage({
+            ...vacio,
+            updated: [orden("PED-1"), orden("PED-9")],
+            checkConsumption: [orden("PED-9")],
+        })
+        expect(msg?.title).toContain("2 pedidos")
+        expect(msg?.description).toContain("PED-9 ya había descontado stock")
+        expect(msg?.description).toContain("revisá")
     })
 
     it("los que quedaron sin tocar se agrupan por motivo y piden revisión", () => {
-        const msg = bomRefreshMessage({
-            updated: [],
-            pending: [
-                { ...orden("PED-9"), reason: "consumido" },
-                { ...orden("PED-8"), reason: "en_entrega" },
-            ],
-        })
+        const msg = bomRefreshMessage({ ...vacio, pending: [{ ...orden("PED-8"), reason: "en_entrega" }] })
         expect(msg?.title).toContain("Ningún pedido")
-        expect(msg?.description).toContain("ya descontaron stock: PED-9")
         expect(msg?.description).toContain("están preparando la entrega: PED-8")
         expect(msg?.description).toContain("a mano")
     })
@@ -110,11 +128,11 @@ describe("el reparto de todos los pedidos que usan la ficha", () => {
             candidato({ orderId: 5, externalId: "CRM-005", status: "listo_para_retirar" }),
         ])
 
-        expect(plan.refresh).toEqual([{ orderId: 1, label: "CRM-001" }])
-        expect(plan.pending).toEqual([
-            { orderId: 2, label: "CRM-002", reason: "consumido" },
-            { orderId: 3, label: "CRM-003", reason: "en_entrega" },
+        expect(plan.refresh).toEqual([
+            { orderId: 1, label: "CRM-001", checkConsumption: false },
+            { orderId: 2, label: "CRM-002", checkConsumption: true },
         ])
+        expect(plan.pending).toEqual([{ orderId: 3, label: "CRM-003", reason: "en_entrega" }])
     })
 
     it("el retirado, el cancelado y el listo para retirar no aparecen en ninguna lista", () => {
