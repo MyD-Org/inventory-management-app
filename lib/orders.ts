@@ -1,5 +1,5 @@
 import { resolveBom, sameSpecs, type BomLine, type BomOption } from "@/lib/bom"
-import { planBomRefresh, type BomRefreshReport } from "@/lib/bom-refresh"
+import { BOM_REFRESHABLE_STATUSES, planBomRefresh, sameOrderBom, type BomRefreshReport } from "@/lib/bom-refresh"
 import { sql } from "@/lib/database"
 import { customerStatus as toCustomerStatus, type OrderStatus as Status } from "@/lib/order-statuses"
 import { logOrderEvent } from "@/lib/order-events"
@@ -502,6 +502,36 @@ export async function explodeBom(
     specs: Record<string, unknown>,
     quantity: number,
 ): Promise<{ unmapped: string[] }> {
+    const { lines: resolved, unmapped } = await resolveBudgetBom(budgetId, specs, quantity)
+
+    for (const line of resolved) {
+        await sql`
+            INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total, family_id, spec_value)
+            VALUES (${orderItemId}, ${line.materialId}, ${line.label}, ${line.qty}, ${line.qtyTotal}, ${line.familyId ?? null}, ${line.specValue ?? null})
+        `
+    }
+
+    // Se escribe SIEMPRE, también vacío: es un hecho derivado de las specs y la
+    // receta actuales, no una marca que alguien tenga que ir a apagar. Corregir
+    // el pedido y re-explotar lo limpia solo.
+    await sql`
+        UPDATE order_items
+        SET unmapped_specs = ${JSON.stringify(unmapped)}::jsonb
+        WHERE id = ${orderItemId}
+    `
+
+    return { unmapped }
+}
+
+// Qué materiales saldrían HOY para estas specs y esta cantidad, sin escribir
+// nada. Separado de explodeBom porque también hace falta para PREGUNTAR —al
+// abrir el pedido se compara su lista contra esto para saber si quedó vieja— y
+// preguntar no puede tener el efecto de reescribir el BOM.
+export async function resolveBudgetBom(
+    budgetId: number,
+    specs: Record<string, unknown>,
+    quantity: number,
+): Promise<{ lines: Array<{ materialId: number | null; label: string; qty: number; qtyTotal: number; familyId: number | null; specValue: string | null }>; unmapped: string[] }> {
     // Las variantes salen de la FAMILIA cuando la línea está vinculada a una
     // (material_families, ver scripts/19-material-families.sql) y de la foto
     // propia de la línea cuando no. El vínculo con la familia es vivo a
@@ -574,23 +604,17 @@ export async function explodeBom(
 
     const { lines: resolved, unmapped } = resolveBom(lines, specs, quantity)
 
-    for (const line of resolved) {
-        await sql`
-            INSERT INTO order_item_materials (order_item_id, material_id, label, qty_per_unit, qty_total, family_id, spec_value)
-            VALUES (${orderItemId}, ${line.materialId}, ${line.label}, ${line.qty}, ${line.qtyTotal}, ${line.familyId ?? null}, ${line.specValue ?? null})
-        `
+    return {
+        lines: resolved.map((l) => ({
+            materialId: l.materialId,
+            label: l.label,
+            qty: l.qty,
+            qtyTotal: l.qtyTotal,
+            familyId: l.familyId ?? null,
+            specValue: l.specValue ?? null,
+        })),
+        unmapped,
     }
-
-    // Se escribe SIEMPRE, también vacío: es un hecho derivado de las specs y la
-    // receta actuales, no una marca que alguien tenga que ir a apagar. Corregir
-    // el pedido y re-explotar lo limpia solo.
-    await sql`
-        UPDATE order_items
-        SET unmapped_specs = ${JSON.stringify(unmapped)}::jsonb
-        WHERE id = ${orderItemId}
-    `
-
-    return { unmapped }
 }
 
 // Crea el pedido y explota el BOM de cada línea desde la hoja de costo.
@@ -1258,21 +1282,28 @@ export interface ReconciledItem {
 //   1. Vuelve a resolver las líneas marcadas needs_review (el producto no tenía
 //      hoja de costo cuando se cargó el pedido) y, si la hoja ya existe, explota
 //      el BOM y baja la bandera.
-//   2. Rehace el BOM de las líneas con valores sin mapear, que se armaron cuando
-//      esos casos caían al material de referencia.
+//   2. Compara la lista del pedido contra la receta de HOY y la rehace si quedó
+//      vieja. Esto cubre también las listas que arrastran un valor sin mapear de
+//      cuando esos casos caían al material de referencia: hoy dan distinto, así
+//      que se rehacen igual.
 //
-// Por qué acá y no un botón: que falte la hoja de costo NO es un dato del
-// pedido, es un dato del catálogo que cambia por su cuenta, y la marca roja
-// quedaba pegada para siempre aunque el taller cargara la hoja al rato.
+// Por qué acá y no un botón: ni la hoja de costo ni las familias de materiales
+// son datos del pedido; son del catálogo y cambian por su cuenta, sin que quien
+// los edita sepa qué pedidos hay en marcha. refreshBomsForBudget pone al día en
+// el momento de guardar la ficha, pero eso solo alcanza para lo que se guarda de
+// ahí en adelante: no cubre las fichas que ya se editaron antes, ni los cambios
+// de familia —que no pasan por el guardado de la ficha—, ni el pedido que entró
+// después con una copia ya vieja. Abrir el pedido es el único momento en que
+// alguien va a mirar esa lista, así que es donde tiene que estar al día.
 //
-// Cuando la hoja SÍ existía y después cambia, el que pone al día los pedidos en
-// marcha es refreshBomsForBudget, desde el guardado de la ficha: ahí se sabe
-// qué cambió y a quién avisarle. Acá no se compara contra la receta de hoy.
+// El paso 3 usa los mismos estados que el guardado de la ficha
+// (BOM_REFRESHABLE_STATUSES): una lista no se reescribe sola abajo de un equipo
+// que ya está fabricado. Haber descontado stock NO frena nada —ver
+// lib/bom-refresh.ts—: el descuento es material por material y materialNeeds()
+// recalcula el pendiente contra lo que salió del depósito.
 //
-// Es conservadora a propósito. No toca nada si:
+// Sigue sin tocar nada si:
 //   - el pedido ya salió (retirado) o se canceló: ahí el BOM es historia;
-//   - ya se descontó stock: mismo criterio que updateOrderItemInternal, meter
-//     materiales nuevos abajo de un descuento hecho deja los números mintiendo;
 //   - la hoja existe pero está vacía: sin materiales la línea se sigue armando
 //     a mano, así que la advertencia tiene que quedar.
 //
@@ -1283,12 +1314,6 @@ export async function reconcileOrderBoms(orderId: number): Promise<ReconciledIte
         const [order] = await sql`SELECT status FROM orders WHERE id = ${orderId}`
         if (!order) return []
         if (order.status === "retirado" || order.status === "cancelado") return []
-
-        const [{ count }] = await sql`
-            SELECT COUNT(*)::int AS count FROM stock_movements
-            WHERE order_id = ${orderId} AND movement_type = 'salida'
-        `
-        if (count > 0) return []
 
         // Limpieza 1: ítems huérfanos que quedaron con unmapped_specs pero sin
         // budget_id. Pasa cuando alguien borra la hoja de costo a mano o queda
@@ -1381,27 +1406,73 @@ export async function reconcileOrderBoms(orderId: number): Promise<ReconciledIte
             arregladas.push({ itemId: item.id as number, product: String(item.product), unmapped })
         }
 
-        // Segunda pasada: líneas que SÍ tienen hoja de costo pero quedaron con
-        // algún valor sin mapear. Su BOM se armó cuando esos casos caían al
-        // material de referencia; hoy no se elige ninguno, así que hay que
-        // rehacerlo para que no quede listado un material que nadie eligió.
-        const conHuecos = await sql`
-            SELECT id, budget_id, specs, quantity
-            FROM order_items
-            WHERE order_id = ${orderId}
-              AND needs_review = FALSE
-              AND budget_id IS NOT NULL
-              AND jsonb_array_length(COALESCE(unmapped_specs, '[]'::jsonb)) > 0
-            ORDER BY line_no ASC
-        `
-        for (const item of conHuecos as any[]) {
-            await sql`DELETE FROM order_item_materials WHERE order_item_id = ${item.id}`
-            await explodeBom(
-                item.id as number,
-                item.budget_id as number,
-                (item.specs ?? {}) as Record<string, unknown>,
-                Number(item.quantity),
-            )
+        // Segunda pasada: la lista está completa, pero la receta cambió después
+        // de que el pedido la copió. Pasa siempre que la ficha se
+        // haya editado antes de que esto existiera, cuando se edita una FAMILIA
+        // —que no pasa por el guardado de la ficha— o cuando el pedido entró
+        // entre dos guardados. Se compara contra la receta de hoy y se rehace
+        // solo si dio distinto: sin comparar, abrir el pedido reescribiría el
+        // BOM y llenaría el historial cada vez.
+        const puestasAlDia: string[] = []
+        if ((BOM_REFRESHABLE_STATUSES as string[]).includes(String(order.status))) {
+            const vigentes = await sql`
+                SELECT id, product, budget_id, specs, quantity, unmapped_specs
+                FROM order_items
+                WHERE order_id = ${orderId}
+                  AND needs_review = FALSE
+                  AND budget_id IS NOT NULL
+                ORDER BY line_no ASC
+            `
+            for (const item of vigentes as any[]) {
+                // Las que acaba de rehacer alguna de las pasadas de arriba ya
+                // están al día; volver a mirarlas es trabajo al pedo.
+                if (arregladas.some((a) => a.itemId === item.id)) continue
+
+                const receta = await resolveBudgetBom(
+                    item.budget_id as number,
+                    (item.specs ?? {}) as Record<string, unknown>,
+                    Number(item.quantity),
+                )
+                const guardado = await sql`
+                    SELECT material_id, label, qty_per_unit, qty_total, family_id, spec_value
+                    FROM order_item_materials WHERE order_item_id = ${item.id}
+                `
+
+                const iguales = sameOrderBom(
+                    {
+                        lines: (guardado as any[]).map((m) => ({
+                            materialId: m.material_id,
+                            label: m.label,
+                            qtyPerUnit: m.qty_per_unit,
+                            qtyTotal: m.qty_total,
+                            familyId: m.family_id,
+                            specValue: m.spec_value,
+                        })),
+                        unmapped: (item.unmapped_specs ?? []) as string[],
+                    },
+                    {
+                        lines: receta.lines.map((l) => ({
+                            materialId: l.materialId,
+                            label: l.label,
+                            qtyPerUnit: l.qty,
+                            qtyTotal: l.qtyTotal,
+                            familyId: l.familyId,
+                            specValue: l.specValue,
+                        })),
+                        unmapped: receta.unmapped,
+                    },
+                )
+                if (iguales) continue
+
+                await sql`DELETE FROM order_item_materials WHERE order_item_id = ${item.id}`
+                await explodeBom(
+                    item.id as number,
+                    item.budget_id as number,
+                    (item.specs ?? {}) as Record<string, unknown>,
+                    Number(item.quantity),
+                )
+                puestasAlDia.push(String(item.product))
+            }
         }
 
         for (const item of arregladas) {
@@ -1410,6 +1481,19 @@ export async function reconcileOrderBoms(orderId: number): Promise<ReconciledIte
                 field: "materiales",
                 newValue: item.product,
                 body: `Se cargó la lista de materiales de "${item.product}", que antes no tenía hoja de costo.`,
+                actor: { name: "Sistema" },
+            })
+        }
+
+        // Campo propio y no "materiales_ficha": ese lo escribe el guardado de la
+        // ficha, que sabe que fue la ficha. Acá se detecta la diferencia al
+        // abrir el pedido y la causa puede ser la ficha, la familia o las specs
+        // del pedido, así que el historial no inventa un culpable.
+        for (const producto of [...new Set(puestasAlDia)]) {
+            await logOrderEvent(orderId, {
+                kind: "item_updated",
+                field: "materiales_al_dia",
+                newValue: producto,
                 actor: { name: "Sistema" },
             })
         }
