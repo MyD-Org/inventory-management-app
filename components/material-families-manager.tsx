@@ -26,6 +26,7 @@ import { saveMaterialFamily, deleteMaterialFamily } from "@/lib/material-familie
 import {
     familyUnitCost,
     normalizeSpecDefaults,
+    MANUAL_SPEC_VALUE,
     type CostStrategy,
     type MaterialFamily,
 } from "@/lib/material-family"
@@ -47,6 +48,9 @@ interface DraftOption {
 interface Draft {
     id: number | null
     name: string
+    // true = familia manual: no varía según ninguna variación, es un grupo de
+    // materiales del que el operario elige uno al fabricar.
+    manual: boolean
     fieldKey: string
     options: DraftOption[]
     defaultSpecValue: string | null
@@ -57,12 +61,17 @@ interface Draft {
 const emptyDraft: Draft = {
     id: null,
     name: "",
+    manual: false,
     fieldKey: "",
     options: [],
     defaultSpecValue: null,
     costStrategy: "average",
     costMaterialId: null,
 }
+
+// Valor del Select que activa el modo manual. No es una key de variación real:
+// las reales vienen del vocabulario y este sentinel no puede colisionar con ellas.
+const MANUAL_SELECT_VALUE = "__manual__"
 
 // Qué costo va a quedar guardado, calculado sobre el borrador. Espeja
 // familyUnitCost() de lib/material-family, pero sobre las filas del formulario y
@@ -172,13 +181,23 @@ export function MaterialFamiliesManager({
 
     // Al elegir el campo se listan TODAS sus opciones como filas vacías. Es la
     // diferencia con cargarlas de a una: se ve de entrada qué falta mapear, y lo
-    // que quede vacío simplemente no se guarda.
+    // que quede vacío simplemente no se guarda. El valor sentinel arma una familia
+    // MANUAL: sin filas precargadas, se cargan los materiales de a uno.
     const setField = (key: string) => {
+        if (key === MANUAL_SELECT_VALUE) {
+            setDraft((d) =>
+                d === null
+                    ? d
+                    : { ...d, manual: true, fieldKey: "", defaultSpecValue: null, options: [] },
+            )
+            return
+        }
         setDraft((d) =>
             d === null
                 ? d
                 : {
                       ...d,
+                      manual: false,
                       fieldKey: key,
                       defaultSpecValue: null,
                       options: sortedOptions(key).map((o) => ({
@@ -207,6 +226,29 @@ export function MaterialFamiliesManager({
 
     const openEdit = (f: MaterialFamily) => {
         resetPanels()
+        if (f.specFieldKey === null) {
+            // Familia manual: las filas son los materiales del grupo, sin variante.
+            // Todas comparten el spec_value sentinela (ver scripts/41-familia-manual.sql):
+            // la maquinaria de default por variante funciona igual con un solo grupo.
+            setDraft({
+                id: f.id,
+                name: f.name,
+                manual: true,
+                fieldKey: "",
+                options: f.options.map((o) => ({
+                    key: newKey(),
+                    specValue: MANUAL_SPEC_VALUE,
+                    materialId: o.materialId,
+                    label: o.label,
+                    unitCost: o.unitCost,
+                    isDefault: Boolean(o.isDefault),
+                })),
+                defaultSpecValue: null,
+                costStrategy: f.costStrategy,
+                costMaterialId: f.costMaterialId,
+            })
+            return
+        }
         // Se muestran todas las opciones del campo, con lo ya mapeado adentro: así
         // agregar un color nuevo es escribir en la fila que ya está, no acordarse
         // de que el color existe.
@@ -254,6 +296,7 @@ export function MaterialFamiliesManager({
         setDraft({
             id: f.id,
             name: f.name,
+            manual: false,
             fieldKey: f.specFieldKey,
             options: rows,
             defaultSpecValue: f.defaultSpecValue,
@@ -387,7 +430,7 @@ export function MaterialFamiliesManager({
             toast.error("Falta el nombre", { description: "Poné el nombre general de la materia prima, por ejemplo “Placa 1 led”." })
             return
         }
-        if (!draft.fieldKey) {
+        if (!draft.manual && !draft.fieldKey) {
             toast.error("Falta el campo", { description: "Elegí según qué varía la familia (color, óptica, grampa…)." })
             return
         }
@@ -409,17 +452,21 @@ export function MaterialFamiliesManager({
 
         // La variante default para BOM es la primera con materiales; no hace falta
         // preguntarle al usuario porque al retirar stock siempre se puede elegir otra.
-        const defaultSpecValue = draft.defaultSpecValue ?? Array.from(bySpec.keys())[0]
+        // Las familias manuales no tienen variante predeterminada: defaultOption
+        // usa la marca is_default.
+        const defaultSpecValue = draft.manual
+            ? null
+            : draft.defaultSpecValue ?? Array.from(bySpec.keys())[0]
 
         setSaving(true)
         const result = await saveMaterialFamily(draft.id, {
             name: draft.name,
-            spec_field_key: draft.fieldKey,
+            spec_field_key: draft.manual ? null : draft.fieldKey,
             default_spec_value: defaultSpecValue,
             cost_strategy: draft.costStrategy,
             cost_material_id: draft.costMaterialId,
             options: filled.map((o) => ({
-                spec_value: o.specValue,
+                spec_value: draft.manual ? MANUAL_SPEC_VALUE : o.specValue,
                 material_id: o.materialId as number,
                 is_default: defaultKeys.has(o.key),
             })),
@@ -434,7 +481,9 @@ export function MaterialFamiliesManager({
             return
         }
         toast.success(draft.id === null ? "Familia creada" : "Familia actualizada", {
-            description: `${draft.name.trim()} · ${filled.length} ${filled.length === 1 ? "material" : "materiales"} en ${bySpec.size} ${bySpec.size === 1 ? "variante" : "variantes"}.`,
+            description: draft.manual
+                ? `${draft.name.trim()} · ${filled.length} ${filled.length === 1 ? "material" : "materiales"}.`
+                : `${draft.name.trim()} · ${filled.length} ${filled.length === 1 ? "material" : "materiales"} en ${bySpec.size} ${bySpec.size === 1 ? "variante" : "variantes"}.`,
         })
         setDraft(null)
         router.refresh()
@@ -458,18 +507,6 @@ export function MaterialFamiliesManager({
                     : undefined,
         })
         router.refresh()
-    }
-
-    if (specFields.length === 0) {
-        return (
-            <p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-                Todavía no hay campos de variación cargados. Cargá el vocabulario en{" "}
-                <Link href="/settings/variaciones" className="underline">
-                    variaciones de producto
-                </Link>{" "}
-                (color de LED, óptica, grampa…) y volvé para armar las familias.
-            </p>
-        )
     }
 
     // Derivados del borrador para la cabecera y el acordeon. Se calculan aca porque
@@ -514,9 +551,18 @@ export function MaterialFamiliesManager({
                                                 <span className="truncate">{f.name}</span>
                                             </p>
                                             <p className="mt-0.5 text-xs text-muted-foreground">
-                                                Varía según {fieldLabel(f.specFieldKey)} · {specCount}{" "}
-                                                {specCount === 1 ? "variante" : "variantes"} · {f.options.length}{" "}
-                                                {f.options.length === 1 ? "material" : "materiales"}
+                                                {f.specFieldKey === null ? (
+                                                    <>
+                                                        Sin variación · elige al fabricar · {f.options.length}{" "}
+                                                        {f.options.length === 1 ? "material" : "materiales"}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        Varía según {fieldLabel(f.specFieldKey)} · {specCount}{" "}
+                                                        {specCount === 1 ? "variante" : "variantes"} · {f.options.length}{" "}
+                                                        {f.options.length === 1 ? "material" : "materiales"}
+                                                    </>
+                                                )}
                                                 {f.options.length > 0 && ` · ${formatArs(familyUnitCost(f))}`}
                                             </p>
                                         </div>
@@ -539,15 +585,19 @@ export function MaterialFamiliesManager({
                                         )}
                                         {f.options.map((o) => {
                                             // El badge de "Predeterminada" solo tiene sentido donde hubo
-                                            // que elegir, o sea en las variantes con más de un material.
+                                            // que elegir, o sea con más de un material para la misma variante
+                                            // (o en la familia manual, para el grupo entero).
                                             const alternatives = f.options.filter(
                                                 (x) => x.specValue === o.specValue,
                                             ).length
+                                            const isManual = f.specFieldKey === null
                                             return (
-                                            <div key={`${o.specValue}-${o.materialId}`} className="grid grid-cols-[110px_1fr_auto] items-center gap-2 text-xs">
-                                                <span className="truncate text-muted-foreground">
-                                                    {valueLabel(f.specFieldKey, o.specValue)}
-                                                </span>
+                                            <div key={`${o.specValue}-${o.materialId}`} className={`grid items-center gap-2 text-xs ${isManual ? "grid-cols-[1fr_auto]" : "grid-cols-[110px_1fr_auto]"}`}>
+                                                {f.specFieldKey !== null && (
+                                                    <span className="truncate text-muted-foreground">
+                                                        {valueLabel(f.specFieldKey, o.specValue)}
+                                                    </span>
+                                                )}
                                                 <span className="truncate">{o.label}</span>
                                                 <span className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
                                                     {alternatives > 1 && o.isDefault && (
@@ -595,11 +645,17 @@ export function MaterialFamiliesManager({
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-1.5">
                                     <Label>Característica que varía *</Label>
-                                    <Select value={draft.fieldKey} onValueChange={setField}>
+                                    <Select
+                                        value={draft.manual ? MANUAL_SELECT_VALUE : draft.fieldKey}
+                                        onValueChange={setField}
+                                    >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Elegí el campo (color, óptica, grampa…)" />
                                         </SelectTrigger>
                                         <SelectContent>
+                                            <SelectItem value={MANUAL_SELECT_VALUE}>
+                                                Sin variación — se elige al fabricar
+                                            </SelectItem>
                                             {specFields.map((f) => (
                                                 <SelectItem key={f.key} value={f.key}>
                                                     {f.label}
@@ -614,7 +670,7 @@ export function MaterialFamiliesManager({
                             {/* El costeo va en su propio bloque: el metodo y el material con el que
                                 se costea son una sola decision, y tenerlos en filas distintas
                                 (con el costo en el medio) los hacia parecer cosas separadas. */}
-                            {draft.fieldKey !== "" && draft.options.length > 0 && (
+                            {(draft.manual || draft.fieldKey !== "") && draft.options.length > 0 && (
                                 <div className="space-y-2 rounded-md border p-3">
                                     <div className="grid gap-4 sm:grid-cols-2">
                                         <div className="space-y-1.5">
@@ -682,7 +738,76 @@ export function MaterialFamiliesManager({
                                 </div>
                             )}
 
-                            {draft.fieldKey !== "" && (
+                            {draft.manual ? (
+                                <div className="space-y-2">
+                                    <Label>Materiales del grupo</Label>
+                                    {/* Lista plana: sin variantes que agrupar. La marca
+                                        "predeterminada" decide cuál material sugiere el
+                                        sistema al descuento; el operario siempre puede
+                                        elegir otro de la lista. */}
+                                    {(() => {
+                                        const filled = draft.options.filter((o) => o.materialId !== null)
+                                        return (
+                                            <>
+                                                {filled.length > 1 && (
+                                                    <p className="text-[11px] text-muted-foreground">
+                                                        Marcá cuál sale del depósito por defecto.
+                                                    </p>
+                                                )}
+                                                {draft.options.map((o) => (
+                                                    <div
+                                                        key={o.key}
+                                                        className={`grid items-center gap-2 ${
+                                                            filled.length > 1
+                                                                ? "grid-cols-[auto_1fr_auto]"
+                                                                : "grid-cols-[1fr_auto]"
+                                                        }`}
+                                                    >
+                                                        {filled.length > 1 && (
+                                                            <input
+                                                                type="radio"
+                                                                name={`default-manual-${draft.id ?? "new"}`}
+                                                                className="h-3.5 w-3.5 accent-primary disabled:opacity-40"
+                                                                checked={o.materialId !== null && o.isDefault}
+                                                                disabled={o.materialId === null}
+                                                                onChange={() => setDefaultRow(o.key)}
+                                                                aria-label={`Usar ${o.label || "este material"} como predeterminado`}
+                                                            />
+                                                        )}
+                                                        <MaterialLineAutocomplete
+                                                            value={o.label}
+                                                            catalog={catalog}
+                                                            linked={o.materialId !== null}
+                                                            onPick={(m) => pickRowMaterial(o.key, m)}
+                                                            onText={(t) => updateRow(o.key, { materialId: null, label: t })}
+                                                        />
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8"
+                                                            onClick={() =>
+                                                                draft.options.length > 1 ? removeRow(o.key) : clearRow(o.key)
+                                                            }
+                                                            title={draft.options.length > 1 ? "Quitar este material" : "Vaciar esta fila"}
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 w-full justify-start text-xs text-muted-foreground hover:text-foreground"
+                                                    onClick={() => addMaterialToSpec(MANUAL_SPEC_VALUE)}
+                                                >
+                                                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                                    Agregar material
+                                                </Button>
+                                            </>
+                                        )
+                                    })()}
+                                </div>
+                            ) : draft.fieldKey !== "" ? (
                                 <div className="space-y-2">
                                     {/* Cabecera de la lista: cuántas variantes ya tienen material y el
                                         filtro para ir cargando solo las que faltan. Es la información
@@ -847,7 +972,7 @@ export function MaterialFamiliesManager({
                                         </>
                                     )}
                                 </div>
-                            )}
+                            ) : null}
 
                             <div className="flex justify-end gap-2 pt-2">
                                 <Button variant="outline" onClick={() => setDraft(null)} disabled={saving}>

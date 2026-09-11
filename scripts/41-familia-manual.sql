@@ -1,0 +1,11 @@
+-- Familias MANUALES: grupo de materiales que no varía según ninguna variación.
+-- La ficha de producto la agrega como una línea más (cantidad + costo por la
+-- estrategia de siempre) y el operario elige cuál material de la familia consume
+-- al fabricar, desde el diálogo de descuento de materiales.
+--
+-- spec_field_key NULL = familia manual. Las opciones de una familia manual usan
+-- spec_value '' como sentinela: una opción real de variación nunca es vacía, así
+-- no puede chocar con un valor cargado a mano. El '' hace que todo el pipeline
+-- existente (agrupación por family_id + spec_value, alternativas al consumir)
+-- funcione sin tocar las consultas.
+ALTER TABLE material_families ALTER COLUMN spec_field_key DROP NOT NULL;

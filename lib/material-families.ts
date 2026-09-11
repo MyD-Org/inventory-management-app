@@ -23,7 +23,9 @@ const sql = neon(process.env.DATABASE_URL!);
 
 export interface MaterialFamilyPayload {
     name: string;
-    spec_field_key: string;
+    // null = familia manual: grupo de materiales sin variación, el operario elige
+    // cuál consume al fabricar (ver scripts/41-familia-manual.sql).
+    spec_field_key: string | null;
     default_spec_value: string | null;
     cost_strategy: CostStrategy;
     cost_material_id: number | null;
@@ -64,7 +66,7 @@ export async function listMaterialFamilies(): Promise<MaterialFamily[]> {
     return rows.map((r) => ({
         id: r.id as number,
         name: r.name as string,
-        specFieldKey: r.spec_field_key as string,
+        specFieldKey: (r.spec_field_key as string | null) ?? null,
         defaultSpecValue: (r.default_spec_value as string | null) ?? null,
         costStrategy: (r.cost_strategy as CostStrategy) ?? 'average',
         costMaterialId: (r.cost_material_id as number | null) ?? null,
@@ -83,13 +85,17 @@ const VALID_COST_STRATEGIES: CostStrategy[] = ['average', 'highest', 'specific']
 
 function validFamilyPayload(p: MaterialFamilyPayload): string | null {
     if (!p.name?.trim()) return 'El nombre de la familia es requerido';
-    if (!p.spec_field_key?.trim()) return 'Falta indicar según qué campo varía la familia';
+    const manual = p.spec_field_key === null;
+    if (!manual && !p.spec_field_key?.trim()) return 'Falta indicar según qué campo varía la familia';
     if (!VALID_COST_STRATEGIES.includes(p.cost_strategy)) return 'Estrategia de costeo inválida';
 
     const byValue = new Map<string, Array<{ material_id: number; is_default: boolean }>>();
     for (const o of p.options) {
         const value = o.spec_value?.trim();
-        if (!value) return 'Hay variantes sin valor';
+        // En una familia manual todas las opciones llevan el sentinela '' (ver
+        // scripts/41-familia-manual.sql); en una de variación el valor es real y
+        // no puede faltar.
+        if (!manual && !value) return 'Hay variantes sin valor';
         if (!Number.isFinite(o.material_id)) return `La variante "${value}" no tiene material`;
         const list = byValue.get(value) ?? [];
         if (list.some((x) => x.material_id === o.material_id)) {
@@ -131,10 +137,14 @@ export async function insertMaterialFamily(
     if (invalid) return { error: invalid };
 
     const name = payload.name.trim();
-    const fieldKey = payload.spec_field_key.trim();
+    // null = familia manual (scripts/41-familia-manual.sql). El trim() de '' daría
+    // '' y neon lo manda como string vacío; hay que pasar NULL explícito.
+    const fieldKey = payload.spec_field_key === null ? null : payload.spec_field_key.trim() || null;
     // Si no llega variante predeterminada tomamos la primera cargada, como anuncia
     // validFamilyPayload. La UI siempre la manda, pero las tools de IA no: sin este
     // fallback el `!` reventaba con un TypeError fuera del try y salía un 500.
+    // En una familia manual las opciones llevan spec_value '', así que este
+    // fallback da NULL: no hay variante predeterminada, y defaultOption usa la marca.
     const defaultValue =
         payload.options.length > 0
             ? payload.default_spec_value?.trim() || payload.options[0].spec_value.trim()

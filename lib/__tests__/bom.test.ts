@@ -233,3 +233,32 @@ describe("cantidad por variante", () => {
         expect(r.substituted).toBe(true)
     })
 })
+
+describe("resolveBomLine con familia manual", () => {
+    // Línea vinculada a una familia MANUAL: sin campo de variación. El material de
+    // referencia sale de la línea; el vínculo con la familia se conserva para que
+    // al consumir se ofrezcan las alternativas del grupo (scripts/41-familia-manual.sql).
+    const tornilleria: BomLine = {
+        id: 1,
+        familyId: 9,
+        materialId: 22,
+        label: "Tornillería",
+        qty: 20,
+        specFieldKey: null,
+        options: [],
+    }
+
+    it("conserva el vínculo con la familia y el spec_value sentinela", () => {
+        const r = resolveBomLine(tornilleria, {})
+        expect(r.materialId).toBe(22)
+        expect(r.substituted).toBe(false)
+        expect(r.familyId).toBe(9)
+        expect(r.specValue).toBe("")
+    })
+
+    it("no confunde con una línea suelta: esa no lleva familia", () => {
+        const r = resolveBomLine({ ...tornilleria, familyId: null }, {})
+        expect(r.familyId).toBeNull()
+        expect(r.specValue).toBeNull()
+    })
+})

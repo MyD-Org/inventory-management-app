@@ -419,14 +419,19 @@ export function BudgetEditor({
         })
     }
 
-    // Familias ofrecidas por el buscador. Una familia sin variantes o sin
-    // predeterminada no se puede usar todavía: no habría con qué costear la línea.
+    // Familias ofrecidas por el buscador. Una familia sin materiales no se puede
+    // usar todavía: no habría con qué costear la línea. Las manuales (sin variación)
+    // entran con cualquier material cargado; las de variación, además, piden la
+    // predeterminada.
     const familyChoices: FamilySearchResult[] = families
-        .filter((f) => f.options.length > 0 && f.defaultSpecValue !== null)
+        .filter((f) => f.options.length > 0 && (f.specFieldKey === null || f.defaultSpecValue !== null))
         .map((f) => ({
             id: f.id,
             name: f.name,
-            fieldLabel: specFields.find((sf) => sf.key === f.specFieldKey)?.label ?? f.specFieldKey,
+            fieldLabel:
+                f.specFieldKey === null
+                    ? "sin variación · se elige al fabricar"
+                    : (specFields.find((sf) => sf.key === f.specFieldKey)?.label ?? f.specFieldKey),
             variantCount: new Set(f.options.map((o) => o.specValue)).size,
             unitCost: defaultOption(f)?.unitCost ?? 0,
         }))
@@ -869,8 +874,10 @@ export function BudgetEditor({
                                             pida el cliente. Si la línea viene de una familia, el mapeo se
                                             muestra pero no se edita acá: se edita en el inventario, una vez
                                             para todos los productos. Solo se ofrece si hay vocabulario de
-                                            specs cargado. */}
-                                        {m.familyId !== null || m.specFieldKey !== null ? (
+                                            specs cargado. Las familias MANUALES (sin variación) no tienen
+                                            panel: el material se elige al descuento, no acá. */}
+                                        {m.specFieldKey !== null ||
+                                        (m.familyId !== null && (familyById.get(m.familyId)?.specFieldKey ?? null) !== null) ? (
                                             (() => {
                                                 const f = m.familyId === null ? undefined : familyById.get(m.familyId)
                                                 const fieldKey = f?.specFieldKey ?? m.specFieldKey
@@ -940,7 +947,16 @@ export function BudgetEditor({
                                                                     </button>
                                                                 )}
                                                             </div>
-                                                            {variantsOpen(i) && (
+                                                            {variantsOpen(i) &&
+                                                                (filas.length === 0 ? (
+                                                                    <p className="border-t py-2 text-xs text-muted-foreground">
+                                                                        &quot;{fieldLabel}&quot; todavía no tiene opciones cargadas.{" "}
+                                                                        <Link href="/settings/variaciones" className="underline hover:text-foreground">
+                                                                            Agregalas en Configuración → Variaciones de producto
+                                                                        </Link>
+                                                                        {" "}y la condición se arma sola.
+                                                                    </p>
+                                                                ) : (
                                                                 <div className="space-y-0">
                                                                     <div className="grid grid-cols-[96px_1fr_56px] items-center gap-2 pb-1 text-[11px] text-muted-foreground">
                                                                         <span>Si pide</span>
@@ -991,12 +1007,12 @@ export function BudgetEditor({
                                                                         )
                                                                     })}
                                                                 </div>
-                                                            )}
+                                                                ))}
                                                         </div>
                                                     </div>
                                                 )
                                             })()
-                                        ) : m.materialId !== null && specFields.length > 0 ? (
+                                        ) : m.familyId === null && m.materialId !== null && specFields.length > 0 ? (
                                             // Línea de material fijo. La cantidad puede depender de una
                                             // respuesta del pedido: la arandela es la misma con las dos
                                             // grampas, lo que cambia es cuántas van. No es una familia
