@@ -17,13 +17,18 @@ export function OrderStatusSelect({
     id,
     status,
     hasInvoice = false,
-    hasRemission = false,
+    deliveryComplete = false,
 }: {
     id: number
     status: OrderStatus
-    /** Qué documentos YA existen: define qué va a emitirse al pasar a facturar. */
+    /** La factura YA existe: define si va a emitirse al pasar a facturar. */
     hasInvoice?: boolean
-    hasRemission?: boolean
+    /**
+     * Del remito no alcanza con saber si existe: un pedido puede tener varios
+     * porque la mercadería sale por partes. Lo que define si se va a emitir uno
+     * más es si NO queda nada sin entregar.
+     */
+    deliveryComplete?: boolean
 }) {
     const router = useRouter()
     const { setEmitiendo } = useOrderEmission()
@@ -40,7 +45,7 @@ export function OrderStatusSelect({
         const emitiendo = { invoice: false, remission: false }
         if (next === "por_facturar") {
             emitiendo.invoice = !hasInvoice
-            emitiendo.remission = !hasRemission
+            emitiendo.remission = !deliveryComplete
         }
         setEmitiendo(emitiendo)
 

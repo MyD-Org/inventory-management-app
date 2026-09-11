@@ -11,7 +11,8 @@ import { auth } from '@/auth';
 import { addEventPhotos, eventPhotoPaths, logOrderEvent, logOrderEvents } from '@/lib/order-events';
 import { sql } from '@/lib/database';
 import { invoiceOrder } from '@/lib/invoicing';
-import { remitOrder } from '@/lib/remissions';
+import { deliverableItems, remitOrder } from '@/lib/remissions';
+import { describeDelivery, describePendingDelivery, pendingQuantity } from '@/lib/deliveries';
 import {
     addOrderItemInternal,
     consumedMaterials,
@@ -28,7 +29,7 @@ import {
     validateOrderPayload,
     type OrderPayload,
 } from '@/lib/orders';
-import { isFixedSpecField } from '@/lib/order-statuses';
+import { acceptsItemChanges, isFixedSpecField, STATUS_LABELS } from '@/lib/order-statuses';
 import { canConsumeStock } from '@/lib/roles';
 import { requireOperator } from '@/lib/operators';
 import { planReturn } from '@/lib/returns';
@@ -79,18 +80,42 @@ export async function createOrderManual(payload: OrderPayload) {
     }
 }
 
+/**
+ * El pedido está cerrado a cambios de líneas: ya salió del taller.
+ *
+ * Se chequea en el servidor y no solo escondiendo el botón: la pantalla se pudo
+ * haber abierto antes de que el pedido pasara a listo para retirar, y el que la
+ * tiene abierta no se entera.
+ */
+async function itemsCongelados(orderId: number): Promise<string | null> {
+    const [order] = await sql`SELECT status FROM orders WHERE id = ${orderId}`;
+    if (!order || acceptsItemChanges(order.status as string)) return null;
+    const etiqueta = STATUS_LABELS[order.status as keyof typeof STATUS_LABELS] ?? order.status;
+    return `El pedido está en "${etiqueta}": ya no admite cambios en sus productos.`;
+}
+
 export async function updateOrderStatus(id: number, status: string) {
     const session = await auth();
     if (!session?.user) return { error: 'No autenticado' };
     if (!ORDER_STATUSES.includes(status as any)) return { error: 'Estado inválido' };
 
     try {
-        // No se puede pasar a listo para retirar sin haber facturado: la factura
-        // es el paso previo obligatorio en el flujo.
+        // No se puede pasar a listo para retirar sin los dos papeles hechos: son
+        // el paso previo obligatorio del flujo. Ahí el pedido deja de ser trabajo
+        // del taller y pasa a ser mercadería esperando a que la retiren.
         if (status === 'listo_para_retirar') {
             const [order] = await sql`SELECT alegra_invoice_id FROM orders WHERE id = ${id}`;
             if (!order?.alegra_invoice_id) {
-                return { error: 'Falta emitir la factura antes de pasar a listo para retirar' };
+                return { error: 'Falta emitir la factura antes de pasar a listo para retirar.' };
+            }
+
+            // Y TODO remitido. Puede estar repartido en varios remitos —la entrega
+            // va por partes y cada salida es su papel— pero no puede quedar nada
+            // adentro: lo que ningún remito nombra sale del depósito sin respaldo,
+            // y el que carga la camioneta no tiene contra qué contar los bultos.
+            const pendiente = describePendingDelivery(await deliverableItems(id));
+            if (pendiente) {
+                return { error: `Falta remitir antes de pasar a listo para retirar: ${pendiente}.` };
             }
         }
 
@@ -114,7 +139,7 @@ export async function updateOrderStatus(id: number, status: string) {
         let warning: string | null = null;
         if (status === 'por_facturar') {
             const [order] = await sql`
-                SELECT alegra_invoice_id, alegra_remission_id, invoice_terms, invoice_notes
+                SELECT alegra_invoice_id, invoice_terms, invoice_notes
                 FROM orders WHERE id = ${id}
             `;
             if (!order?.alegra_invoice_id) {
@@ -149,14 +174,30 @@ export async function updateOrderStatus(id: number, status: string) {
             // El remito, con el mismo criterio. Va DESPUÉS de la factura a propósito:
             // así, cuando los dos salen juntos, el remito ya puede nombrarla en sus
             // observaciones —al revés la factura no tendría a quién nombrar—.
-            if (!order?.alegra_remission_id) {
+            //
+            // LA CONDICIÓN ES LO PENDIENTE, no "si ya hay remito": un pedido puede
+            // tener remito y todavía tener mercadería adentro, porque la entrega va
+            // por partes. Lo que se emite acá es un remito por TODO lo que falte
+            // entregar; si no falta nada, no hay documento que emitir.
+            const pendiente = (await deliverableItems(id)).some((i) => pendingQuantity(i) > 0);
+            if (pendiente) {
                 try {
-                    const result = await remitOrder(id);
+                    const result = await remitOrder(id, null, { name: 'Sistema' });
                     if (result.remissionId != null) {
                         await logOrderEvent(id, {
                             kind: 'invoice',
                             field: 'remito',
                             newValue: result.remissionNumber ?? String(result.remissionId),
+                            // Cuánto quedó remitido: con remitos parciales el
+                            // número del papel solo no dice si salió todo.
+                            body: describeDelivery(
+                                result.delivery.map((d) => ({
+                                    id: d.orderItemId,
+                                    product: d.product,
+                                    quantity: d.ordered,
+                                    delivered: d.delivered,
+                                })),
+                            ),
                             actor: { name: 'Sistema' },
                         });
                     }
@@ -513,8 +554,13 @@ export async function updateOrderItem(
     const session = await auth();
     if (!session?.user) return { ok: false, error: 'No autenticado' };
 
-    const [item] = await sql`SELECT order_id, product, quantity, specs FROM order_items WHERE id = ${itemId}`;
+    const [item] = await sql`
+        SELECT order_id, product, quantity, specs FROM order_items WHERE id = ${itemId}
+    `;
     if (!item) return { ok: false, error: 'La línea no existe' };
+
+    const congelado = await itemsCongelados(item.order_id as number);
+    if (congelado) return { ok: false, error: congelado };
 
     const result = await updateOrderItemInternal(itemId, patch);
     if (result.ok) {
@@ -567,8 +613,13 @@ export async function deleteOrderItem(itemId: number): Promise<import('@/lib/ord
     if (!session?.user) return { ok: false, error: 'No autenticado' };
 
     // Se lee el producto ANTES de borrarlo: después ya no hay qué nombrar.
-    const [item] = await sql`SELECT order_id, product, quantity FROM order_items WHERE id = ${itemId}`;
+    const [item] = await sql`
+        SELECT order_id, product, quantity FROM order_items WHERE id = ${itemId}
+    `;
     if (!item) return { ok: false, error: 'La línea no existe' };
+
+    const congelado = await itemsCongelados(item.order_id as number);
+    if (congelado) return { ok: false, error: congelado };
 
     const result = await deleteOrderItemInternal(itemId);
     if (result.ok) {
@@ -592,6 +643,9 @@ export async function addOrderItem(
     const session = await auth();
     if (!session?.user) return { ok: false, error: 'No autenticado' };
 
+    const congelado = await itemsCongelados(orderId);
+    if (congelado) return { ok: false, error: congelado };
+
     const result = await addOrderItemInternal(orderId, payload);
     if (result.ok) {
         await markDocumentsStale(orderId);
@@ -603,6 +657,58 @@ export async function addOrderItem(
         revalidatePath(`/pedidos/${orderId}`);
     }
     return result;
+}
+
+/**
+ * Marcar (o desmarcar) que una línea del pedido se le entregó al cliente.
+ *
+ * SOLO SOBRE LO REMITIDO: entregar algo sin papel es lo que el circuito no quiere,
+ * así que una línea sin remito no se puede marcar. El check escribe lo remitido y
+ * destildar escribe 0; quien marca no tipea ninguna cantidad (por qué se guarda un
+ * número y no un sí/no, ver scripts/42-entrega-al-cliente.sql).
+ *
+ * NO PASA POR itemsCongelados, y no es un olvido: un pedido en "Listo para retirar"
+ * tiene las líneas congeladas —no se le cambian productos ni cantidades— y es
+ * EXACTAMENTE el estado en el que alguien viene a buscar la mercadería. Congelar
+ * también el check dejaría la función sin el único momento en que se usa.
+ */
+export async function setItemHandedOver(itemId: number, entregado: boolean) {
+    const session = await auth();
+    if (!session?.user) return { ok: false as const, error: 'No autenticado' };
+
+    const [item] = await sql`
+        SELECT order_id, product, quantity, delivered_quantity, handed_over_quantity
+        FROM order_items WHERE id = ${itemId}
+    `;
+    if (!item) return { ok: false as const, error: 'La línea no existe' };
+
+    const remitido = Number(item.delivered_quantity ?? 0);
+    if (remitido <= 0) {
+        return { ok: false as const, error: 'Esa línea todavía no tiene remito: no se puede marcar como entregada.' };
+    }
+
+    // Marcar lo que ya estaba marcado no es un cambio y no deja evento: dos clicks
+    // seguidos —o un reintento del navegador— llenaban el historial de renglones
+    // repetidos que decían todos lo mismo.
+    const objetivo = entregado ? remitido : 0;
+    if (Math.abs(Number(item.handed_over_quantity ?? 0) - objetivo) < 0.005) {
+        return { ok: true as const };
+    }
+
+    await sql`
+        UPDATE order_items SET handed_over_quantity = ${objetivo}
+        WHERE id = ${itemId}
+    `;
+    await logOrderEvent(item.order_id as number, {
+        kind: 'handover',
+        field: 'entrega',
+        newValue: `${remitido} × ${item.product}`,
+        body: entregado ? null : 'desmarcada',
+    });
+
+    revalidatePath('/pedidos');
+    revalidatePath(`/pedidos/${item.order_id}`);
+    return { ok: true as const };
 }
 
 // Clientes reales para el alta, del espejo de Alegra. Evita que alguien tenga

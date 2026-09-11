@@ -1,0 +1,200 @@
+// Entregas parciales de un pedido: cuánto de cada línea ya salió del depósito y
+// cuánto falta.
+//
+// Vive SEPARADO de lib/remissions.ts —que habla con Postgres y con Alegra— por el
+// mismo motivo que lib/returns.ts vive separado de lib/order-actions.ts: acá está
+// la regla, y se puede testear sin levantar nada. Además lo importan client
+// components (la fila del producto, la tarjeta del tablero), y lib/remissions.ts
+// arrastra lib/database.ts, que hace throw a nivel de módulo si falta DATABASE_URL.
+//
+// LA REGLA, en una línea: el tope de una entrega es lo PENDIENTE de esa línea —lo
+// pedido menos lo ya remitido—, y no lo pedido. Remitir de más significa que el
+// papel dice que salió mercadería que el pedido nunca pidió, y eso no se arregla
+// después: el remito es un documento de la contabilidad real, se anula, no se borra.
+//
+// REMITIDO NO ES ENTREGADO, y de eso habla todo lo que se ve en pantalla acá.
+// Remitido = esa mercadería tiene su papel emitido. Que el cliente la haya
+// recibido es otro hecho y ya lo dice el ESTADO del pedido: "Listo para retirar"
+// mientras espera, "Retirado" cuando se la llevó. Un pedido puede estar remitido
+// por completo y esperando en el mostrador hace una semana. Por eso nada de acá
+// dice "entregado": diría algo que el sistema no sabe.
+
+/** Una línea del pedido, con lo que ya se entregó de ella. */
+export interface DeliverableItem {
+    id: number
+    product: string
+    /** Lo pedido. */
+    quantity: number
+    /** Lo ya remitido, sumando todos los remitos del pedido. */
+    delivered: number
+    /**
+     * Cuánto de lo remitido ya se le entregó al cliente. Lo marca una persona con
+     * un check; el número existe para que el check se destilde solo cuando sale un
+     * remito nuevo (ver isHandedOver).
+     */
+    handedOver?: number
+}
+
+export interface DeliveryRequestItem {
+    orderItemId: number
+    quantity: number
+}
+
+export type DeliveryState = "sin_remitir" | "parcial" | "remitido"
+
+export const DELIVERY_LABELS: Record<DeliveryState, string> = {
+    sin_remitir: "Sin remitir",
+    parcial: "Remitido en parte",
+    remitido: "Remitido",
+}
+
+// Las cantidades son DECIMAL(10,2) en la base y viajan como float. Comparar
+// 2.9999999 contra 3 y concluir que falta entregar algo sería mentir por un
+// redondeo, así que todo se compara con dos decimales, que es la precisión que la
+// columna guarda.
+const EPSILON = 0.005
+
+export function round2(n: number): number {
+    return Math.round(n * 100) / 100
+}
+
+/** Lo que falta entregar de una línea. Nunca negativo: ver deliveredOverflow. */
+export function pendingQuantity(item: DeliverableItem): number {
+    return Math.max(0, round2(item.quantity - item.delivered))
+}
+
+/**
+ * Líneas donde se remitió MÁS de lo pedido. Pasa cuando el pedido se achica
+ * después de haber remitido —salieron 5 y después alguien bajó la línea a 3—.
+ * No se corrige solo: el papel ya salió con 5. Lo que corresponde es avisarlo.
+ */
+export function deliveredOverflow(items: DeliverableItem[]): DeliverableItem[] {
+    return items.filter((i) => i.delivered - i.quantity > EPSILON)
+}
+
+/** Cuánto del pedido tiene remito emitido. */
+export function deliveryState(items: DeliverableItem[]): DeliveryState {
+    const pedido = items.reduce((s, i) => s + i.quantity, 0)
+    const remitido = items.reduce((s, i) => s + i.delivered, 0)
+    // Un pedido sin líneas no remitió nada, y decir "remitido" porque 0 >= 0
+    // sería marcarlo como salido sin que haya salido nada.
+    if (remitido <= EPSILON) return "sin_remitir"
+    if (remitido >= pedido - EPSILON) return "remitido"
+    return "parcial"
+}
+
+/**
+ * ¿Esta línea ya se le entregó al cliente?
+ *
+ * Es "lo entregado alcanza a lo remitido", no "alguien tildó el check": si después
+ * de tildarlo sale otro remito por lo que faltaba, la línea vuelve a tener
+ * mercadería sin entregar y el check se destilda solo. Marcar mercadería como
+ * entregada porque una vez se tildó una línea más chica sería mentir.
+ *
+ * Una línea sin remito nunca está entregada, por más que el número diga otra cosa:
+ * lo que no tiene papel no salió del depósito.
+ */
+export function isHandedOver(item: DeliverableItem): boolean {
+    if (item.delivered <= EPSILON) return false
+    return (item.handedOver ?? 0) >= item.delivered - EPSILON
+}
+
+/** Cuántas líneas del pedido ya se entregaron, sobre las que se pueden entregar. */
+export function handoverCount(items: DeliverableItem[]): { entregadas: number; remitidas: number } {
+    const remitidas = items.filter((i) => i.delivered > EPSILON)
+    return { entregadas: remitidas.filter(isHandedOver).length, remitidas: remitidas.length }
+}
+
+/** "Remitidas 4 de 10". Lo que queda escrito en el hilo de actividad del pedido. */
+export function describeDelivery(items: DeliverableItem[]): string {
+    const pedido = round2(items.reduce((s, i) => s + i.quantity, 0))
+    const remitido = round2(items.reduce((s, i) => s + i.delivered, 0))
+    return `Remitidas ${remitido} de ${pedido}`
+}
+
+/**
+ * Qué queda sin remitir, nombrado producto por producto: "Optic 9 12-24v (6),
+ * Estaca corta (8)". null = está todo remitido.
+ *
+ * Lo usa el freno para pasar el pedido a "Listo para retirar": decir "falta
+ * remitir" sin decir QUÉ obliga a ir a buscarlo línea por línea.
+ *
+ * SE CORTA EN TRES: un pedido de quince líneas sin remitir no se lee en un toast,
+ * y el que necesita la lista entera la tiene en la pantalla del pedido.
+ */
+export function describePendingDelivery(items: DeliverableItem[]): string | null {
+    const pendientes = items
+        .map((i) => ({ product: i.product, pending: pendingQuantity(i) }))
+        .filter((i) => i.pending > 0)
+    if (pendientes.length === 0) return null
+
+    const nombrados = pendientes.slice(0, 3).map((i) => `${i.product} (${i.pending})`)
+    const resto = pendientes.length - nombrados.length
+    return resto > 0 ? `${nombrados.join(", ")} y ${resto} más` : nombrados.join(", ")
+}
+
+/**
+ * Qué se va a remitir de verdad, o por qué no se puede.
+ *
+ * `request` en null significa "todo lo pendiente": es el caso normal —el pedido
+ * sale completo— y también lo que hace la emisión automática al pasar a
+ * "Preparando entrega", que no tiene a nadie a quien preguntarle cantidades.
+ *
+ * Se valida TODO antes de emitir nada, igual que planReturn: medio remito emitido
+ * deja el pedido peor que no haber hecho nada, y acá "peor" es un documento de más
+ * en la contabilidad del cliente.
+ */
+export function planDelivery(
+    items: DeliverableItem[],
+    request: DeliveryRequestItem[] | null,
+): { items: Array<{ orderItemId: number; product: string; quantity: number }> } | { error: string } {
+    if (request === null) {
+        const todo = items
+            .map((i) => ({ orderItemId: i.id, product: i.product, quantity: pendingQuantity(i) }))
+            .filter((l) => l.quantity > 0)
+        if (todo.length === 0) {
+            return { error: "El pedido ya está remitido por completo: no hay unidades pendientes." }
+        }
+        return { items: todo }
+    }
+
+    // Las filas en cero no son un error: el diálogo manda todas las líneas del
+    // pedido y quien remite deja en cero lo que todavía no sale.
+    const pedido = request.filter((r) => Number.isFinite(r.quantity) && r.quantity > 0)
+    if (pedido.length === 0) return { error: "No se indicó ninguna cantidad a remitir." }
+
+    const porItem = new Map(items.map((i) => [i.id, i]))
+
+    // Una línea repetida se suma antes de comparar contra el tope, igual que en la
+    // devolución de materiales: dos filas de 2 contra 3 pendientes son 4.
+    const totales = new Map<number, number>()
+    for (const r of pedido) {
+        totales.set(r.orderItemId, round2((totales.get(r.orderItemId) ?? 0) + r.quantity))
+    }
+
+    const errores: string[] = []
+    for (const [orderItemId, total] of totales) {
+        const item = porItem.get(orderItemId)
+        if (!item) {
+            errores.push("Hay una línea que no pertenece a este pedido.")
+            continue
+        }
+        const pendiente = pendingQuantity(item)
+        if (total - pendiente > EPSILON) {
+            errores.push(
+                pendiente === 0
+                    ? `${item.product}: ya está remitido por completo.`
+                    : `${item.product}: ${total} supera las ${pendiente} unidades pendientes.`,
+            )
+        }
+    }
+    if (errores.length > 0) return { error: errores.join(" ") }
+
+    return {
+        items: [...totales.entries()].map(([orderItemId, quantity]) => ({
+            orderItemId,
+            product: porItem.get(orderItemId)!.product,
+            quantity,
+        })),
+    }
+}

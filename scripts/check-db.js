@@ -1,13 +1,9 @@
-const { neon } = require("@neondatabase/serverless");
+const { connect } = require("./db");
 
 async function checkDb() {
-    if (!process.env.DATABASE_URL) {
-        console.error("❌ DATABASE_URL is not set");
-        return;
-    }
 
     try {
-        const sql = neon(process.env.DATABASE_URL);
+        const sql = connect();
 
         console.log("Checking database connection...");
 

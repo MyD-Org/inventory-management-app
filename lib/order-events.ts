@@ -22,6 +22,8 @@ export type OrderEventKind =
     | "materials_consumed"
     | "materials_returned"
     | "invoice"
+    /** Alguien marcó que una línea se le entregó al cliente. */
+    | "handover"
     | "note"
 
 /**

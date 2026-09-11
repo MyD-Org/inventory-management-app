@@ -13,7 +13,25 @@ App (:3005) ──HTTP──> neon-proxy (:4444) ──pg──> Postgres docker
 > Neon), no el protocolo Postgres. `lib/neon-local.ts` redirige el driver al proxy
 > cuando `NEON_LOCAL_PROXY` está seteada (en Vercel no existe → no hace nada).
 
+## 0. El camino corto
+
+```bash
+bash scripts/setup-local.sh
+```
+
+Hace los pasos 1, 3 y 4 de acá abajo en el orden correcto, es idempotente y se
+planta antes de tocar nada si `.env.local` no tiene `NEON_LOCAL_PROXY` —sin esa
+variable la app y los scripts van a Neon de producción, y el accidente no falla:
+te deja trabajando contra datos reales sin decir una palabra—. Lo de abajo queda
+como referencia y para cuando algo del medio hay que hacerlo a mano.
+
 ## 1. Postgres + proxy (docker)
+
+> Ojo con el 5432: si hay un Postgres instalado en la Mac ocupando ese puerto,
+> el proxy —que se conecta a `host.docker.internal`— termina en ESE y no en el
+> contenedor. Se aplica la migración de un lado y la app lee del otro. Por eso el
+> script del punto 0 pone los dos contenedores en una red propia, donde el proxy
+> llega al Postgres por nombre y ningún puerto de la Mac se mete en el medio.
 
 ```bash
 # Postgres (si no existe ya un contenedor postgres en :5432)
@@ -30,6 +48,19 @@ docker run -d --name neon-proxy -p 4444:4444 \
   -e PG_CONNECTION_STRING="postgres://postgres:postgres@host.docker.internal:5432/avantec" \
   ghcr.io/timowilhelm/local-neon-http-proxy:main
 ```
+
+> **Contra qué base escriben los scripts.** Todos los de `scripts/` conectan por
+> `scripts/db.js`, que respeta `NEON_LOCAL_PROXY` igual que la app y **imprime la
+> base antes de tocar nada**:
+>
+> ```
+> ▶ Base: LOCAL, la que sirva http://localhost:4444/sql (el host de DATABASE_URL no se usa)
+> ▶ Base: ep-xxx.neon.tech/avantec — Neon REMOTO
+> ```
+>
+> Leé esa línea antes de aplicar una migración. Sin `NEON_LOCAL_PROXY` en el
+> entorno, `node scripts/run-sql.js` va al Neon de `DATABASE_URL` — que en un
+> `.env.local` apuntado a producción es producción.
 
 ## 2. ai-api local con el tenant Avantec
 

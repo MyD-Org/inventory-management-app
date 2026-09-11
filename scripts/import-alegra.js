@@ -8,11 +8,9 @@
 // duplica (facturas: UNIQUE doc_type+code; pagos: UNIQUE number+date).
 // Encoding de Alegra: Windows-1252, separador ';', decimales con coma.
 
-const { neon } = require("@neondatabase/serverless");
+const { connect } = require("./db");
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config({ path: ".env.local" });
-require("dotenv").config();
 
 // ── Parsing ──────────────────────────────────────────────────────────────────
 
@@ -226,13 +224,12 @@ function collectCsvFiles(args) {
 }
 
 async function run() {
-    if (!process.env.DATABASE_URL) { console.error("❌ DATABASE_URL no está seteada"); process.exit(1); }
     const args = process.argv.slice(2);
     if (!args.length) {
         console.log("Uso: node scripts/import-alegra.js <archivo.csv | carpeta> [...]");
         process.exit(1);
     }
-    const sql = neon(process.env.DATABASE_URL);
+    const sql = connect();
     const clientCache = new Map();
     const files = collectCsvFiles(args);
     if (!files.length) { console.error("❌ No encontré archivos .csv en los argumentos"); process.exit(1); }

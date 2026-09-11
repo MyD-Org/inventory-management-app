@@ -1,16 +1,10 @@
-const { neon } = require("@neondatabase/serverless");
+const { connect } = require("./db");
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config({ path: ".env.local" });
-require("dotenv").config();
 
 async function run() {
-    if (!process.env.DATABASE_URL) {
-        console.error("❌ DATABASE_URL is not set");
-        process.exit(1);
-    }
 
-    const sql = neon(process.env.DATABASE_URL);
+    const sql = connect();
     const filePath = path.join(__dirname, "04-create-budget-tables.sql");
     const raw = fs.readFileSync(filePath, "utf8");
 

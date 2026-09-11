@@ -37,8 +37,18 @@ export interface BoardCard {
     // null = aún no se emitió. Se usa para marcar tarjetas en la columna
     // "por_facturar" que todavía necesitan la factura antes de salir.
     alegra_invoice_id: string | null
-    // Lo mismo para el remito: los dos documentos frenan la salida del pedido.
-    alegra_remission_id: string | null
+    // Del remito no se guarda el id y no es un olvido: un pedido puede tener
+    // varios porque la mercadería sale por partes, así que lo que frena la salida
+    // no es "no hay remito" sino que quede algo sin remitir. El número de cada
+    // papel vive en el detalle.
+    /**
+     * Unidades que faltan remitir, sumadas LÍNEA POR LÍNEA (ver la consulta).
+     *
+     * No es "pedidas menos remitidas": una línea remitida de más tapaba a otra
+     * sin remitir y la tarjeta decía que el pedido podía salir mientras el
+     * servidor —que mira línea por línea— lo frenaba.
+     */
+    pending: number
     modified_at: string | null
     delivery_date_verified_at: string | null
 }
@@ -95,7 +105,7 @@ export function OrdersBoard({ cards, query = "" }: { cards: BoardCard[]; query?:
     const missingInvoice = (c: BoardCard) =>
         !emitiendo[c.id] && statusOf(c) === "por_facturar" && !c.alegra_invoice_id
     const missingRemission = (c: BoardCard) =>
-        !emitiendo[c.id] && statusOf(c) === "por_facturar" && !c.alegra_remission_id
+        !emitiendo[c.id] && statusOf(c) === "por_facturar" && c.pending > 0.005
     // La franja roja es una sola: lo que frena la salida es que FALTE un papel,
     // sin importar cuál. Cuál falta lo dicen las etiquetas de la tarjeta.
     const missingDoc = (c: BoardCard) => missingInvoice(c) || missingRemission(c)
@@ -147,7 +157,7 @@ export function OrdersBoard({ cards, query = "" }: { cards: BoardCard[]; query?:
             const card = cards.find((c) => c.id === id)
             const falta: string[] = []
             if (!card?.alegra_invoice_id) falta.push("factura")
-            if (!card?.alegra_remission_id) falta.push("remito")
+            if (card && card.pending > 0.005) falta.push("remito")
             // Sin nada que emitir no se avisa nada: el pedido solo cambia de columna.
             if (falta.length > 0) setEmitiendo((e) => ({ ...e, [id]: falta.join(" y ") }))
         }
@@ -313,13 +323,20 @@ export function OrdersBoard({ cards, query = "" }: { cards: BoardCard[]; query?:
                                                 </span>
                                             )}
 
+                                            {/* Con algo ya remitido la etiqueta dice
+                                                CUÁNTO falta, no que falte el remito:
+                                                el papel de la primera entrega ya
+                                                salió y decir "falta emitir el remito"
+                                                mandaría a emitir uno de más. */}
                                             {missingRemission(card) && (
                                                 <span
                                                     className="inline-flex w-fit items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive"
-                                                    title="El pedido está para facturar y remitir, pero falta emitir el remito"
+                                                    title="El pedido está para facturar y remitir, y todavía queda mercadería sin remitir"
                                                 >
                                                     <TriangleAlert className="h-3 w-3" />
-                                                    Falta emitir el remito
+                                                    {card.pending < card.units
+                                                        ? `Falta remitir ${card.pending} u.`
+                                                        : "Falta emitir el remito"}
                                                 </span>
                                             )}
 

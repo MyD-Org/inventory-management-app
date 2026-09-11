@@ -1,14 +1,9 @@
-const { neon } = require("@neondatabase/serverless");
-require('dotenv').config();
+const { connect } = require("./db");
 
 async function createUsersTable() {
-    if (!process.env.DATABASE_URL) {
-        console.error("❌ DATABASE_URL is not set");
-        return;
-    }
 
     try {
-        const sql = neon(process.env.DATABASE_URL);
+        const sql = connect();
 
         console.log("Creating users table...");
 

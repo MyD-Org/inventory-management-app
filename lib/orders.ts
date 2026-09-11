@@ -258,6 +258,20 @@ export interface OrderItem {
     specs: Record<string, string>
     quantity: number
     needs_review: boolean
+    /**
+     * Cuánto de esta línea tiene REMITO emitido, sumando todos los remitos del
+     * pedido. Menor que quantity = falta remitir el resto.
+     *
+     * No dice que el cliente la haya recibido: eso lo dice el estado del pedido
+     * ("Listo para retirar" / "Retirado").
+     */
+    delivered_quantity: number
+    /**
+     * Cuánto de lo remitido ya se le entregó al cliente. Lo marca una persona con
+     * un check en la línea; el número está para que ese check se destilde solo
+     * cuando sale un remito nuevo (ver isHandedOver).
+     */
+    handed_over_quantity: number
     /** Valores que el pedido pidió y la hoja de costo no mapea, p. ej. ["clamp=media"]. */
     unmapped_specs: string[]
     materials: OrderMaterial[]
@@ -301,8 +315,6 @@ export interface Order {
     /** Remito emitido en Alegra. null = todavía no se remitió. */
     alegra_remission_id: number | null
     alegra_remission_number: string | null
-    /** El pedido cambió después de remitir y el remito todavía no se actualizó. */
-    remission_stale: boolean
     items: OrderItem[]
     modified_at: string | null
     delivery_date_verified_at: string | null
@@ -337,13 +349,27 @@ export function normalizeOrigin(v: unknown): OrderOrigin {
 // factura al día y el remito viejo, o al revés, porque se emiten y se actualizan
 // independientemente. No hace nada si el pedido no tiene ninguno de los dos, así
 // que se puede llamar sin preguntar antes.
+//
+// SOLO LA FACTURA SE ENSUCIA, y el remito no, aunque los dos sean documentos del
+// mismo pedido:
+//
+//   La factura cubre el pedido ENTERO y es UNA. Cualquier cambio de ítem la
+//   desalinea —agregar un producto significa que hay algo más para cobrar— y se
+//   arregla reescribiendo la que está.
+//
+//   El remito dice qué mercadería SALIÓ ESE DÍA. Que el pedido cambie después no
+//   lo desmiente: lo que salió, salió. Lo que falta sale en OTRO remito, y para
+//   eso está "Remitir el resto". Un papel realmente mal emitido se anula en
+//   Alegra, que es donde vive la contabilidad; la app no reescribe documentos
+//   emitidos.
+//
+// La columna orders.remission_stale queda en la base sin que nadie la lea: viene
+// de 29-remito-stale.sql y sacarla es una migración sobre producción a cambio de
+// nada. Lo que importa es que dejó de escribirse.
 export async function markDocumentsStale(orderId: number): Promise<void> {
     await sql`
-        UPDATE orders SET
-            invoice_stale = (alegra_invoice_id IS NOT NULL),
-            remission_stale = (alegra_remission_id IS NOT NULL)
-        WHERE id = ${orderId}
-          AND (alegra_invoice_id IS NOT NULL OR alegra_remission_id IS NOT NULL)
+        UPDATE orders SET invoice_stale = (alegra_invoice_id IS NOT NULL)
+        WHERE id = ${orderId} AND alegra_invoice_id IS NOT NULL
     `
 }
 
@@ -356,7 +382,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
                delivery_date_estimate::text AS delivery_date_estimate,
                source_conversation, reference, notes, invoice_terms, invoice_notes, created_at, updated_at,
                alegra_invoice_id, alegra_invoice_number, invoice_warnings, invoice_stale,
-               alegra_remission_id, alegra_remission_number, remission_stale,
+               alegra_remission_id, alegra_remission_number,
                modified_at::text AS modified_at,
                delivery_date_verified_at::text AS delivery_date_verified_at
         FROM orders WHERE id = ${orderId}
@@ -365,7 +391,7 @@ export async function readOrder(orderId: number): Promise<Order | null> {
 
     const items = await sql`
         SELECT id, line_no, budget_id, product, product_external_id, specs, quantity,
-               needs_review, unmapped_specs
+               needs_review, unmapped_specs, delivered_quantity, handed_over_quantity
         FROM order_items WHERE order_id = ${orderId} ORDER BY line_no ASC
     `
     const itemIds = (items as any[]).map((i) => i.id)
@@ -384,6 +410,8 @@ export async function readOrder(orderId: number): Promise<Order | null> {
         items: (items as any[]).map((i) => ({
             ...i,
             quantity: Number(i.quantity),
+            delivered_quantity: Number(i.delivered_quantity ?? 0),
+            handed_over_quantity: Number(i.handed_over_quantity ?? 0),
             materials: (materials as any[])
                 .filter((m) => m.order_item_id === i.id)
                 .map(({ order_item_id, ...m }) => ({

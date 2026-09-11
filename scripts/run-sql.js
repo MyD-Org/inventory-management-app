@@ -1,21 +1,18 @@
 // Corre un archivo .sql contra la base (DATABASE_URL). Uso:
 //   node scripts/run-sql.js scripts/10-alegra-mirror.sql
-const { neon } = require("@neondatabase/serverless");
+//
+// CONTRA QUÉ BASE: la que diga DATABASE_URL, y por el proxy local si hay
+// NEON_LOCAL_PROXY (ver scripts/db.js). Lo imprime antes de tocar nada.
 const fs = require("fs");
-require("dotenv").config({ path: ".env.local" });
-require("dotenv").config();
+const { connect } = require("./db");
 
 async function run() {
-    if (!process.env.DATABASE_URL) {
-        console.error("❌ DATABASE_URL is not set");
-        process.exit(1);
-    }
     const file = process.argv[2];
     if (!file || !fs.existsSync(file)) {
         console.error("Uso: node scripts/run-sql.js <archivo.sql>");
         process.exit(1);
     }
-    const sql = neon(process.env.DATABASE_URL);
+    const sql = connect();
     const raw = fs.readFileSync(file, "utf8");
     const statements = raw
         .split(/;\s*(?:\r?\n|$)/)

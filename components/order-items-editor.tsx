@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Check, Loader2, PackageX, Plus, TriangleAlert, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { addOrderItem, deleteOrderItem, updateOrderItem } from "@/lib/order-actions"
+import { addOrderItem, deleteOrderItem, setItemHandedOver, updateOrderItem } from "@/lib/order-actions"
+import { isHandedOver } from "@/lib/deliveries"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { ProductPicker } from "@/components/product-picker"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -21,6 +22,16 @@ interface Item {
     id: number
     product: string
     quantity: number
+    /**
+     * Cuánto de esta línea tiene remito emitido, sumando todos los remitos del
+     * pedido. La salida va por partes: 4 hoy y 6 la semana que viene.
+     */
+    delivered?: number
+    /**
+     * Cuánto de lo remitido ya se le entregó al cliente. Otro hecho que el de
+     * arriba: lo remitido lo dice el papel, esto lo marca una persona.
+     */
+    handedOver?: number
     specs: Record<string, string>
     // El producto no matcheó ninguna hoja de costo: la línea no aporta materiales.
     needs_review: boolean
@@ -30,6 +41,64 @@ interface Item {
 }
 
 const SIN = "__ninguna__"
+
+// El check de "se lo llevó el cliente".
+//
+// SOLO DONDE HAY REMITO: entregar mercadería sin papel es lo que el circuito no
+// quiere, así que en una línea sin remitir el check no existe —no se muestra
+// deshabilitado, que invitaría a preguntarse por qué no anda—.
+//
+// NO LO APAGA readOnly, y eso es a propósito: un pedido en "Listo para retirar"
+// tiene las líneas congeladas y es justo el estado en el que alguien viene a
+// buscar la mercadería. Lo que está congelado son los PRODUCTOS del pedido, no el
+// registro de qué se llevaron.
+function EntregadoCheck({
+    item,
+    pendiente,
+    onToggle,
+}: {
+    item: Item
+    /**
+     * Lo que se acaba de marcar y todavía no volvió del servidor. Sin esto el
+     * check se destildaba solo entre el click y el refresh —está atado al dato del
+     * servidor, que hasta ese momento sigue diciendo lo viejo— y quien lo veía
+     * volver atrás lo clickeaba de nuevo, dejando dos renglones en el historial.
+     */
+    pendiente: boolean | undefined
+    onToggle: (item: Item, entregado: boolean) => void
+}) {
+    const remitido = item.delivered ?? 0
+    if (remitido <= 0) return <span className="text-muted-foreground">—</span>
+
+    const entregado =
+        pendiente ??
+        isHandedOver({
+            id: item.id,
+            product: item.product,
+            quantity: item.quantity,
+            delivered: remitido,
+            handedOver: item.handedOver ?? 0,
+        })
+
+    return (
+        <input
+            type="checkbox"
+            className="h-4 w-4 cursor-pointer accent-emerald-600 disabled:cursor-wait"
+            disabled={pendiente !== undefined}
+            checked={entregado}
+            // La fila entera abre el editor al hacer click: sin esto, marcar la
+            // entrega abriría también la edición del producto.
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => onToggle(item, e.target.checked)}
+            aria-label={`Marcar ${item.product} como entregado al cliente`}
+            title={
+                entregado
+                    ? "Entregado al cliente"
+                    : `Marcar como entregado (${remitido} remitidas)`
+            }
+        />
+    )
+}
 
 export function OrderItemsEditor({
     orderId,
@@ -83,6 +152,55 @@ export function OrderItemsEditor({
         specs: Record<string, string>
     } | null>(null)
     const [addingSave, setAddingSave] = useState(false)
+    // La columna del check solo existe si alguna línea ya tiene remito: en un
+    // pedido sin remitir sería una columna de guiones a lo largo de toda la tabla,
+    // y la tabla ya es ancha.
+    const hayEntregas = items.some((i) => (i.delivered ?? 0) > 0)
+
+    // Lo que se marcó y todavía no volvió del servidor, por línea. Se guarda por
+    // id y no una sola bandera porque se marcan varias seguidas cuando el cliente
+    // se lleva todo junto, y una fila esperando no puede bloquear a las otras.
+    const [marcadas, setMarcadas] = useState<Record<number, boolean>>({})
+
+    async function marcarEntregado(item: Item, entregado: boolean) {
+        setMarcadas((m) => ({ ...m, [item.id]: entregado }))
+        const result = await setItemHandedOver(item.id, entregado)
+        if (!result.ok) {
+            // Vuelve a lo que diga el servidor: la marca no llegó a existir.
+            setMarcadas((m) => {
+                const next = { ...m }
+                delete next[item.id]
+                return next
+            })
+            toast.error("No se pudo marcar la entrega", { description: result.error })
+            return
+        }
+        toast.success(entregado ? `${item.product} entregado` : `${item.product}: entrega desmarcada`)
+        router.refresh()
+    }
+
+    // Cuando el pedido vuelve a leerse, el dato del servidor ya dice lo mismo que
+    // la marca local: se sueltan las que coinciden para no quedar pisando al
+    // servidor si alguien más cambia la misma línea.
+    useEffect(() => {
+        setMarcadas((m) => {
+            const next: Record<number, boolean> = {}
+            for (const [id, valor] of Object.entries(m)) {
+                const item = items.find((i) => i.id === Number(id))
+                if (!item) continue
+                const real = isHandedOver({
+                    id: item.id,
+                    product: item.product,
+                    quantity: item.quantity,
+                    delivered: item.delivered ?? 0,
+                    handedOver: item.handedOver ?? 0,
+                })
+                if (real !== valor) next[Number(id)] = valor
+            }
+            return next
+        })
+    }, [items])
+
     const [highlightedId, setHighlightedId] = useState<number | undefined>(highlightedItemId)
 
     useEffect(() => {
@@ -194,6 +312,17 @@ export function OrderItemsEditor({
                                     </span>
                                 </th>
                             ))}
+                            {/* Al FINAL y sin la cantidad remitida al lado: esta tabla
+                                es la orden de trabajo y lo primero que se lee tiene que
+                                ser qué armar. Cuánto se remitió de cada línea se
+                                consulta en el diálogo de remitir, que es donde se
+                                decide; acá solo queda la marca de que el cliente se lo
+                                llevó, que es una acción y no un dato. */}
+                            {hayEntregas && (
+                                <th className="no-print px-3 py-2 text-xs font-normal text-muted-foreground text-center w-[80px]">
+                                    Entregado
+                                </th>
+                            )}
                         </tr>
                     </thead>
                     <tbody>
@@ -305,6 +434,15 @@ export function OrderItemsEditor({
                                         </td>
                                     )
                                 })}
+                                {hayEntregas && (
+                                    <td className="no-print px-3 py-2 text-center align-middle">
+                                        <EntregadoCheck
+                                            item={item}
+                                            pendiente={marcadas[item.id]}
+                                            onToggle={marcarEntregado}
+                                        />
+                                    </td>
+                                )}
                             </tr>
                         )
                     }
@@ -332,6 +470,7 @@ export function OrderItemsEditor({
                                         }
                                     />
                                 </td>
+                                {/* Lo remitido no se edita: lo dicen los remitos. */}
                                 <td className="px-3 py-2 text-base font-medium">
                                     {cambiandoProducto ? (
                                         <ProductPicker
@@ -428,10 +567,19 @@ export function OrderItemsEditor({
                                         )}
                                     </td>
                                 ))}
+                                {hayEntregas && (
+                                    <td className="no-print px-3 py-2 text-center align-middle">
+                                        <EntregadoCheck
+                                            item={item}
+                                            pendiente={marcadas[item.id]}
+                                            onToggle={marcarEntregado}
+                                        />
+                                    </td>
+                                )}
                             </tr>
 
                             <tr className="bg-muted/30">
-                                <td colSpan={2 + columnas.length} className="px-3 pb-3">
+                                <td colSpan={(hayEntregas ? 3 : 2) + columnas.length} className="px-3 pb-3">
                                     <div className="flex items-center gap-2">
                                         <Button
                                             variant="ghost"
@@ -492,6 +640,9 @@ export function OrderItemsEditor({
                                             }
                                         />
                                     </td>
+                                    {/* Una línea nueva no tiene nada remitido: la
+                                        celda existe para que la fila siga alineada
+                                        con el encabezado. */}
                                     <td className="px-3 py-2">
                                         {nuevo.product ? (
                                             <button
@@ -584,10 +735,15 @@ export function OrderItemsEditor({
                                             )}
                                         </td>
                                     ))}
+                                    {hayEntregas && (
+                                        <td className="no-print px-3 py-2 text-center align-middle text-muted-foreground">
+                                            —
+                                        </td>
+                                    )}
                                 </tr>
 
                                 <tr className="bg-muted/30">
-                                    <td colSpan={2 + columnas.length} className="px-3 pb-3">
+                                    <td colSpan={(hayEntregas ? 3 : 2) + columnas.length} className="px-3 pb-3">
                                         <div className="flex items-center justify-end gap-2">
                                             <Button
                                                 variant="ghost"

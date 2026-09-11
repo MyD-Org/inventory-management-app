@@ -20,8 +20,9 @@ async function markModified(orderId: number) {
         SET modified_at = NOW(), delivery_date_verified_at = NULL
         WHERE id = ${orderId}
     `
-    // Si el pedido ya tenía factura o remito, quedaron viejos. El CRM edita por
-    // acá, así que sin esto un cambio del CRM los desalinea sin avisar.
+    // Si el pedido ya tenía factura, quedó vieja. El CRM edita por acá, así que
+    // sin esto un cambio del CRM la desalinea sin avisar. El remito no se ensucia:
+    // ver markDocumentsStale.
     await markDocumentsStale(orderId)
 }
 
@@ -52,7 +53,9 @@ export async function PATCH(
 
     try {
         // El producto se lee ANTES de tocarlo, para poder nombrarlo en la historia.
-        const [previo] = await sql`SELECT product, quantity, specs FROM order_items WHERE id = ${itemId}`
+        const [previo] = await sql`
+            SELECT product, quantity, specs FROM order_items WHERE id = ${itemId}
+        `
         const result = await updateOrderItemInternal(itemId, {
             quantity: body.quantity !== undefined ? Number(body.quantity) : undefined,
             specs: body.specs,
@@ -107,7 +110,9 @@ export async function DELETE(
     }
 
     try {
-        const [previo] = await sql`SELECT product, quantity FROM order_items WHERE id = ${itemId}`
+        const [previo] = await sql`
+            SELECT product, quantity FROM order_items WHERE id = ${itemId}
+        `
         const result = await deleteOrderItemInternal(itemId)
         if (!result.ok) {
             return NextResponse.json({ error: result.error }, { status: 400 })

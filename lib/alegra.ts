@@ -437,6 +437,15 @@ export async function updateRemission(
     }
 }
 
+// El PDF de un remito tal como lo arma Alegra, para imprimirlo. Es solo lectura.
+//
+// NO SE GUARDA: el link viene firmado y vence (?Expires=…), así que se pide uno
+// nuevo cada vez que alguien quiere imprimir. Devuelve null si Alegra no lo trae.
+export async function getRemissionPdfUrl(remissionId: number): Promise<string | null> {
+    const rem = await alegraFetch<{ pdf?: string | null }>(`/remissions/${remissionId}?fields=pdf`)
+    return rem.pdf || null
+}
+
 // Emite un remito. ESCRIBE en la contabilidad real, igual que createInvoice.
 //
 // SIN NUMERACIÓN EXPLÍCITA: a diferencia de las facturas, acá no se manda

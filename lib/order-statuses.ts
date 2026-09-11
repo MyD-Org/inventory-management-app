@@ -51,6 +51,22 @@ export function customerStatus(status: string, overrides?: Record<string, string
 
 export const ORDER_PRIORITIES = ["baja", "normal", "alta"] as const
 
+// El pedido ya salió de las manos del taller: está esperando que lo retiren o ya
+// se lo llevaron. Para llegar ahí la factura tiene que estar emitida y TODO
+// remitido (ver updateOrderStatus), así que sus líneas ya están facturadas,
+// contadas y embaladas. Tocarlas después no completa el pedido: lo desalinea de
+// los papeles que ya salieron, y una cantidad que sube deja mercadería sin remito
+// en un pedido que el tablero da por listo.
+//
+// Lo que sí se puede hacer siempre: emitir, actualizar documentos y dejar notas.
+// Lo que se congela son las LÍNEAS.
+export const CLOSED_STATUSES: OrderStatus[] = ["listo_para_retirar", "retirado"]
+
+/** ¿Se le pueden agregar, cambiar o quitar líneas al pedido? */
+export function acceptsItemChanges(status: string): boolean {
+    return !CLOSED_STATUSES.includes(status as OrderStatus)
+}
+
 export const API_EDITABLE_STATUSES: OrderStatus[] = ["por_revisar", "recibido", "en_proceso"]
 
 export function isApiEditable(status: OrderStatus): boolean {
