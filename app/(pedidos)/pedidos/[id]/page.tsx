@@ -276,11 +276,13 @@ export default async function OrderDetailPage({
     ])
 
     // Specs en el orden del vocabulario y solo los valores: "ámbar · grampa larga · 25°"
-    // se lee de corrido, mientras que con etiquetas ocupa el triple.
+    // se lee de corrido, mientras que con etiquetas ocupa el triple. Se muestra el
+    // nombre ACTUAL de cada opción, no la clave guardada en la línea: si la opción
+    // se renombró, el pedido lo refleja.
     const specsLine = (specs: Record<string, string>) =>
         Object.keys(vocab)
             .filter((k) => specs[k])
-            .map((k) => specs[k])
+            .map((k) => vocab[k].labels[specs[k]] ?? specs[k])
             .join(" · ")
 
     // Los boolean no cuentan como faltantes: no marcarlos ya es una respuesta.
