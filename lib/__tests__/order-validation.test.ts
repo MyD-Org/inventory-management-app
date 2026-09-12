@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { normalizePhone, validateOrderPayloadWith, validateSpecs, type SpecField } from "@/lib/order-validation"
+import { normalizePhone, normalizeSpecs, validateOrderPayloadWith, validateSpecs, type SpecField } from "@/lib/order-validation"
 
 // Vocabulario de prueba con los tres tipos de campo que existen.
 const vocab: Record<string, SpecField> = {
@@ -169,5 +169,42 @@ describe("normalizePhone", () => {
         expect(normalizePhone("   ")).toBe("")
         expect(normalizePhone("1234567")).toBe("")   // 7 dígitos: matchearía de más
         expect(normalizePhone("no tengo")).toBe("")
+    })
+})
+
+// Una opción renombrada conserva su clave: el bot ve el nombre nuevo y lo manda,
+// y la línea tiene que guardar la clave que enganchan fichas y familias.
+describe("normalizeSpecs", () => {
+    const renombrado: Record<string, SpecField> = {
+        clamp: {
+            label: "Grampa",
+            options: ["Grampa corta", "Grampa larga"],
+            free_text: false,
+            kind: "list",
+            labels: { "Grampa corta": "Corta", "Grampa larga": "Larga", "Grampa en U": "U" },
+        },
+        other: { label: "Otras", options: [], free_text: true, kind: "text", labels: {} },
+    }
+
+    it("traduce el nombre actual a la clave", () => {
+        expect(normalizeSpecs({ clamp: "Corta" }, renombrado)).toEqual({ clamp: "Grampa corta" })
+    })
+
+    it("no distingue mayúsculas ni espacios en el nombre", () => {
+        expect(normalizeSpecs({ clamp: " larga " }, renombrado)).toEqual({ clamp: "Grampa larga" })
+    })
+
+    it("deja la clave como está", () => {
+        expect(normalizeSpecs({ clamp: "Grampa corta" }, renombrado)).toEqual({ clamp: "Grampa corta" })
+    })
+
+    it("no ofrece ni traduce a una opción desactivada", () => {
+        expect(normalizeSpecs({ clamp: "U" }, renombrado)).toEqual({ clamp: "U" })
+    })
+
+    it("no toca texto libre, campos desconocidos ni valores sin coincidencia", () => {
+        const specs = { other: "Corta", nope: "x", clamp: "Mediana" }
+        expect(normalizeSpecs(specs, renombrado)).toEqual(specs)
+        expect(validateSpecs(normalizeSpecs({ clamp: "Mediana" }, renombrado), renombrado)).toHaveLength(1)
     })
 })

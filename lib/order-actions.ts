@@ -288,6 +288,14 @@ export async function createSpecOption(fieldKey: string, value: string, label: s
             return { ok: true, reactivated: true };
         }
 
+        // Una opción renombrada conserva su clave vieja: el nombre nuevo solo vive
+        // en el label, y sin este chequeo se podía cargar otra igual.
+        const [sameName] = await sql`
+            SELECT id FROM spec_options
+            WHERE field_key = ${fieldKey} AND LOWER(COALESCE(label, value)) = LOWER(${label.trim() || cleanValue})
+        `;
+        if (sameName) return { error: `"${label.trim() || cleanValue}" ya está en la lista` };
+
         const [{ next }] = await sql`
             SELECT COALESCE(MAX(position), 0) + 1 AS next FROM spec_options WHERE field_key = ${fieldKey}
         `;
@@ -304,29 +312,37 @@ export async function createSpecOption(fieldKey: string, value: string, label: s
     }
 }
 
-// Renombrar una opción: se actualizan value y label juntos (se cargan iguales).
-// Los pedidos que ya guardaron el valor viejo lo siguen mostrando como texto
-// crudo, sin mapear a etiqueta nueva.
-export async function updateSpecOption(id: number, value: string) {
+// Renombrar una opción cambia SOLO su nombre (label). El value es la clave con la
+// que la opción está enganchada en todos lados —familias, variantes de las
+// fichas, agregados de factura y las specs de cada pedido— y no se toca nunca:
+// si cambiara, esas copias quedarían apuntando a una opción que ya no existe y
+// la línea saldría sin material. Cada pantalla busca el nombre por la clave, así
+// que renombrar se ve en todos lados a la vez. Para una opción distinta se crea
+// una nueva.
+export async function updateSpecOption(id: number, label: string) {
     const session = await auth();
     if (session?.user?.role !== 'admin') return { error: 'Solo un admin puede editar el vocabulario' };
 
-    const cleanValue = value.trim();
-    if (!cleanValue) return { error: 'El valor es requerido' };
+    const cleanLabel = label.trim();
+    if (!cleanLabel) return { error: 'El nombre es requerido' };
 
     try {
-        const [current] = await sql`SELECT field_key, value FROM spec_options WHERE id = ${id}`;
+        const [current] = await sql`SELECT field_key FROM spec_options WHERE id = ${id}`;
         if (!current) return { error: 'La opción ya no existe' };
 
+        // Dos opciones con el mismo nombre serían indistinguibles en cualquier lista.
         const [other] = await sql`
-            SELECT id FROM spec_options WHERE field_key = ${current.field_key} AND value = ${cleanValue} AND id != ${id}
+            SELECT id FROM spec_options
+            WHERE field_key = ${current.field_key} AND id != ${id}
+              AND (LOWER(COALESCE(label, value)) = LOWER(${cleanLabel}) OR LOWER(value) = LOWER(${cleanLabel}))
         `;
-        if (other) return { error: `"${cleanValue}" ya está en la lista` };
+        if (other) return { error: `"${cleanLabel}" ya está en la lista` };
 
-        await sql`UPDATE spec_options SET value = ${cleanValue}, label = ${cleanValue} WHERE id = ${id}`;
+        await sql`UPDATE spec_options SET label = ${cleanLabel} WHERE id = ${id}`;
         revalidatePath('/settings/variaciones');
         revalidatePath('/materials/familias');
         revalidatePath('/fichas');
+        revalidatePath('/pedidos', 'layout');
         return { ok: true };
     } catch (error) {
         console.error('Error en updateSpecOption:', error);

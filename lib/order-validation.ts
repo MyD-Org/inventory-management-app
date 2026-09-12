@@ -15,9 +15,10 @@ export interface SpecField {
     // En 'boolean' NO marcar es una respuesta válida (el "no"), no un dato que
     // falte confirmar: por eso no entra en el conteo de faltantes.
     kind: SpecKind
-    // Cómo se muestra cada opción ("calido" -> "Cálido", "8" -> "8°"). Es solo
-    // para la UI: GET /api/specs sigue devolviendo options tal cual manda el doc
-    // del CRM, porque esos son los valores del contrato con el bot.
+    // El nombre de cada opción, por clave. `options` son las claves: no cambian
+    // nunca y es lo que se guarda en los pedidos, familias y fichas. El nombre se
+    // edita desde /settings/variaciones y es lo único que se muestra. Incluye las
+    // opciones desactivadas, para que un pedido viejo siga leyéndose.
     labels: Record<string, string>
 }
 
@@ -46,6 +47,31 @@ export function validateSpecs(specs: Record<string, unknown>, vocab: Record<stri
         }
     }
     return errors
+}
+
+// Traduce los NOMBRES de opción a su clave. El bot ve los nombres actuales en
+// GET /api/specs y los devuelve tal cual; la línea tiene que guardar la clave,
+// que es lo que enganchan las familias y las fichas. Si llega la clave, queda
+// igual: los que ya mandaban claves siguen funcionando después de un renombre.
+// Lo que no coincide con nada tampoco se toca, así validateSpecs lo reporta.
+export function normalizeSpecs(
+    specs: Record<string, unknown> | null | undefined,
+    vocab: Record<string, SpecField>,
+): Record<string, unknown> {
+    const out: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(specs ?? {})) {
+        const field = vocab[key]
+        if (!field || field.kind !== "list" || typeof value !== "string" || field.options.includes(value)) {
+            out[key] = value
+            continue
+        }
+        const buscado = value.trim().toLowerCase()
+        const clave =
+            field.options.find((o) => o.toLowerCase() === buscado) ??
+            field.options.find((o) => (field.labels[o] ?? o).trim().toLowerCase() === buscado)
+        out[key] = clave ?? value
+    }
+    return out
 }
 
 export interface OrderItemPayload {
