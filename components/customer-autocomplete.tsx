@@ -23,7 +23,7 @@ export function CustomerAutocomplete({
     onChange,
     onSelect,
     enabled,
-    emptyMessage = "Sin contactos en Alegra. Se usará como cliente nuevo (podés crearlo al cotizar).",
+    emptyMessage = "Sin resultados",
 }: {
     value: string
     contactId: number | null

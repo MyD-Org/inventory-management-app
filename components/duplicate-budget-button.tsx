@@ -114,8 +114,8 @@ export function DuplicateBudgetButton({
                             <DialogTitle>Duplicar ficha</DialogTitle>
                             <DialogDescription>
                                 Se copian los materiales con sus variantes, la mano de obra y los otros costos de
-                                “{budgetName}”. Buscá el producto nuevo en Alegra; si todavía no está, escribilo y
-                                se crea al cotizar. La copia entra como borrador.
+                                “{budgetName}”. Buscá el producto nuevo en Alegra; si todavía no está, escribilo.
+                                La copia entra como borrador.
                             </DialogDescription>
                         </DialogHeader>
 

@@ -150,15 +150,10 @@ export function ProductNameAutocomplete({
                     ))}
                     {!searching && results.length === 0 && (
                         <div className="p-3 text-sm text-muted-foreground">
-                            No está en Alegra. Queda como producto nuevo (se creará al cotizar).
+                            Sin resultados
                         </div>
                     )}
                 </div>
-            )}
-            {enabled && !unavailable && itemId == null && value.trim() && !open && (
-                <p className="text-xs text-muted-foreground mt-1">
-                    Producto nuevo: se creará en Alegra al generar la cotización.
-                </p>
             )}
         </div>
     )
