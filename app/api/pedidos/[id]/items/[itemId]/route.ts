@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
-import { deleteOrderItemInternal, diffSpecs, markDocumentsStale, readOrder, updateOrderItemInternal } from "@/lib/orders"
+import { deleteOrderItemInternal, diffSpecs, getSpecs, markDocumentsStale, normalizeSpecs, readOrder, updateOrderItemInternal } from "@/lib/orders"
 import { isApiEditable } from "@/lib/order-statuses"
 import { apiActor, logOrderEvent } from "@/lib/order-events"
 
@@ -53,6 +53,8 @@ export async function PATCH(
 
     try {
         // El producto se lee ANTES de tocarlo, para poder nombrarlo en la historia.
+        // Nombre de opción -> clave (ver normalizeSpecs).
+        if (body.specs) body.specs = normalizeSpecs(body.specs, await getSpecs())
         const [previo] = await sql`
             SELECT product, quantity, specs FROM order_items WHERE id = ${itemId}
         `

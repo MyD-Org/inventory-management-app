@@ -16,8 +16,6 @@ export async function GET(request: NextRequest) {
     if (denied) return denied
 
     try {
-        // Devolvemos solo lo del contrato. 'labels' es cosmética de la UI y no
-        // tiene por qué viajar al bot.
         // Solo lo que el cliente elige: las variaciones internas las define el
         // taller y el bot no tiene por qué preguntarlas.
         const specs = await getSpecs({ soloCliente: true })
@@ -25,7 +23,10 @@ export async function GET(request: NextRequest) {
             Object.fromEntries(
                 Object.entries(specs).map(([key, f]) => [
                     key,
-                    { label: f.label, options: f.options, free_text: f.free_text, kind: f.kind },
+                    // Los nombres actuales, no las claves: si se renombra una opción
+                    // el bot la ofrece con el nombre nuevo. Al crear o editar un
+                    // pedido se acepta el nombre y se guarda la clave.
+                    { label: f.label, options: f.options.map((o) => f.labels[o] ?? o), free_text: f.free_text, kind: f.kind },
                 ]),
             ),
         )

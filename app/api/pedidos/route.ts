@@ -6,9 +6,11 @@ import {
     ORDER_ORIGINS,
     createOrder,
     customerStatus,
+    getSpecs,
     isOrderOrigin,
     getCustomerStatusMap,
     missingMaterials,
+    normalizeSpecs,
     readOrder,
     validateOrderPayload,
     type OrderPayload,
@@ -94,7 +96,11 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const errors = await validateOrderPayload(payload)
+        // El bot puede mandar el nombre de la opción (es lo que ve en /api/specs):
+        // se guarda la clave, que es la que enganchan las fichas y las familias.
+        const vocab = await getSpecs()
+        payload.items = payload.items.map((i) => (i?.specs ? { ...i, specs: normalizeSpecs(i.specs, vocab) } : i))
+        const errors = await validateOrderPayload(payload, vocab)
         if (errors.length > 0) {
             // Un solo error de campo faltante va tal cual, para que el mensaje
             // del bot sea directo ("Falta external_id").

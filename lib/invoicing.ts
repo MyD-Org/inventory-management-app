@@ -10,6 +10,7 @@ import {
     type NumberTemplate,
 } from "@/lib/alegra"
 import { normalizeVariant } from "@/lib/alegra-sync"
+import { getSpecs } from "@/lib/orders"
 
 // Facturar un pedido en Alegra.
 //
@@ -94,6 +95,13 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
 
     const lines: InvoiceLinePreview[] = []
     const warnings: string[] = []
+
+    // Las specs de la línea guardan la CLAVE de cada opción. El cruce con Alegra y
+    // los agregados siguen usando la clave, que no cambia; lo que se escribe en el
+    // renglón usa el nombre actual, así un renombre se ve también en la factura.
+    const vocab = await getSpecs()
+    const conNombres = (specs: Record<string, string>) =>
+        Object.fromEntries(Object.entries(specs).map(([k, v]) => [k, v ? (vocab[k]?.labels[v] ?? v) : v]))
 
     // El cliente del pedido viene como "alegra:1234" o "manual:nombre". Solo los
     // primeros se pueden facturar: los manuales no existen en la contabilidad.
@@ -209,7 +217,11 @@ export async function previewInvoice(orderId: number): Promise<InvoicePreview> {
             price: Number(elegido.price) || 0,
             // Las specs que ya tienen su propio renglón (la estaca) no se repiten
             // acá: en la factura del cliente quedaría dicho dos veces.
-            description: describeLine(specs, match === "base" || colorEnDescripcion ? color : null, specsConLineaPropia),
+            description: describeLine(
+                conNombres(specs),
+                match === "base" || colorEnDescripcion ? (conNombres(specs).led_color?.trim() ?? color ?? null) : null,
+                specsConLineaPropia,
+            ),
             match,
         })
         lines.push(...agregados)

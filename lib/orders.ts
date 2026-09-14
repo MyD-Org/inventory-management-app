@@ -4,6 +4,7 @@ import { sql } from "@/lib/database"
 import { customerStatus as toCustomerStatus, type OrderStatus as Status } from "@/lib/order-statuses"
 import { logOrderEvent } from "@/lib/order-events"
 import {
+    normalizeSpecs,
     validateOrderPayloadWith,
     validateSpecs,
     type OrderItemPayload,
@@ -45,6 +46,7 @@ export async function getCustomerStatusMap(): Promise<Record<string, string>> {
 // Los tipos y la validación viven en lib/order-validation.ts, sin importar la
 // base, para poder testearlos sin Postgres. Se reexportan por comodidad.
 export {
+    normalizeSpecs,
     validateSpecs,
     validateOrderPayloadWith,
     type SpecKind,
@@ -71,16 +73,16 @@ export async function getSpecs(
 ): Promise<Record<string, SpecField>> {
     const rows = opts.soloCliente
         ? await sql`
-            SELECT f.key, f.label, f.free_text, f.kind, o.value, o.label AS option_label
+            SELECT f.key, f.label, f.free_text, f.kind, o.value, o.label AS option_label, o.active AS option_active
             FROM spec_fields f
-            LEFT JOIN spec_options o ON o.field_key = f.key AND o.active = TRUE
+            LEFT JOIN spec_options o ON o.field_key = f.key
             WHERE f.active = TRUE AND f.offered_to_customer = TRUE
             ORDER BY f.position ASC, f.key ASC, o.position ASC, o.value ASC
         `
         : await sql`
-        SELECT f.key, f.label, f.free_text, f.kind, o.value, o.label AS option_label
+        SELECT f.key, f.label, f.free_text, f.kind, o.value, o.label AS option_label, o.active AS option_active
         FROM spec_fields f
-        LEFT JOIN spec_options o ON o.field_key = f.key AND o.active = TRUE
+        LEFT JOIN spec_options o ON o.field_key = f.key
         WHERE f.active = TRUE
         ORDER BY f.position ASC, f.key ASC, o.position ASC, o.value ASC
     `
@@ -96,7 +98,9 @@ export async function getSpecs(
             }
         }
         if (r.value) {
-            specs[r.key].options.push(r.value)
+            // Las desactivadas no se ofrecen, pero su nombre sí hace falta: un
+            // pedido viejo que la eligió tiene que seguir mostrándolo.
+            if (r.option_active) specs[r.key].options.push(r.value)
             specs[r.key].labels[r.value] = r.option_label ?? r.value
         }
     }

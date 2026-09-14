@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
-import { addOrderItemInternal, markDocumentsStale, missingMaterials, readOrder } from "@/lib/orders"
+import { addOrderItemInternal, getSpecs, markDocumentsStale, missingMaterials, normalizeSpecs, readOrder } from "@/lib/orders"
 import { isApiEditable } from "@/lib/order-statuses"
 import { apiActor, logOrderEvent } from "@/lib/order-events"
 
@@ -51,7 +51,8 @@ export async function POST(
         const result = await addOrderItemInternal(id, {
             product: body.product,
             quantity: Number(body.quantity ?? 1),
-            specs,
+            // Nombre de opción -> clave (ver normalizeSpecs).
+            specs: normalizeSpecs(specs, await getSpecs()) as Record<string, string>,
         })
 
         if (!result.ok) {
