@@ -30,6 +30,7 @@ import {
     type OrderPayload,
 } from '@/lib/orders';
 import { acceptsItemChanges, isFixedSpecField, STATUS_LABELS } from '@/lib/order-statuses';
+import { specChangeAffectsInvoice } from '@/lib/order-validation';
 import { canConsumeStock } from '@/lib/roles';
 import { requireOperator } from '@/lib/operators';
 import { planReturn } from '@/lib/returns';
@@ -580,12 +581,25 @@ export async function updateOrderItem(
 
     const result = await updateOrderItemInternal(itemId, patch);
     if (result.ok) {
-        await markDocumentsStale(item.order_id);
+        const [actualizado] = await sql`SELECT product FROM order_items WHERE id = ${itemId}`;
+        const cambioProducto = actualizado && actualizado.product !== item.product;
+        const cambioCantidad =
+            patch.quantity !== undefined && Number(patch.quantity) !== Number(item.quantity);
+
+        // Qué opción cambió y de qué a qué. Antes el evento decía solo "cambió las
+        // opciones de Optic 1": para saber qué se había tocado había que acordarse.
+        // Se nombran con las etiquetas del vocabulario, igual que las columnas.
+        const diff = patch.specs ? await diffSpecs((item.specs ?? {}) as Record<string, string>, patch.specs) : [];
+
+        // El texto libre (p. ej. "Otras indicaciones") no va al papel: cambiarlo
+        // solo no ensucia la factura. Cantidad, producto y opciones de lista sí.
+        if (cambioProducto || cambioCantidad || specChangeAffectsInvoice(diff)) {
+            await markDocumentsStale(item.order_id);
+        }
 
         // El cambio de producto se registra aparte: rehace la receta entera, así
         // que en el hilo tiene que leerse como tal y no como "cambió un dato".
-        const [actualizado] = await sql`SELECT product FROM order_items WHERE id = ${itemId}`;
-        if (actualizado && actualizado.product !== item.product) {
+        if (cambioProducto) {
             await logOrderEvent(item.order_id, {
                 kind: 'item_updated',
                 field: 'product',
@@ -596,14 +610,6 @@ export async function updateOrderItem(
             revalidatePath(`/pedidos/${item.order_id}`);
             return result;
         }
-
-        const cambioCantidad =
-            patch.quantity !== undefined && Number(patch.quantity) !== Number(item.quantity);
-
-        // Qué opción cambió y de qué a qué. Antes el evento decía solo "cambió las
-        // opciones de Optic 1": para saber qué se había tocado había que acordarse.
-        // Se nombran con las etiquetas del vocabulario, igual que las columnas.
-        const diff = patch.specs ? await diffSpecs((item.specs ?? {}) as Record<string, string>, patch.specs) : [];
 
         await logOrderEvent(item.order_id, {
             kind: 'item_updated',

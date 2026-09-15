@@ -3,6 +3,7 @@ import { sql } from "@/lib/database"
 import { requireInternalSecret } from "@/lib/ai-tools-auth"
 import { deleteOrderItemInternal, diffSpecs, getSpecs, markDocumentsStale, normalizeSpecs, readOrder, updateOrderItemInternal } from "@/lib/orders"
 import { isApiEditable } from "@/lib/order-statuses"
+import { specChangeAffectsInvoice } from "@/lib/order-validation"
 import { apiActor, logOrderEvent } from "@/lib/order-events"
 
 async function checkOrder(id: number) {
@@ -14,16 +15,17 @@ async function checkOrder(id: number) {
     return { order }
 }
 
-async function markModified(orderId: number) {
+async function markModified(orderId: number, documentsStale: boolean) {
     await sql`
         UPDATE orders
         SET modified_at = NOW(), delivery_date_verified_at = NULL
         WHERE id = ${orderId}
     `
-    // Si el pedido ya tenía factura, quedó vieja. El CRM edita por acá, así que
-    // sin esto un cambio del CRM la desalinea sin avisar. El remito no se ensucia:
-    // ver markDocumentsStale.
-    await markDocumentsStale(orderId)
+    // Si el pedido ya tenía factura y el cambio toca lo que dice el papel, quedó
+    // vieja. El CRM edita por acá, así que sin esto un cambio del CRM la desalinea
+    // sin avisar. El remito no se ensucia: ver markDocumentsStale. Solo texto
+    // libre (p. ej. "Otras indicaciones") no la ensucia: ver specChangeAffectsInvoice.
+    if (documentsStale) await markDocumentsStale(orderId)
 }
 
 export async function PATCH(
@@ -65,7 +67,6 @@ export async function PATCH(
         if (!result.ok) {
             return NextResponse.json({ error: result.error }, { status: 400 })
         }
-        await markModified(orderId)
         const cambioCantidad =
             body.quantity !== undefined && Number(body.quantity) !== Number(previo?.quantity)
         // El hilo dice qué opción se tocó y de qué a qué, igual que cuando el
@@ -73,6 +74,7 @@ export async function PATCH(
         const diff = body.specs
             ? await diffSpecs((previo?.specs ?? {}) as Record<string, string>, body.specs)
             : []
+        await markModified(orderId, cambioCantidad || specChangeAffectsInvoice(diff))
         await logOrderEvent(orderId, {
             kind: "item_updated",
             field: cambioCantidad ? "quantity" : "specs",
@@ -119,7 +121,7 @@ export async function DELETE(
         if (!result.ok) {
             return NextResponse.json({ error: result.error }, { status: 400 })
         }
-        await markModified(orderId)
+        await markModified(orderId, true)
         await logOrderEvent(orderId, {
             kind: "item_removed",
             oldValue: previo ? `${previo.quantity} × ${previo.product}` : null,
