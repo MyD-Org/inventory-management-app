@@ -4,7 +4,7 @@
 // y se guarda solo. Cambiar la cantidad REESCALA el BOM ya congelado (mantiene
 // el por-unidad del pedido), no vuelve a leer la receta, que pudo cambiar.
 
-import { Fragment, useEffect, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -350,12 +350,9 @@ export function OrderItemsEditor({
                                 </td>
                                 <td className="px-3 py-2">
                                     <span className="flex items-center gap-1.5 min-w-0">
-                                        <span
-                                            className="truncate font-display text-[0.97rem] font-semibold"
-                                            title={item.product}
-                                        >
+                                        <TruncatedText className="truncate font-display text-[0.97rem] font-semibold">
                                             {item.product}
-                                        </span>
+                                        </TruncatedText>
                                         {/* Este producto no aporta materiales a la lista de
                                             abajo: hay que descontarlos a mano. Se marca acá,
                                             en la fila, que es donde se ve de cuál se trata. */}
@@ -422,15 +419,15 @@ export function OrderItemsEditor({
                                             className={`px-3 py-2 text-base ${
                                                 v ? "" : "text-muted-foreground/40"
                                             }`}
-                                            title={v ? v : `${field.label} sin especificar`}
+                                            title={v ? undefined : `${field.label} sin especificar`}
                                         >
                                             {/* El texto libre puede ser largo: se corta con
                                                 puntos suspensivos para que la tabla no crezca
-                                                a lo ancho. El texto completo va en el title y
-                                                se ve entero al abrir la fila. */}
-                                            <span className="block truncate">
+                                                a lo ancho. Si no entra, el texto completo
+                                                aparece en un globo al pasar el mouse. */}
+                                            <TruncatedText className="block truncate">
                                                 {v ? field.labels[v] ?? v : "—"}
-                                            </span>
+                                            </TruncatedText>
                                         </td>
                                     )
                                 })}
@@ -817,5 +814,30 @@ export function OrderItemsEditor({
                 }}
             />
         </TooltipProvider>
+    )
+}
+
+// Texto que se corta con "…" cuando no entra en la celda. Al pasar el mouse (o
+// enfocar con el teclado) muestra el texto COMPLETO en un globo, pero solo si de
+// verdad está cortado: sobre un texto que entra entero el globo sería ruido. Se
+// mide en el momento, así que se adapta al ancho de la ventana.
+function TruncatedText({ className, children }: { className: string; children: string }) {
+    const ref = useRef<HTMLSpanElement>(null)
+    const [open, setOpen] = useState(false)
+    return (
+        <Tooltip
+            open={open}
+            onOpenChange={(next) => {
+                const el = ref.current
+                setOpen(next && !!el && el.scrollWidth > el.clientWidth)
+            }}
+        >
+            <TooltipTrigger asChild>
+                <span ref={ref} className={className}>
+                    {children}
+                </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-sm whitespace-pre-wrap break-words">{children}</TooltipContent>
+        </Tooltip>
     )
 }
