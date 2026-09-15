@@ -11,6 +11,12 @@ import { getSpecs } from "@/lib/orders"
 // (/settings/variaciones) y el bot las descubre solo, sin tocar código del CRM.
 //
 // Formato:  { "clamp": { "label": "Grampa", "options": ["larga", "corta"] } }
+// Prueba: al bot solo le ofrecemos estas opciones (por clave, no por nombre).
+// Las demás siguen activas en la app. Borrar la entrada para volver a ofrecer todas.
+const SOLO_PARA_EL_BOT: Record<string, string[]> = {
+    clamp: ["Grampa corta", "Grampa larga"],
+}
+
 export async function GET(request: NextRequest) {
     const denied = requireInternalSecret(request)
     if (denied) return denied
@@ -26,7 +32,14 @@ export async function GET(request: NextRequest) {
                     // Los nombres actuales, no las claves: si se renombra una opción
                     // el bot la ofrece con el nombre nuevo. Al crear o editar un
                     // pedido se acepta el nombre y se guarda la clave.
-                    { label: f.label, options: f.options.map((o) => f.labels[o] ?? o), free_text: f.free_text, kind: f.kind },
+                    {
+                        label: f.label,
+                        options: f.options
+                            .filter((o) => !SOLO_PARA_EL_BOT[key] || SOLO_PARA_EL_BOT[key].includes(o))
+                            .map((o) => f.labels[o] ?? o),
+                        free_text: f.free_text,
+                        kind: f.kind,
+                    },
                 ]),
             ),
         )
