@@ -97,6 +97,29 @@ export function specChangeAffectsInvoice(changes: { freeText: boolean }[]): bool
     return changes.some((c) => !c.freeText)
 }
 
+// Si un evento de la historia es un cambio SOLO de texto libre, para sacarlo de
+// la lista del aviso de factura desactualizada: no cambia lo que dice el papel.
+// Los eventos nuevos vienen marcados con field 'specs_texto'. Los viejos quedaron
+// como 'specs' y solo guardan el texto ("Otras indicaciones — → Otras
+// indicaciones 10 metros"), así que se reconocen por las etiquetas del vocabulario:
+// arranca con un campo de texto libre y no nombra ningún campo que vaya al papel.
+export function isFreeTextOnlySpecEvent(
+    e: { field: string | null; old_value: string | null; new_value: string | null },
+    vocab: Record<string, SpecField>,
+): boolean {
+    if (e.field === "specs_texto") return true
+    if (e.field !== "specs") return false
+    const campos = Object.values(vocab)
+    const libres = campos.filter((f) => f.kind === "text").map((f) => f.label)
+    const otros = campos.filter((f) => f.kind !== "text").map((f) => f.label)
+    if (libres.length === 0) return false
+    const soloLibre = (v: string | null) =>
+        !!v &&
+        libres.some((l) => v.startsWith(`${l} `)) &&
+        !otros.some((l) => v.startsWith(`${l} `) || v.includes(`, ${l} `))
+    return soloLibre(e.old_value) && soloLibre(e.new_value)
+}
+
 export interface OrderItemPayload {
     product: string
     product_external_id?: string | null
