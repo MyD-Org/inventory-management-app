@@ -226,10 +226,10 @@ export async function listSellableProducts(): Promise<SellableProduct[]> {
 export async function diffSpecs(
     antes: Record<string, string>,
     despues: Record<string, string>,
-): Promise<Array<{ label: string; antes: string; despues: string }>> {
+): Promise<Array<{ label: string; antes: string; despues: string; freeText: boolean }>> {
     const vocab = await getSpecs()
     const claves = [...new Set([...Object.keys(antes), ...Object.keys(despues)])]
-    const cambios: Array<{ label: string; antes: string; despues: string }> = []
+    const cambios: Array<{ label: string; antes: string; despues: string; freeText: boolean }> = []
 
     for (const key of claves) {
         const a = String(antes[key] ?? "")
@@ -240,6 +240,9 @@ export async function diffSpecs(
             label: field?.label ?? key,
             antes: a ? (field?.labels?.[a] ?? a) : "—",
             despues: b ? (field?.labels?.[b] ?? b) : "—",
+            // La regla de qué desalinea la factura vive en specChangeAffectsInvoice;
+            // acá solo se la etiqueta para no repetir el vocabulario en las llamadas.
+            freeText: field?.free_text ?? false,
         })
     }
     return cambios

@@ -88,6 +88,15 @@ export function normalizeSpecs(
     return out
 }
 
+// Si un cambio de specs de una línea desalinea la factura. El texto libre (como
+// "Otras indicaciones") no va al papel: cambiarlo no cambia ni la facturación ni
+// el remito, así que no tiene que prender el aviso de desactualizada. Cambiar
+// una opción de lista sí cambia lo que dice el renglón. Recibe el diff de
+// diffSpecs; la cantidad y el producto se evalúan aparte, en quien llama.
+export function specChangeAffectsInvoice(changes: { freeText: boolean }[]): boolean {
+    return changes.some((c) => !c.freeText)
+}
+
 export interface OrderItemPayload {
     product: string
     product_external_id?: string | null

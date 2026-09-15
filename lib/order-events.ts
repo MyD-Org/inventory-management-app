@@ -115,7 +115,9 @@ export async function logOrderEvents(
  * y deducirlo evento por evento.
  *
  * Solo eventos de ítems: son los únicos que cambian lo que dice el documento. Un
- * cambio de prioridad no lo desalinea y meterlo en la lista sería ruido.
+ * cambio de prioridad no lo desalinea y meterlo en la lista sería ruido. Dentro
+ * de los de ítem, los de materiales tampoco cuentan: la lista de materiales es
+ * del taller y no va en ningún papel.
  *
  * El corte se hace EN SQL contra la marca de sincronización y no comparando fechas
  * en JS: las dos vienen de Postgres y compararlas allá evita el ida y vuelta de
@@ -139,6 +141,10 @@ export async function listDocumentDrift(
                       AND o.invoice_synced_at IS NOT NULL
                       AND e.created_at > o.invoice_synced_at
                       AND e.kind IN ('item_added', 'item_updated', 'item_removed')
+                      -- Los eventos de materiales son del taller: la lista de materiales
+                      -- nunca va en la factura ni en el remito, así que no son drift
+                      -- aunque sean item_updated.
+                      AND (e.field IS NULL OR e.field NOT IN ('materiales', 'materiales_al_dia', 'materiales_ficha'))
                     ORDER BY e.created_at ASC, e.id ASC
                 `
                 : await sql`
@@ -151,6 +157,10 @@ export async function listDocumentDrift(
                       AND o.remission_synced_at IS NOT NULL
                       AND e.created_at > o.remission_synced_at
                       AND e.kind IN ('item_added', 'item_updated', 'item_removed')
+                      -- Los eventos de materiales son del taller: la lista de materiales
+                      -- nunca va en la factura ni en el remito, así que no son drift
+                      -- aunque sean item_updated.
+                      AND (e.field IS NULL OR e.field NOT IN ('materiales', 'materiales_al_dia', 'materiales_ficha'))
                     ORDER BY e.created_at ASC, e.id ASC
                 `
         return (rows as Omit<OrderEvent, "photos">[]).map((e) => ({ ...e, photos: [] }))

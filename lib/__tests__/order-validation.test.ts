@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { normalizePhone, normalizeSpecs, validateOrderPayloadWith, validateSpecs, type SpecField } from "@/lib/order-validation"
+import { normalizePhone, normalizeSpecs, specChangeAffectsInvoice, validateOrderPayloadWith, validateSpecs, type SpecField } from "@/lib/order-validation"
 
 // Vocabulario de prueba con los tres tipos de campo que existen.
 const vocab: Record<string, SpecField> = {
@@ -236,5 +236,24 @@ describe("normalizeSpecs", () => {
             const specs = normalizeSpecs({ color: "Grampa larga", angle: "45º" }, luz)
             expect(validateSpecs(specs, luz)).toHaveLength(2)
         })
+    })
+})
+
+describe("specChangeAffectsInvoice", () => {
+    // El diff lo arma diffSpecs; acá alcanza con la forma que usa la regla.
+    const cambio = (freeText: boolean) => ({ freeText })
+
+    it("solo texto libre no desalinea la factura", () => {
+        expect(specChangeAffectsInvoice([cambio(true)])).toBe(false)
+        expect(specChangeAffectsInvoice([cambio(true), cambio(true)])).toBe(false)
+    })
+
+    it("una opción de lista sí desalinea", () => {
+        expect(specChangeAffectsInvoice([cambio(false)])).toBe(true)
+        expect(specChangeAffectsInvoice([cambio(true), cambio(false)])).toBe(true)
+    })
+
+    it("sin cambios no desalinea", () => {
+        expect(specChangeAffectsInvoice([])).toBe(false)
     })
 })
