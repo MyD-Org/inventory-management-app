@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { normalizePhone, normalizeSpecs, specChangeAffectsInvoice, validateOrderPayloadWith, validateSpecs, type SpecField } from "@/lib/order-validation"
+import { isFreeTextOnlySpecEvent, normalizePhone, normalizeSpecs, specChangeAffectsInvoice, validateOrderPayloadWith, validateSpecs, type SpecField } from "@/lib/order-validation"
 
 // Vocabulario de prueba con los tres tipos de campo que existen.
 const vocab: Record<string, SpecField> = {
@@ -255,5 +255,28 @@ describe("specChangeAffectsInvoice", () => {
 
     it("sin cambios no desalinea", () => {
         expect(specChangeAffectsInvoice([])).toBe(false)
+    })
+})
+
+describe("isFreeTextOnlySpecEvent", () => {
+    const ev = (field: string, old_value: string, new_value: string) => ({ field, old_value, new_value })
+
+    it("un evento nuevo marcado como specs_texto", () => {
+        expect(isFreeTextOnlySpecEvent(ev("specs_texto", "x", "y"), vocab)).toBe(true)
+    })
+
+    it("un evento viejo de solo Otras indicaciones", () => {
+        const e = ev("specs", "Otras indicaciones —", "Otras indicaciones 10 metros de cable?")
+        expect(isFreeTextOnlySpecEvent(e, vocab)).toBe(true)
+    })
+
+    it("si además cambió una opción de lista, cuenta", () => {
+        const e = ev("specs", "Grampa Larga, Otras indicaciones —", "Grampa Corta, Otras indicaciones algo")
+        expect(isFreeTextOnlySpecEvent(e, vocab)).toBe(false)
+        expect(isFreeTextOnlySpecEvent(ev("specs", "Otras indicaciones —, Grampa Larga", "Otras indicaciones x, Grampa Corta"), vocab)).toBe(false)
+    })
+
+    it("cantidad o producto siempre cuentan", () => {
+        expect(isFreeTextOnlySpecEvent(ev("quantity", "1 × Optic", "2 × Optic"), vocab)).toBe(false)
     })
 })

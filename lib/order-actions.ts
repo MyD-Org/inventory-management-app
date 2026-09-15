@@ -613,7 +613,9 @@ export async function updateOrderItem(
 
         await logOrderEvent(item.order_id, {
             kind: 'item_updated',
-            field: cambioCantidad ? 'quantity' : 'specs',
+            // Solo texto libre va con su propio field: así el aviso de factura
+            // desactualizada lo deja afuera sin adivinar por el texto.
+            field: cambioCantidad ? 'quantity' : specChangeAffectsInvoice(diff) ? 'specs' : 'specs_texto',
             oldValue: cambioCantidad
                 ? `${item.quantity} × ${item.product}`
                 : diff.map((d) => `${d.label} ${d.antes}`).join(', ') || item.product,

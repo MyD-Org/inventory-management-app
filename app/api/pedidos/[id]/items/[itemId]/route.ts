@@ -77,7 +77,9 @@ export async function PATCH(
         await markModified(orderId, cambioCantidad || specChangeAffectsInvoice(diff))
         await logOrderEvent(orderId, {
             kind: "item_updated",
-            field: cambioCantidad ? "quantity" : "specs",
+            // Solo texto libre va con su propio field: así el aviso de factura
+            // desactualizada lo deja afuera sin adivinar por el texto.
+            field: cambioCantidad ? "quantity" : specChangeAffectsInvoice(diff) ? "specs" : "specs_texto",
             oldValue: cambioCantidad
                 ? `${previo?.quantity} × ${previo?.product}`
                 : diff.map((d) => `${d.label} ${d.antes}`).join(", ") || previo?.product || null,

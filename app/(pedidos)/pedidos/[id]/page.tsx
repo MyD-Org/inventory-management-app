@@ -22,6 +22,7 @@ import { canConsumeStock } from "@/lib/roles"
 import { DateField, PriorityField, TextField } from "@/components/order-props-editor"
 import { OrderCustomerField } from "@/components/order-customer-field"
 import { OrderActivity } from "@/components/order-activity"
+import { isFreeTextOnlySpecEvent } from "@/lib/order-validation"
 import { describeDrift, listDocumentDrift, listOrderEvents, type OrderEvent } from "@/lib/order-events"
 import { noteHasContent } from "@/lib/order-notes"
 import { listOrderRemissions, type EmittedRemission } from "@/lib/remissions"
@@ -275,6 +276,14 @@ export default async function OrderDetailPage({
         order.invoice_stale ? listDocumentDrift(id, "invoice") : Promise.resolve([]),
     ])
 
+    // Lo que el aviso de factura desactualizada enumera, sin los cambios de solo
+    // texto libre (no van al papel). Si TODO lo que cambió fue texto libre, el
+    // aviso no se muestra: pasa con pedidos marcados antes de que esos cambios
+    // dejaran de ensuciar la factura. Sin detalle (lista vacía) se muestra igual,
+    // porque no sabemos qué la desalineó.
+    const invoiceChanges = invoiceDrift.filter((e) => !isFreeTextOnlySpecEvent(e, vocab))
+    const invoiceStale = order.invoice_stale && (invoiceDrift.length === 0 || invoiceChanges.length > 0)
+
     // Specs en el orden del vocabulario y solo los valores: "ámbar · grampa larga · 25°"
     // se lee de corrido, mientras que con etiquetas ocupa el triple. Se muestra el
     // nombre ACTUAL de cada opción, no la clave guardada en la línea: si la opción
@@ -452,14 +461,14 @@ export default async function OrderDetailPage({
                                             doc="factura"
                                             number={order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
                                         />
-                                        {order.invoice_stale && (
+                                        {invoiceStale && (
                                             <DocumentStaleTag
                                                 label="Factura desactualizada"
-                                                changes={invoiceDrift.map(describeDrift)}
+                                                changes={invoiceChanges.map(describeDrift)}
                                             />
                                         )}
                                     </div>
-                                    {order.invoice_stale && (
+                                    {invoiceStale && (
                                         <InvoiceButton orderId={order.id} mode="actualizar" />
                                     )}
                                 </div>
