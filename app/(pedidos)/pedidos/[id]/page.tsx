@@ -6,7 +6,8 @@ import { sql } from "@/lib/database"
 import { consumedMaterials, extraConsumedMaterials, getSpecs, listSellableProducts, materialNeeds, orderItemRecipes, readOrder, reconcileOrderBoms } from "@/lib/orders"
 import { orderNeedsReview } from "@/lib/order-statuses"
 import { acceptsItemChanges, STATUS_LABELS } from "@/lib/order-statuses"
-import { ChevronRight, ExternalLink, MessageSquare, Printer } from "lucide-react"
+import { ChevronRight, ExternalLink, MessageSquare } from "lucide-react"
+import { DocumentPdfButton } from "@/components/document-pdf-button"
 import { PrintIconButton } from "@/components/print-icon-button"
 import { OrderStatusSelect } from "@/components/order-status-select"
 import { OrderItemsEditor } from "@/components/order-items-editor"
@@ -168,20 +169,14 @@ function ListaRemitos({
                                 </span>
                             </span>
                         )}
-                        {/* IMPRIMIR ES DE TODOS, a diferencia del link: el que
-                            entrega la mercadería es el taller o el mostrador, y
-                            el papel va con ella. Abre el PDF que arma Alegra. */}
+                        {/* VER E IMPRIMIR ES DE TODOS, a diferencia del link: el
+                            que entrega la mercadería es el taller o el mostrador, y
+                            el papel va con ella. Abre el PDF de Alegra en un modal. */}
                         {r.alegraId && (
-                            <a
-                                href={`/pedidos/${orderId}/remitos/${r.id}/pdf`}
-                                target="_blank"
-                                rel="noreferrer"
-                                title={`Imprimir el remito ${r.number ?? ""}`.trim()}
-                                aria-label={`Imprimir el remito ${r.number ?? ""}`.trim()}
-                                className="no-print inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                            >
-                                <Printer className="h-3.5 w-3.5" />
-                            </a>
+                            <DocumentPdfButton
+                                url={`/pedidos/${orderId}/remitos/${r.id}/pdf`}
+                                title={`Remito ${r.number ?? ""}`.trim()}
+                            />
                         )}
                         {/* Desvincular, en cambio, es del admin: con el mismo
                             criterio que el link a Alegra. */}
@@ -456,6 +451,10 @@ export default async function OrderDetailPage({
                                             {order.alegra_invoice_number ?? `#${order.alegra_invoice_id}`}
                                             <ExternalLink className="h-3 w-3" />
                                         </a>
+                                        <DocumentPdfButton
+                                            url={`/pedidos/${order.id}/factura/pdf`}
+                                            title={`Factura ${order.alegra_invoice_number ?? ""}`.trim()}
+                                        />
                                         <UnlinkDocumentButton
                                             url={`/api/pedidos/${order.id}/factura-existente`}
                                             doc="factura"

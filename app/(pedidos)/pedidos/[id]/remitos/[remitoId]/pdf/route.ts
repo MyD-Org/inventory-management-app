@@ -1,9 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { sql } from "@/lib/database"
-import { AlegraError, getRemissionPdfUrl } from "@/lib/alegra"
+import { getRemissionPdfUrl } from "@/lib/alegra"
+import { proxyAlegraPdf } from "@/lib/document-pdf"
 
-// Imprimir un remito: redirige al PDF que arma Alegra.
+// El PDF de un remito, para verlo en el modal o imprimirlo. `?download=1` lo baja.
 //
 // ES PARA TODOS, admin o no: el taller y el mostrador son los que entregan la
 // mercadería con el papel en la mano. No les abre Alegra —el PDF es un archivo
@@ -17,7 +18,7 @@ import { AlegraError, getRemissionPdfUrl } from "@/lib/alegra"
 // (order_remissions), no el de Alegra, y se busca junto con el pedido. Cambiar el
 // número en la barra no alcanza para abrir el remito de otro cliente.
 export async function GET(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: { id: string; remitoId: string } },
 ) {
     const session = await auth()
@@ -32,23 +33,17 @@ export async function GET(
     }
 
     const rows = await sql`
-        SELECT alegra_remission_id FROM order_remissions
+        SELECT alegra_remission_id, alegra_remission_number FROM order_remissions
         WHERE id = ${remitoId} AND order_id = ${orderId}
     `
-    const alegraId = (rows as any[])[0]?.alegra_remission_id
-    if (!alegraId) {
+    const row = (rows as any[])[0]
+    if (!row?.alegra_remission_id) {
         return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
     }
 
-    try {
-        const pdf = await getRemissionPdfUrl(Number(alegraId))
-        if (!pdf) {
-            return NextResponse.json({ error: "Alegra no devolvió el PDF del remito" }, { status: 502 })
-        }
-        return NextResponse.redirect(pdf)
-    } catch (error) {
-        const status = error instanceof AlegraError ? error.status : 500
-        console.error("[remito pdf]", error)
-        return NextResponse.json({ error: "No se pudo traer el PDF del remito" }, { status: status >= 500 ? 502 : status })
-    }
+    return proxyAlegraPdf(
+        () => getRemissionPdfUrl(Number(row.alegra_remission_id)),
+        `remito-${row.alegra_remission_number ?? row.alegra_remission_id}`,
+        request.nextUrl.searchParams.get("download") === "1",
+    )
 }
