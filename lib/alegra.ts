@@ -451,6 +451,12 @@ export async function updateRemission(
 //
 // NO SE GUARDA: el link viene firmado y vence (?Expires=…), así que se pide uno
 // nuevo cada vez que alguien quiere imprimir. Devuelve null si Alegra no lo trae.
+/** La URL firmada del PDF de una factura. Vence: pedirla cada vez, no guardarla. */
+export async function getInvoicePdfUrl(invoiceId: number): Promise<string | null> {
+    const inv = await alegraFetch<{ pdf?: string | null }>(`/invoices/${invoiceId}?fields=pdf`)
+    return inv.pdf || null
+}
+
 export async function getRemissionPdfUrl(remissionId: number): Promise<string | null> {
     const rem = await alegraFetch<{ pdf?: string | null }>(`/remissions/${remissionId}?fields=pdf`)
     return rem.pdf || null
