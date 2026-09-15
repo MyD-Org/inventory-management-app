@@ -207,4 +207,34 @@ describe("normalizeSpecs", () => {
         expect(normalizeSpecs(specs, renombrado)).toEqual(specs)
         expect(validateSpecs(normalizeSpecs({ clamp: "Mediana" }, renombrado), renombrado)).toHaveLength(1)
     })
+
+    describe("lo que escribe el cliente a mano", () => {
+        const luz: Record<string, SpecField> = {
+            color: {
+                label: "Color de luz",
+                options: ["warm_3000", "cold_6000"],
+                free_text: false,
+                kind: "list",
+                labels: { warm_3000: "Blanco calido 3000", cold_6000: "Blanco Frio 6000" },
+            },
+            angle: { label: "Ángulo", options: ["30°", "60°"], free_text: false, kind: "list", labels: {} },
+        }
+
+        it.each([
+            ["Blanco frío 6000", "cold_6000"],
+            ["blanco CÁLIDO 3000K", "warm_3000"],
+            ["Blanco calido 3000 k", "warm_3000"],
+        ])("tildes, mayúsculas y la K: %s", (valor, clave) => {
+            expect(normalizeSpecs({ color: valor }, luz)).toEqual({ color: clave })
+        })
+
+        it("º y ° son lo mismo", () => {
+            expect(normalizeSpecs({ angle: "30º" }, luz)).toEqual({ angle: "30°" })
+        })
+
+        it("lo que no se parece a nada sigue volviendo como 400", () => {
+            const specs = normalizeSpecs({ color: "Grampa larga", angle: "45º" }, luz)
+            expect(validateSpecs(specs, luz)).toHaveLength(2)
+        })
+    })
 })
