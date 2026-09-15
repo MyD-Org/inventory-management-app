@@ -49,6 +49,20 @@ export function validateSpecs(specs: Record<string, unknown>, vocab: Record<stri
     return errors
 }
 
+// Comparación "de cualquier forma": para matchear ignoramos mayúsculas, tildes,
+// la diferencia entre ° y º y la K de kelvin en temperaturas ("3000K" = "3000").
+// Así un valor que escribió el cliente a mano ("30º", "blanco frío") matchea la
+// opción del vocabulario en vez de volver como 400 y forzar re-preguntar.
+function foldOption(s: string): string {
+    return s
+        .normalize("NFD")
+        .replace(/\p{M}/gu, "")
+        .replace(/º/g, "°")
+        .replace(/(\d)\s*k\b/gi, "$1")
+        .trim()
+        .toLowerCase()
+}
+
 // Traduce los NOMBRES de opción a su clave. El bot ve los nombres actuales en
 // GET /api/specs y los devuelve tal cual; la línea tiene que guardar la clave,
 // que es lo que enganchan las familias y las fichas. Si llega la clave, queda
@@ -65,10 +79,10 @@ export function normalizeSpecs(
             out[key] = value
             continue
         }
-        const buscado = value.trim().toLowerCase()
+        const buscado = foldOption(value)
         const clave =
-            field.options.find((o) => o.toLowerCase() === buscado) ??
-            field.options.find((o) => (field.labels[o] ?? o).trim().toLowerCase() === buscado)
+            field.options.find((o) => foldOption(o) === buscado) ??
+            field.options.find((o) => foldOption(field.labels[o] ?? o) === buscado)
         out[key] = clave ?? value
     }
     return out
