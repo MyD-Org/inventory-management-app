@@ -407,13 +407,24 @@ export function ConsumeMaterialsForm({
                                                 <span className="block truncate text-left">{r.label}</span>
                                             </SelectValue>
                                         </SelectTrigger>
-                                        <SelectContent>
+                                        {/* La lista no puede ser más ancha que la pantalla: en el
+                                            teléfono un nombre largo empujaba el stock afuera. Con
+                                            el tope, el nombre baja de renglón y el código y el
+                                            stock quedan siempre a la vista. */}
+                                        <SelectContent className="max-w-[calc(100vw-1.5rem)]">
                                             {r.alternatives.map((a) => (
                                                 <SelectItem key={a.material_id} value={String(a.material_id)}>
-                                                    <span className="truncate">{a.label}</span>
-                                                    <span className="ml-2 shrink-0 text-sm text-muted-foreground">
-                                                        {a.available ?? "—"} en stock
-                                                    </span>
+                                                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                                                        <span>{a.label}</span>
+                                                        {a.barcode && (
+                                                            <span className="font-mono text-sm text-muted-foreground">
+                                                                ({a.barcode})
+                                                            </span>
+                                                        )}
+                                                        <span className="text-sm text-muted-foreground">
+                                                            {a.available ?? "—"} en stock
+                                                        </span>
+                                                    </div>
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
