@@ -12,6 +12,7 @@ import { updateOrderStatus } from "@/lib/order-actions"
 import { useToast } from "@/hooks/use-toast"
 import { BOARD_STATUSES, orderNeedsReview, STATUS_LABELS, type OrderStatus } from "@/lib/order-statuses"
 import { PriorityIcon, StatusIcon } from "@/components/order-glyphs"
+import { formatDate, isOverdue } from "@/lib/order-dates"
 
 export interface BoardCard {
     id: number
@@ -53,25 +54,9 @@ export interface BoardCard {
     delivery_date_verified_at: string | null
 }
 
-const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
-
-export function formatDate(d: string | null): string | null {
-    if (!d) return null
-    // Viene como "2026-09-05": lo parseamos a mano porque new Date("2026-09-05")
-    // es medianoche UTC y en Argentina mostraría el día anterior.
-    const [, m, day] = d.split("-").map(Number)
-    return `${String(day).padStart(2, "0")} ${MONTHS_SHORT[m - 1]}`
-}
-
-// Entrega vencida: la fecha ya pasó y el pedido todavía no salió.
-export function isOverdue(d: string | null, status: string): boolean {
-    if (!d || status === "retirado" || status === "cancelado") return false
-    const [y, m, day] = d.split("-").map(Number)
-    const eta = new Date(y, m - 1, day)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    return eta < today
-}
+// Las fechas viven en lib/order-dates.ts para que el server también las use; se
+// reexportan acá porque la lista y el envoltorio las importan de este archivo.
+export { formatDate, isOverdue }
 
 export function OrdersBoard({ cards, query = "" }: { cards: BoardCard[]; query?: string }) {
     const router = useRouter()
