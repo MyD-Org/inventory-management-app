@@ -59,75 +59,54 @@ function StatusFilter({ statuses }: { statuses: OrderStatus[] }) {
     )
 }
 
-function Desplegable({ titulo, open, children }: { titulo: string; open?: boolean; children: React.ReactNode }) {
-    return (
-        <details open={open} className="group mt-4">
-            <summary className="flex items-center gap-1.5 cursor-pointer select-none list-none text-base font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
-                <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
-                {titulo}
-            </summary>
-            <div className="mt-2">{children}</div>
-        </details>
-    )
-}
-
-function GroupHeader({ titulo, units, orders, children }: { titulo: React.ReactNode; units: number; orders: number; children?: React.ReactNode }) {
-    return (
-        <div className="flex items-baseline justify-between gap-4 flex-wrap">
-            <h2 className="font-display text-xl font-semibold leading-tight">{titulo}</h2>
-            <p className="text-base text-muted-foreground">
-                <span className="font-mono tabular-nums text-2xl font-semibold text-foreground">{formatStock(units)}</span>{" "}
-                u. · {orders} {plural(orders, "pedido", "pedidos")}
-                {children}
-            </p>
-        </div>
-    )
-}
-
+// La tarjeta entera es un <details> cerrado: con muchos productos, abiertos no se
+// ve más que el primero. La cabecera es lo que se toca para abrirla, así que la
+// tarjeta cerrada ocupa un solo renglón.
 function ProductCard({ group }: { group: ProductionGroup }) {
     const vencido = group.lines.some((l) => isOverdue(l.delivery_date_estimate, l.status))
+    const combinaciones = group.combos.length
     return (
-        <section className="rounded-lg border bg-card p-4 sm:p-5">
-            <GroupHeader
-                titulo={
-                    <span className="inline-flex items-center gap-2 flex-wrap">
-                        {group.product}
-                        {group.budget_id === null && (
-                            <span
-                                className="inline-flex items-center gap-1 rounded-full border border-amber-500/60 px-2 py-0.5 font-sans text-xs font-medium text-amber-600 dark:text-amber-400"
-                                title="Producto sin hoja de costo: sin receta ni descuento de stock"
-                            >
-                                <TriangleAlert className="h-3 w-3" />
-                                Sin ficha
-                            </span>
-                        )}
-                    </span>
-                }
-                units={group.units}
-                orders={group.orders}
-            >
-                {group.nextDelivery && (
-                    <span className={vencido ? "text-destructive font-medium" : ""}>
-                        {" "}
-                        · próxima entrega {formatDate(group.nextDelivery)}
-                    </span>
-                )}
-            </GroupHeader>
-
-            {group.fields.length > 0 && (
-                <Desplegable titulo="Combinaciones pendientes" open>
-                    <ProductionCombos product={group.product} fields={group.fields} combos={group.combos} />
-                </Desplegable>
-            )}
-        </section>
+        <details className="group rounded-lg border bg-card">
+            <summary className="flex items-center gap-x-3 gap-y-1 flex-wrap cursor-pointer select-none list-none rounded-lg px-3 py-2.5 sm:px-4 hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+                <h2 className="min-w-0 flex-1 basis-48 inline-flex items-center gap-2 flex-wrap font-display text-lg font-semibold leading-tight">
+                    {group.product}
+                    {group.budget_id === null && (
+                        <span
+                            className="inline-flex items-center gap-1 rounded-full border border-amber-500/60 px-2 py-0.5 font-sans text-xs font-medium text-amber-600 dark:text-amber-400"
+                            title="Producto sin hoja de costo: sin receta ni descuento de stock"
+                        >
+                            <TriangleAlert className="h-3 w-3" />
+                            Sin ficha
+                        </span>
+                    )}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                    <span className="font-mono tabular-nums text-xl font-semibold text-foreground">
+                        {formatStock(group.units)}
+                    </span>{" "}
+                    u. · {group.orders} {plural(group.orders, "pedido", "pedidos")} · {combinaciones}{" "}
+                    {plural(combinaciones, "combinación", "combinaciones")}
+                    {group.nextDelivery && (
+                        <span className={vencido ? "text-destructive font-medium" : ""}>
+                            {" "}
+                            · próxima entrega {formatDate(group.nextDelivery)}
+                        </span>
+                    )}
+                </p>
+            </summary>
+            <div className="px-3 pb-3 sm:px-4 sm:pb-4">
+                <ProductionCombos product={group.product} fields={group.fields} combos={group.combos} />
+            </div>
+        </details>
     )
 }
 
 export function ProductionView({ summary, statuses }: { summary: ProductionSummary; statuses: OrderStatus[] }) {
     const vacio = summary.groups.length === 0
     return (
-        <div className="space-y-4 pb-24">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="space-y-2 pb-24">
+            <div className="flex items-center justify-between gap-4 flex-wrap pb-2">
                 <StatusFilter statuses={statuses} />
                 {!vacio && (
                     <p className="text-base text-muted-foreground">
