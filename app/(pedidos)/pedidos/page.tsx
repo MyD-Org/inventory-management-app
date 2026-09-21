@@ -93,7 +93,7 @@ export default async function OrdersPage({
                             : "Arrastrá una tarjeta para cambiarle el estado"}
                     </p>
                 </div>
-                <ViewToggle lista={lista} />
+                <ViewToggle vista={lista ? "lista" : "tablero"} />
             </div>
 
             <OrdersView
