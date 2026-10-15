@@ -19,7 +19,7 @@ import { UnlinkDocumentButton } from "@/components/unlink-document-button"
 import { DocumentStaleTag } from "@/components/document-stale-tag"
 import { EmissionSlot, OrderEmissionProvider } from "@/components/order-emission"
 import { OrderMaterials } from "@/components/order-materials"
-import { canConsumeStock } from "@/lib/roles"
+import { canConsumeStock, canEmitRemission } from "@/lib/roles"
 import { DateField, PriorityField, TextField } from "@/components/order-props-editor"
 import { OrderCustomerField } from "@/components/order-customer-field"
 import { OrderActivity } from "@/components/order-activity"
@@ -250,6 +250,7 @@ export default async function OrderDetailPage({
 
     const session = await auth()
     const isAdmin = session?.user?.role === "admin"
+    const puedeRemitir = canEmitRemission(session?.user?.role)
 
     // Los productos del selector salen del CATÁLOGO de Alegra, no de las hojas
     // de costo: un producto existe porque se vende, y la hoja es opcional.
@@ -503,10 +504,12 @@ export default async function OrderDetailPage({
                         la celda no muestra "el" remito: muestra los que salieron y
                         cuánto del pedido ya se entregó. Eso último lo ve todo el
                         mundo, admin o no —el taller y el mostrador necesitan saber
-                        qué falta cargar en la camioneta—; lo que es del admin son
-                        los links a Alegra y los botones de emitir. */}
+                        qué falta cargar en la camioneta—. EMITIR es del admin y
+                        del operador, que es quien entrega y necesita el papel en
+                        el momento; los links a Alegra, vincular y desvincular
+                        siguen siendo solo del admin. */}
                     <Fact label={remissions.length > 1 ? "Remitos" : "Remito"}>
-                        {!isAdmin ? (
+                        {!puedeRemitir ? (
                             <ListaRemitos
                                 orderId={order.id}
                                 remissions={remissions}
@@ -521,7 +524,7 @@ export default async function OrderDetailPage({
                                 <ListaRemitos
                                     orderId={order.id}
                                     remissions={remissions}
-                                    conLink
+                                    conLink={isAdmin}
                                     conAcciones={pendiente > 0}
                                     pendiente={pendiente}
                                     pedido={units}
@@ -542,7 +545,7 @@ export default async function OrderDetailPage({
                                             orderId={order.id}
                                             label={remissions.length > 0 ? "Remitir el resto" : undefined}
                                         />
-                                        <LinkRemissionButton orderId={order.id} />
+                                        {isAdmin && <LinkRemissionButton orderId={order.id} />}
                                     </div>
                                 )}
                             </div>

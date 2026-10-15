@@ -34,3 +34,10 @@ export const isOrdersOnly = (role?: string | null) => role === "pedidos"
  * botón: el botón escondido no protege a la acción.
  */
 export const canConsumeStock = (role?: string | null) => !isOrdersOnly(role)
+
+/**
+ * Quién ve el botón de emitir remito: el admin y el operador, que es quien
+ * entrega la mercadería y necesita el papel en el momento. Vincular uno ya
+ * hecho, desvincular y el link a Alegra siguen siendo solo del admin.
+ */
+export const canEmitRemission = (role?: string | null) => role === "admin" || role === "operator"
