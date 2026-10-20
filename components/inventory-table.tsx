@@ -55,7 +55,8 @@ async function getInventoryCount(search?: string, categoryId?: string, status?: 
           ${statusFilter}::text IS NULL OR
           (${statusFilter} = 'low' AND i.current_stock <= m.min_stock) OR
           (${statusFilter} = 'high' AND i.current_stock >= m.max_stock) OR
-          (${statusFilter} = 'normal' AND i.current_stock > m.min_stock AND i.current_stock < m.max_stock)
+          (${statusFilter} = 'normal' AND i.current_stock > m.min_stock AND i.current_stock < m.max_stock) OR
+          (${statusFilter} = 'inactive' AND NOT m.active)
         )
     `
 
@@ -90,6 +91,7 @@ async function getInventoryItemsPaged(
         m.unit_cost,
         m.min_stock,
         m.max_stock,
+        m.active,
         i.current_stock,
         i.available_stock,
         i.reserved_stock,
@@ -106,7 +108,8 @@ async function getInventoryItemsPaged(
           ${statusFilter}::text IS NULL OR
           (${statusFilter} = 'low' AND i.current_stock <= m.min_stock) OR
           (${statusFilter} = 'high' AND i.current_stock >= m.max_stock) OR
-          (${statusFilter} = 'normal' AND i.current_stock > m.min_stock AND i.current_stock < m.max_stock)
+          (${statusFilter} = 'normal' AND i.current_stock > m.min_stock AND i.current_stock < m.max_stock) OR
+          (${statusFilter} = 'inactive' AND NOT m.active)
         )
       ORDER BY m.name
       LIMIT ${ITEMS_PER_PAGE}

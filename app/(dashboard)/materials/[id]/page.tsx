@@ -98,7 +98,15 @@ export default async function MaterialDetailPage({ params }: { params: { id: str
                 </nav>
 
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">{material.name}</h1>
+                    <h1 className="text-2xl font-bold tracking-tight flex items-center gap-3">
+                        {material.name}
+                        {material.active === false && <Badge variant="outline">Desactivado</Badge>}
+                    </h1>
+                    {material.active === false && (
+                        <p className="text-sm text-muted-foreground">
+                            No aparece al descontar materiales de un pedido. Se reactiva desde el inventario.
+                        </p>
+                    )}
                     <p className="text-muted-foreground font-mono text-sm">{material.barcode}</p>
                 </div>
 

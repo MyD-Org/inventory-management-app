@@ -775,8 +775,13 @@ export interface MaterialNeed {
     spec_value: string | null
     /** Código de barras del material, para buscarlo en el depósito. '' si no tiene. */
     barcode: string
-    /** Otros materiales posibles para el mismo color/familia. */
+    /** Otros materiales posibles para el mismo color/familia. Solo los activos. */
     alternatives: Array<{ material_id: number; label: string; available: number | null; barcode: string }>
+    /**
+     * El material de la receta está desactivado y la familia no tiene otro activo
+     * que lo reemplace. No se ofrece para descontar. Ver scripts/45-materiales-activos.sql.
+     */
+    inactive: boolean
 }
 
 // Estado de cada material del pedido: cuánto necesita, cuánto ya se descontó y
@@ -797,6 +802,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
             COALESCE(i.available_stock, 0) AS available,
             m.unit_of_measure AS unit,
             m.barcode,
+            COALESCE(m.active, TRUE) AS active,
             (oim.material_id IS NOT NULL AND i.id IS NOT NULL) AS en_inventario
         FROM order_item_materials oim
         JOIN order_items oi ON oi.id = oim.order_item_id
@@ -810,7 +816,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
     const familyIds = [...new Set(familyRows.map((r) => r.family_id as number))]
     const specValues = [...new Set(familyRows.map((r) => r.spec_value as string))]
 
-    const alternativesByFamilySpec = new Map<string, Array<{ material_id: number; label: string; available: number | null; barcode: string }>>()
+    const alternativesByFamilySpec = new Map<string, Array<{ material_id: number; label: string; available: number | null; barcode: string; active: boolean }>>()
     if (familyIds.length > 0 && specValues.length > 0) {
         const altRows = await sql`
             SELECT
@@ -819,6 +825,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
                 fo.material_id,
                 m.name AS label,
                 m.barcode,
+                m.active,
                 i.available_stock
             FROM material_family_options fo
             JOIN materials m ON m.id = fo.material_id
@@ -835,6 +842,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
                 label: r.label as string,
                 available: r.available_stock == null ? null : Number(r.available_stock),
                 barcode: (r.barcode as string | null) ?? '',
+                active: r.active as boolean,
             })
             alternativesByFamilySpec.set(key, list)
         }
@@ -866,6 +874,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
                 family_id: r.family_id as number,
                 spec_value: r.spec_value as string,
                 alternatives,
+                inactive: !r.active,
             })
         } else {
             groups.set(key, {
@@ -880,6 +889,7 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
                 family_id: null,
                 spec_value: null,
                 alternatives: [],
+                inactive: r.material_id !== null && !r.active,
             })
         }
     }
@@ -923,6 +933,22 @@ export async function materialNeeds(orderId: number): Promise<MaterialNeed[]> {
         )
         need.consumed = consumedMain + consumedAlts
         need.pending = Math.max(need.required - need.consumed, 0)
+
+        // Los desactivados se sacan recién acá: lo que ya se descontó de ellos
+        // tiene que seguir contando como consumido, si no el pedido volvería a
+        // pedirlo. Si el de la receta está desactivado pero la familia tiene otro
+        // activo, se ofrece ese en su lugar.
+        const activas = (need.alternatives as Array<(typeof need.alternatives)[number] & { active?: boolean }>)
+            .filter((a) => a.active !== false)
+        if (need.inactive && activas.length > 0) {
+            const reemplazo = activas[0]
+            need.material_id = reemplazo.material_id
+            need.label = reemplazo.label
+            need.available = reemplazo.available
+            need.barcode = reemplazo.barcode
+            need.inactive = false
+        }
+        need.alternatives = activas.map(({ material_id, label, available, barcode }) => ({ material_id, label, available, barcode }))
     }
 
     return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label))

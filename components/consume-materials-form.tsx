@@ -271,7 +271,9 @@ export function ConsumeMaterialsForm({
     useEffect(() => {
         setRows(
             needs
-                .filter((n) => n.material_id !== null && n.pending > 0)
+                // Los desactivados en el inventario no se ofrecen: ver
+                // scripts/45-materiales-activos.sql.
+                .filter((n) => n.material_id !== null && n.pending > 0 && !n.inactive)
                 .map((n) => {
                     const key = n.family_id !== null ? `fam:${n.family_id}:${n.spec_value}` : `mat:${n.material_id}`
                     return {

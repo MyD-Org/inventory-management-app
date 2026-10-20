@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Pencil, Copy } from "lucide-react"
+import { Pencil, Copy, EyeOff, Eye } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { EditMaterialDialog } from "./edit-material-dialog"
 import { formatCurrencyUSD } from "@/lib/formatters"
 import { formatStock } from "@/lib/format"
+import { setMaterialActive } from "@/lib/actions"
 
 interface InventoryTableClientProps {
     items: any[]
@@ -21,6 +22,24 @@ interface InventoryTableClientProps {
 export function InventoryTableClient({ items, categories, suppliers, userRole }: InventoryTableClientProps) {
     const [editingMaterial, setEditingMaterial] = useState<any>(null)
     const router = useRouter()
+    const [pending, startTransition] = useTransition()
+
+    // Desactivar no borra: el material sigue acá, atenuado, y deja de aparecer
+    // al descontar un pedido. Ver scripts/45-materiales-activos.sql.
+    const toggleActive = (item: any) => {
+        const active = !item.active
+        startTransition(async () => {
+            const res = await setMaterialActive(item.id, active)
+            if (res.error) {
+                toast.error(res.error)
+                return
+            }
+            toast.success(active ? "Material activado" : "Material desactivado", {
+                description: active ? item.name : `${item.name} ya no aparece al descontar pedidos`,
+            })
+            router.refresh()
+        })
+    }
 
     const copyCode = async (e: React.MouseEvent, code: string) => {
         e.stopPropagation() // no navegar al detalle al copiar
@@ -65,12 +84,15 @@ export function InventoryTableClient({ items, categories, suppliers, userRole }:
                             return (
                                 <tr
                                     key={item.id}
-                                    className="border-b hover:bg-muted/50 transition-colors cursor-pointer"
+                                    className={`border-b hover:bg-muted/50 transition-colors cursor-pointer ${item.active ? "" : "text-muted-foreground [&_td]:opacity-60"}`}
                                     onClick={() => router.push(`/materials/${item.id}`)}
                                 >
                                     <td className="py-3 px-3">
                                         <div>
-                                            <div className="font-medium text-foreground">{item.name}</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-medium text-foreground">{item.name}</span>
+                                                {!item.active && <Badge variant="outline">Desactivado</Badge>}
+                                            </div>
                                             <div className="text-sm text-muted-foreground">{item.supplier_name}</div>
                                         </div>
                                     </td>
@@ -124,6 +146,16 @@ export function InventoryTableClient({ items, categories, suppliers, userRole }:
                                                         title="Editar"
                                                     >
                                                         <Pencil className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        disabled={pending}
+                                                        onClick={() => toggleActive(item)}
+                                                        title={item.active ? "Desactivar: no aparece al descontar pedidos" : "Activar"}
+                                                    >
+                                                        {item.active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                                     </Button>
                                                 </div>
                                             </td>

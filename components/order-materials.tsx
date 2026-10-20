@@ -53,7 +53,7 @@ function Estado({ n }: { n: MaterialNeed }) {
 
 export function OrderMaterials({
     orderId,
-    needs,
+    needs: todasLasNecesidades,
     extras = [],
     consumed = [],
     recipes = [],
@@ -86,6 +86,9 @@ export function OrderMaterials({
     const [dialogo, setDialogo] = useState(false)
     const [devolucion, setDevolucion] = useState(false)
 
+    // Los desactivados en el inventario no se muestran: ya no se usan, y verlos
+    // invita a ir a buscarlos. Ver scripts/45-materiales-activos.sql.
+    const needs = todasLasNecesidades.filter((n) => !n.inactive)
     const descontables = needs.filter((n) => n.material_id !== null && n.pending > 0)
     const conFaltante = needs.filter((n) => n.available !== null && n.pending > n.available)
     const todoDescontado = needs.length > 0 && needs.every((n) => n.pending === 0)
