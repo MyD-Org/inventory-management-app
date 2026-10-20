@@ -881,12 +881,16 @@ export async function consumeOrderMaterials(
         const faltantes: string[] = [];
         for (const item of aDescontar) {
             const [inv] = await sql`
-                SELECT i.current_stock, i.available_stock, m.name
+                SELECT i.current_stock, i.available_stock, m.name, m.active
                 FROM inventory i JOIN materials m ON m.id = i.material_id
                 WHERE i.material_id = ${item.material_id}
             `;
             if (!inv) {
                 faltantes.push(`Material ${item.material_id} no está en el inventario`);
+            } else if (!inv.active) {
+                // La pantalla ya no los ofrece; esto cubre una pestaña que quedó
+                // abierta desde antes de desactivarlo.
+                faltantes.push(`${inv.name} está desactivado en el inventario`);
             } else if (item.quantity > Number(inv.available_stock)) {
                 faltantes.push(`${inv.name}: pedís ${item.quantity} y hay ${inv.available_stock}`);
             }
@@ -1115,7 +1119,8 @@ export async function searchInventoryMaterials(q: string) {
             SELECT m.id, m.name, m.barcode, COALESCE(i.available_stock, 0) AS available
             FROM materials m
             LEFT JOIN inventory i ON i.material_id = m.id
-            WHERE m.name ILIKE ${`%${term}%`} OR m.barcode ILIKE ${`%${term}%`}
+            -- Los desactivados no se ofrecen: ver scripts/45-materiales-activos.sql.
+            WHERE m.active AND (m.name ILIKE ${`%${term}%`} OR m.barcode ILIKE ${`%${term}%`})
             ORDER BY
                 -- El código exacto primero: es lo que devuelve la cámara, y si
                 -- queda sepultado entre parecidos hay que buscarlo a ojo.

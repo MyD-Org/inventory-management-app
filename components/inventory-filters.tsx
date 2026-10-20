@@ -104,6 +104,7 @@ export function InventoryFilters({ categories }: InventoryFiltersProps) {
                         <SelectItem value="low">Stock Bajo</SelectItem>
                         <SelectItem value="normal">Normal</SelectItem>
                         <SelectItem value="high">Stock Alto</SelectItem>
+                        <SelectItem value="inactive">Desactivados</SelectItem>
                     </SelectContent>
                 </Select>
             </div>

@@ -336,6 +336,25 @@ export async function deleteSupplier(id: number) {
     }
 }
 
+// Desactivar un material lo saca de todo lo que se usa para descontar un pedido
+// (buscador, opciones de familia, receta) sin borrarlo: el stock y el historial
+// quedan, y se vuelve a activar con el mismo botón. Ver scripts/45-materiales-activos.sql.
+export async function setMaterialActive(id: number, active: boolean) {
+    const session = await auth();
+    if (session?.user?.role !== 'admin') return { error: 'No tenés permisos para esta acción' };
+
+    const sql = neon(process.env.DATABASE_URL!);
+    try {
+        await sql`UPDATE materials SET active = ${active}, updated_at = NOW() WHERE id = ${id}`;
+        revalidatePath('/inventory');
+        revalidatePath(`/materials/${id}`);
+        return { success: true };
+    } catch (error) {
+        console.error('Error en setMaterialActive:', error);
+        return { error: 'No se pudo cambiar el estado del material' };
+    }
+}
+
 export async function downloadInventoryReport() {
     // El reporte lleva unit_cost y total_value: es información de costos, solo admin.
     const session = await auth();
